@@ -1,0 +1,12 @@
+.DS_Store
+.vscode
+.mypy_cache
+.pytest_cache
+__pycache__
+.vercel
+.ai*
+data
+dev*
+*_bak*
+.env.local
+.env*.local
