@@ -1,0 +1,26 @@
+{
+  "name": "The Tip Genius",
+  "short_name": "TipGenius",
+  "description": "Making you look like a soccer expert, one AI tip at a time...",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f4f8",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-256x256.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
