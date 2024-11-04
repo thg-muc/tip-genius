@@ -125,6 +125,8 @@
     let currentLeague = localStorage.getItem('lastUsedLeague');
     const API_URL = '/api/predictions';
     let cachedLeagueData = null;
+    const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
+    let lastFetchTime = 0;
 
     // Error handling functions
     const showError = msg => {
@@ -253,13 +255,32 @@
         }
     }
 
-    // API data fetching
+    // API data fetching (with caching)
     async function fetchLeagueData() {
+        const currentTime = Date.now();
+        
+        // Check if cache should be invalidated
+        if (currentTime - lastFetchTime > CACHE_DURATION) {
+            cachedLeagueData = null;
+            
+            // Clear KV cache if using service worker
+            if ('caches' in window) {
+                try {
+                    const cache = await caches.open(DYNAMIC_CACHE);
+                    await cache.delete(API_URL);
+                } catch (error) {
+                    console.warn('Cache clear failed:', error);
+                }
+            }
+        }
+        
+        // Fetch fresh data
         const response = await fetch(API_URL);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
         const data = parseApiResponse(await response.json());
         cachedLeagueData = data;
+        lastFetchTime = currentTime;
         return data;
     }
 
@@ -366,6 +387,13 @@
         document.body.classList.add('loaded');
     });
 
+    // Set up periodic refresh
+    setInterval(() => {
+        if (currentLeague) {
+            loadLeagueData(currentLeague);
+        }
+    }, CACHE_DURATION);
+
     // Service Worker registration
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
@@ -374,7 +402,7 @@
                 .catch(err => console.log('ServiceWorker registration failed:', err));
         });
     }
-    </script>
+</script>
 
 </body>
 </html>
