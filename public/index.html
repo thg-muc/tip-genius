@@ -276,15 +276,6 @@ async function createTabs() {
     }
 }
 
-// Optional: Add a refresh function
-function refreshData() {
-    cachedLeagueData = null;
-    loadLeagueData(currentLeague);
-}
-
-// Optional: Auto-refresh every 5 minutes
-setInterval(refreshData, 5 * 60 * 1000);
-
 // Navigation functions
 function scrollToTop() {
     window.scrollTo({top: 0, behavior: 'smooth'});
