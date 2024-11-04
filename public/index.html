@@ -1,6 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,21 +11,41 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <link rel="manifest" href="manifest.json">
+    <script>
+        tailwind.config = {
+            darkMode: 'media',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            DEFAULT: '#1a1a1a',
+                            card: '#2d2d2d'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
         html { scroll-behavior: smooth; }
+        /* Light mode gradient */
         body { background-image: linear-gradient(to bottom right, #f0f4f8, #d9e2ec); }
+        /* Dark mode gradient */
+        @media (prefers-color-scheme: dark) {
+            body { background-image: linear-gradient(to bottom right, #1a1a1a, #2d2d2d); }
+        }
     </style>
 </head>
 
 <body class="font-sans flex flex-col min-h-screen">
-    <header class="bg-white bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10">
+    <header class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10">
         <div class="container mx-auto px-4 py-2 sm:py-3">
             <div class="flex items-center justify-between">
                 <a href="#about" class="flex items-center group transition duration-200">
                     <span class="text-base sm:text-2xl mr-2 hover:animate-bounce">⚽️</span>
-                    <span class="text-base sm:text-2xl font-bold text-gray-800 sm:hover:text-sky-700 transition duration-200">Tip Genius</span>
+                    <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                 </a>
-                <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="text-gray-500 sm:hover:text-sky-700 transition duration-200">
+                <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">
                         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                     </svg>
@@ -37,30 +56,30 @@
     
     <main class="container mx-auto px-4 py-4 sm:py-8 flex-grow">
         <div class="text-center mb-4 sm:mb-8">
-            <h1 class="text-2xl sm:text-4xl font-bold text-gray-800 mb-2">The Tip Genius</h1>
-            <p class="text-gray-500 text-xs sm:text-xl italic">Making you look like a soccer expert, one AI tip at a time...</p>
+            <h1 class="text-2xl sm:text-4xl font-bold text-gray-800 dark:text-gray-200 mb-2">The Tip Genius</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-xl italic">Making you look like a soccer expert, one AI tip at a time...</p>
         </div>
         
         <div id="league-tabs" class="flex justify-center mb-4"></div>
         <div id="matches-container" class="space-y-2 sm:space-y-3"></div>
 
         <!-- Error message container -->
-        <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative my-4" role="alert">
+        <div id="error-message" class="hidden bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative my-4" role="alert">
             <span class="block sm:inline"></span>
         </div>
     </main>
 
-    <footer class="bg-white bg-opacity-80 backdrop-blur-md mt-2">
+    <footer class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 pt-3 sm:pt-4 pb-4">
             <div id="about" class="mb-5 sm:mb-6 text-center">
-                <h2 class="text-sm sm:text-lg font-semibold text-gray-800 mb-2">About: The Tip Genius ⚽️</h2>
-                <p class="text-xs sm:text-base text-gray-500">
+                <h2 class="text-sm sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">About: The Tip Genius ⚽️</h2>
+                <p class="text-xs sm:text-base text-gray-500 dark:text-gray-400">
                     This tool uses advanced LLMs and external data sources to make predictions. AI is far from perfect, so use with caution!
                 </p>
             </div>
-            <div class="flex justify-between items-center text-xs text-gray-500">
-                <a href="http://linkedin.com/in/thomas-glanzer" class="text-xs sm:text-sm font-semibold hover:text-sky-700 transition duration-200">Contact</a>
-                <a href="#" class="text-xs sm:text-sm font-semibold hover:text-sky-700 transition duration-200 md:block hidden" onclick="scrollToTop()">Back to top</a>
+            <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                <a href="http://linkedin.com/in/thomas-glanzer" class="text-xs sm:text-sm font-semibold hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Contact</a>
+                <a href="#" class="text-xs sm:text-sm font-semibold hover:text-sky-700 dark:hover:text-sky-400 transition duration-200 md:block hidden" onclick="scrollToTop()">Back to top</a>
                 <div class="text-xs sm:text-sm font-semibold">© 2024 THG</div>
             </div>
         </div>
@@ -105,19 +124,19 @@ function formatTimeForDisplay(date) {
     });
 }
 
-// Match element creation
+// Match element creation with dark mode support
 function createMatchElement(match) {
     const matchElement = document.createElement('div');
-    matchElement.className = 'bg-white bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-3 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0';
+    matchElement.className = 'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-3 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0';
     matchElement.innerHTML = `
         <div class="flex flex-col">
-            <div class="text-xs sm:text-lg text-gray-500 mb-1">${formatTimeForDisplay(formatDate(match.commence_time_str))}</div>
-            <div class="text-sm sm:text-2xl font-semibold mb-1 text-gray-800">${match.home_team} vs ${match.away_team}</div>
+            <div class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 mb-1">${formatTimeForDisplay(formatDate(match.commence_time_str))}</div>
+            <div class="text-sm sm:text-2xl font-semibold mb-1 text-gray-800 dark:text-gray-200">${match.home_team} vs ${match.away_team}</div>
             <div class="flex items-end justify-between mt-1">
-                <p class="text-xs sm:text-lg text-gray-500 italic flex-grow pr-2 sm:pr-8">"${match.outlook}"</p>
+                <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">"${match.outlook}"</p>
                 <div class="flex flex-col items-end justify-end ml-3">
-                    <span class="text-gray-500 text-[0.6rem] sm:text-base mb-0.5">Prediction</span>
-                    <span class="font-bold text-2xl sm:text-4xl text-sky-700">${match.prediction_home}-${match.prediction_away}</span>
+                    <span class="text-gray-500 dark:text-gray-400 text-[0.6rem] sm:text-base mb-0.5">Prediction</span>
+                    <span class="font-bold text-2xl sm:text-4xl text-sky-700 dark:text-sky-400">${match.prediction_home}-${match.prediction_away}</span>
                 </div>
             </div>
         </div>
@@ -131,7 +150,7 @@ function createMatchElement(match) {
     return matchElement;
 }
 
-// Renders all matches for a given league
+// Renders matches with dark mode support
 function renderMatches(matches) {
     const container = document.getElementById('matches-container');
     container.innerHTML = '';
@@ -143,7 +162,7 @@ function renderMatches(matches) {
 
         if (formattedDate !== currentDate) {
             const dateHeader = document.createElement('h2');
-            dateHeader.className = 'text-base sm:text-2xl font-bold text-gray-500 mb-0 mt-8';
+            dateHeader.className = 'text-base sm:text-2xl font-bold text-gray-500 dark:text-gray-400 mb-0 mt-8';
             dateHeader.textContent = formattedDate;
             container.appendChild(dateHeader);
             currentDate = formattedDate;
@@ -193,21 +212,21 @@ async function loadLeagueData(leagueName) {
     }
 }
 
-// Sets the active tab in the UI
+// Set active tab with dark mode support
 function setActiveTab(tabId) {
     document.querySelectorAll('button[id^="tab-"]').forEach(tab => {
         const isActive = tab.id === tabId;
         if (isActive) {
-            tab.classList.add('bg-white', 'text-sky-700', 'font-semibold');
-            tab.classList.remove('bg-gray-100', 'text-gray-500', 'font-normal');
+            tab.classList.add('bg-white', 'dark:bg-dark-card', 'text-sky-700', 'dark:text-sky-400', 'font-semibold');
+            tab.classList.remove('bg-gray-100', 'dark:bg-dark', 'text-gray-500', 'dark:text-gray-400', 'font-normal');
         } else {
-            tab.classList.add('bg-gray-100', 'text-gray-500', 'font-normal');
-            tab.classList.remove('bg-white', 'text-sky-700', 'font-semibold');
+            tab.classList.add('bg-gray-100', 'dark:bg-dark', 'text-gray-500', 'dark:text-gray-400', 'font-normal');
+            tab.classList.remove('bg-white', 'dark:bg-dark-card', 'text-sky-700', 'dark:text-sky-400', 'font-semibold');
         }
     });
 }
 
-// Creates the league tabs in the UI
+// Create tabs with dark mode support
 async function createTabs() {
     const tabContainer = document.getElementById('league-tabs');
     
@@ -227,9 +246,10 @@ async function createTabs() {
             const button = document.createElement('button');
             button.id = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`;
             button.className = `
-                px-4 py-2 text-xs sm:text-lg hover:bg-gray-50 focus:z-10 
-                hover:text-sky-700 transition duration-200 ease-in-out shadow-md
-                bg-gray-100 text-gray-500 font-normal
+                px-4 py-2 text-xs sm:text-lg focus:z-10 
+                transition duration-200 ease-in-out shadow-md
+                bg-gray-100 dark:bg-dark-card text-gray-500 dark:text-gray-400 font-normal
+                hover:bg-gray-50 dark:hover:bg-dark hover:text-sky-700 dark:hover:text-sky-400
                 ${index === 0 ? 'rounded-l-lg' : ''}
                 ${index === leagues.length - 1 ? 'rounded-r-lg' : ''}
             `;
@@ -282,6 +302,3 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('header a[href="#about"]').addEventListener('click', scrollToAbout);
 });
 </script>
-
-</body>
-</html>
