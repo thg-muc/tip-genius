@@ -1,0 +1,25 @@
+# Tip Genius Main Configuration File
+
+  sports_list:
+    - "Bundesliga - Germany"
+    - "Premier League - England"
+    - "UEFA Champions League"
+  
+  llm_provider_options:
+    - "Mistral-Large"
+    # - "Deepseek-Chat" # Has issues with response format
+    # - "Anthropic-Haiku"
+    # - "Anthropic-Sonnet"
+    
+  
+  prediction_type_options:
+    - "FourPointsScoring"
+    # - "Default"
+  
+  named_teams_options:
+    - true
+    # - false
+  
+  additional_info_options:
+    - true
+    # - false
