@@ -1,0 +1,43 @@
+# LLM Configuration File
+
+mistral-large:
+  api_key_env_name: MISTRAL_API_KEY
+  base_url: https://api.mistral.ai/v1
+  operation: chat/completions
+  model: mistral-large-latest
+  kwargs:
+    temperature: 0.0
+    stream: false
+    response_format:
+      type: "json_object"
+
+deepseek-chat:
+  api_key_env_name: DEEPSEEK_API_KEY
+  base_url: https://api.deepseek.com
+  operation: chat/completions
+  model: "deepseek-chat"
+  kwargs:
+    temperature: 0.0
+    stream: false
+    response_format:
+      type: "json_object"
+
+anthropic-haiku:
+  api_key_env_name: ANTHROPIC_API_KEY
+  base_url: https://api.anthropic.com/v1
+  operation: messages
+  model: "claude-3-5-haiku-20241022"
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 4096
+
+anthropic-sonnet:
+  api_key_env_name: ANTHROPIC_API_KEY
+  base_url: https://api.anthropic.com/v1
+  operation: messages
+  model: "claude-3-5-sonnet-20241022"
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 4096
