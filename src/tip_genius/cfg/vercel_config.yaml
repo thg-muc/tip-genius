@@ -1,0 +1,5 @@
+# Vercel config file
+
+tip_genius:
+  kv_token_env_name: KV_REST_API_TOKEN
+  kv_url_env_name: KV_REST_API_URL
