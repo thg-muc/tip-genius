@@ -1,0 +1,16 @@
+# Odds API Configuration File
+
+odds_api:
+  api_key_env_name: ODDS_API_KEY
+  base_url: "https://api.the-odds-api.com/v4/sports/"
+  parameters: "odds?regions=eu&oddsFormat=decimal"
+  sports_mapping:
+    "Bundesliga - Germany" : "soccer_germany_bundesliga"
+    "Premier League - England" : "soccer_epl"
+    "Bundesliga - Austria": "soccer_austria_bundesliga"
+    "UEFA Champions League": "soccer_uefa_champs_league"
+    "UEFA Europa League": "soccer_uefa_europa_league"
+  bookmaker_priority:
+    - tipico_de
+    - nordicbet
+    - williamhill
