@@ -1,0 +1,18 @@
+[tool.isort]
+known_first_party = "constants"
+known_local_folder = ["src", "tests"]
+
+[tool.pytest.ini_options]
+addopts = "-W ignore::DeprecationWarning"
+pythonpath = [
+  ".", "src", "tests",
+]
+
+[tool.pylint.'MESSAGES CONTROL']
+max-line-length = 88
+disable = [
+    "import-error",
+    "no-name-in-module",
+    "no-member",
+    "invalid-name"
+]
