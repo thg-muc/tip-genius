@@ -17,10 +17,11 @@ from typing import Any, Dict, List
 
 import polars as pl
 import yaml
-from api_data import BaseAPI, OddsAPI
-from llm_manager import LLMManager
-from storage_manager import StorageManager
 from tqdm import tqdm
+
+from lib.api_data import BaseAPI, OddsAPI
+from lib.llm_manager import LLMManager
+from lib.storage_manager import StorageManager
 
 # %% --------------------------------------------
 # * Configuration and Logging
@@ -443,7 +444,11 @@ if __name__ == "__main__":
         tip_genius_config = yaml.safe_load(f)
 
     # Create an instance of TipGenius with an API class
-    tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False, write_to_kv=True)
+    tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=True, write_to_kv=False)
 
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)
+
+# TODO Deepchat -> do not skip row after 5 tries, continue if odds issue
+# TODO add last update to prediction structure & HTML
+# TODO add GPT 4 o Mini & Google

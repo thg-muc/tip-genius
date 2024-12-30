@@ -13,7 +13,8 @@ from typing import Any, Dict, List
 
 import requests
 import yaml
-from llm_prompts import Prompt
+
+from lib.llm_prompts import Prompt
 
 LLM_CONFIG_FILE = os.path.join("cfg", "llm_config.yaml")
 
