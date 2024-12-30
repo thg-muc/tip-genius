@@ -1,7 +1,10 @@
 [tool.isort]
-known_first_party = "constants"
-known_local_folder = ["src", "tests"]
-
+profile = "black"
+line_length = 88
+known_first_party = [
+    "tip_genius", 
+    "lib" 
+]
 [tool.pytest.ini_options]
 addopts = "-W ignore::DeprecationWarning"
 pythonpath = [
