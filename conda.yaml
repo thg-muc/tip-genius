@@ -1,0 +1,24 @@
+# Developer Environment for Tip-Genius
+# conda env create -f conda.yaml
+# conda env remove -n tip-genius
+
+name: tip-genius
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python >=3.11.7, <3.12
+  - pip
+
+  # Developer Tools
+  - jupyter
+  - notebook
+  - pipreqs
+  - pylint
+  - pytest
+
+
+  - pip:
+    - -r requirements.txt

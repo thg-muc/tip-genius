@@ -1,0 +1,4 @@
+polars
+PyYAML
+requests
+tqdm
