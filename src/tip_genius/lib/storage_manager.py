@@ -115,10 +115,12 @@ class StorageManager:
         Flag to indicate debug mode, by default False
     write_to_kv : bool, optional
         Flag to enable Vercel KV storage, by default False
+    write_to_file : bool, optional
+        Flag to enable writing of result to file system, by default False.
 
     Attributes
     ----------
-    kv_enabled : bool
+    kv_initialized : bool
         Indicates whether KV storage is properly configured and available
     """
 
@@ -127,6 +129,7 @@ class StorageManager:
         prediction_json_folder: str,
         debug: bool = False,
         write_to_kv: bool = False,
+        write_to_file: bool = False,
     ):
         # Get project root directory
         self.project_root = Path(
@@ -135,7 +138,8 @@ class StorageManager:
         self.prediction_json_folder = prediction_json_folder
         self.debug = debug
         self.write_to_kv = write_to_kv
-        self.kv_enabled = False
+        self.write_to_file = write_to_file
+        self.kv_initialized = False
         self.kv_url: Optional[str] = None
         self.kv_token: Optional[str] = None
 
@@ -152,7 +156,7 @@ class StorageManager:
         The method will first try to load configuration from .env.local file,
         then fall back to system environment variables if needed.
 
-        Sets kv_enabled to True if configuration is successful, False otherwise.
+        Sets kv_initialized to True if configuration is successful, False otherwise.
         """
         try:
             # Load KV config
@@ -165,7 +169,7 @@ class StorageManager:
             self.kv_url = self.env_config.get(config["kv_url_env_name"])
 
             if self.kv_token and self.kv_url:
-                self.kv_enabled = True
+                self.kv_initialized = True
                 logger.info("Vercel KV storage configured successfully")
             else:
                 logger.warning(
@@ -174,7 +178,7 @@ class StorageManager:
 
         except (FileNotFoundError, KeyError, yaml.YAMLError) as e:
             logger.error("Failed to initialize KV config: %s", str(e))
-            self.kv_enabled = False
+            self.kv_initialized = False
 
     def store_predictions(
         self,
@@ -202,12 +206,15 @@ class StorageManager:
         timestamped_filename = f"{timestamp}_{base_filename}.jsonl"
         non_timestamped_filename = f"{base_filename}.jsonl"
 
-        # Store files locally
-        self._store_to_file(prediction_data, timestamped_filename, full_export_path)
-        self._store_to_file(prediction_data, non_timestamped_filename, full_export_path)
+        # Store files locally if enabled
+        if self.write_to_file:
+            self._store_to_file(prediction_data, timestamped_filename, full_export_path)
+            self._store_to_file(
+                prediction_data, non_timestamped_filename, full_export_path
+            )
 
         # Store in KV if enabled
-        if self.write_to_kv and self.kv_enabled:
+        if self.write_to_kv and self.kv_initialized:
             # Store both timestamped and non-timestamped versions
             self._store_to_kv(prediction_data, f"{timestamp}_{base_filename}")
             self._store_to_kv(prediction_data, base_filename)
@@ -259,7 +266,7 @@ class StorageManager:
         key_name : str
             The key name to use in KV storage
         """
-        if not self.kv_enabled or not self.kv_url or not self.kv_token:
+        if not self.kv_initialized or not self.kv_url or not self.kv_token:
             return
 
         headers = {"Authorization": f"Bearer {self.kv_token}"}
