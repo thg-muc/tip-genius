@@ -1,4 +1,4 @@
-# Developer Environment for Tip-Genius
+# Developer Environment (Conda) for Tip-Genius
 # conda env create -f conda.yaml
 # conda env remove -n tip-genius
 

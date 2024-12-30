@@ -1,4 +1,4 @@
-polars
-PyYAML
-requests
-tqdm
+polars==1.18.0
+PyYAML==6.0.2
+requests==2.32.3
+tqdm==4.67.1
