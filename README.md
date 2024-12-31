@@ -24,4 +24,4 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
 
 ## Website
 
-Visit tip-genius.vercel.app to see Tip Genius in action.
+[Visit Tip Genius](https://tip-genius.vercel.app) to see Tip Genius in action.
