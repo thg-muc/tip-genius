@@ -8,5 +8,6 @@ __pycache__
 data
 dev*
 *_bak*
+TODO.txt
 .env.local
 .env*.local
