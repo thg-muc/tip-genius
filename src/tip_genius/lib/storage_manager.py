@@ -133,7 +133,11 @@ class StorageManager:
     ):
         # Get project root directory
         self.project_root = Path(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            os.path.dirname(
+                os.path.dirname(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                )
+            )
         )
         self.prediction_json_folder = prediction_json_folder
         self.debug = debug
@@ -247,9 +251,11 @@ class StorageManager:
                         ensure_ascii=False,
                     )
                     f.write("\n")
-            logger.info("Successfully exported predictions to: %s", filename)
+            logger.info("Successfully exported predictions to: %s", file_path)
         except IOError as e:
-            logger.error("Failed to write predictions to file %s: %s", filename, str(e))
+            logger.error(
+                "Failed to write predictions to file %s: %s", file_path, str(e)
+            )
 
     def _store_to_kv(
         self,

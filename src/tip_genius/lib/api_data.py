@@ -127,7 +127,9 @@ class BaseAPI(ABC):
         """
         try:
             # Determine the project root and create the full export path
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            project_root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            )
             full_export_path = os.path.join(project_root, export_folder)
             os.makedirs(full_export_path, exist_ok=True)
 

@@ -48,14 +48,19 @@ class TipGenius:
     api_pipeline : BaseAPI
         The API pipeline to use for fetching odds data.
     debug : bool, optional
-        Flag to enable debug mode, by default False
+        Flag to enable debug mode, by default False.
+        Will limit the number of LLM requests and increase logging verbosity,
     write_to_kv : bool, optional
-        Flag to enable Vercel KV storage, by default False
+        Flag to enable writing of result to Vercel KV storage, by default False.
+    write_to_file : bool, optional
+        Flag to enable writing of result to file system, by default False.
 
     Attributes
     ----------
-    store_api_results : bool, default True
-        Flag to store API results
+    store_api_results : bool, default False
+        Flag to store intermediate API results to file system.
+    store_llm_results : bool, default False
+        Flag to store intermediate LLM results to file system.
     llm_attempts : int, default 5
         Number of attempts for LLM predictions before giving up.
     llm_data_folder : str, default 'data/llm_data'
@@ -66,27 +71,40 @@ class TipGenius:
         Nested dictionary to store prediction data for summary export.
     """
 
-    store_api_results = True
+    # Initialize class parameters
+    store_api_results = False
+    store_llm_results = False
     llm_attempts = 5
 
     llm_data_folder = os.path.join("data", "llm_data")
     prediction_json_folder = os.path.join("data", "match_predictions")
 
     def __init__(
-        self, api_pipeline: BaseAPI, debug: bool = False, write_to_kv: bool = False
+        self,
+        api_pipeline: BaseAPI,
+        debug: bool = False,
+        write_to_kv: bool = False,
+        write_to_file: bool = False,
     ):
         """Initialize the TipGenius class."""
-        self.debug = debug
+
+        # Initialize class paremeters
         self.api_pipeline = api_pipeline
+        self.debug = debug
         self.prediction_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
             dict
         )
+
+        if self.debug:
+            self.store_api_results = True
+            self.store_llm_results = True
 
         # Initialize storage manager
         self.storage_manager = StorageManager(
             prediction_json_folder=self.prediction_json_folder,
             debug=self.debug,
             write_to_kv=write_to_kv,
+            write_to_file=write_to_file,
         )
 
         logger.info(
@@ -122,7 +140,9 @@ class TipGenius:
         """
         try:
             # Determine the project root directory by navigating up from current file
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            project_root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            )
 
             # Construct the full export path using the configured LLM data folder
             llm_export_path = os.path.join(project_root, self.llm_data_folder)
@@ -379,8 +399,9 @@ class TipGenius:
                         additional_info=additional_info,
                     )
 
+                    # If debug mode is enabled, only process the first few rows
                     if self.debug:
-                        df = df.limit(3)
+                        df = df.limit(2)
 
                     df_processed = self.predict_results(
                         df=df,
@@ -389,14 +410,15 @@ class TipGenius:
                     )
 
                     # Store LLM results in CSV format
-                    self.store_llm_data(
-                        df=df_processed,
-                        sport=sport,
-                        llm_provider=llm_provider,
-                        prediction_type=prediction_type,
-                        named_teams=named_teams,
-                        additional_info=additional_info,
-                    )
+                    if self.store_llm_results:
+                        self.store_llm_data(
+                            df=df_processed,
+                            sport=sport,
+                            llm_provider=llm_provider,
+                            prediction_type=prediction_type,
+                            named_teams=named_teams,
+                            additional_info=additional_info,
+                        )
 
                     matches = df_processed.select(
                         [
@@ -444,7 +466,13 @@ if __name__ == "__main__":
         tip_genius_config = yaml.safe_load(f)
 
     # Create an instance of TipGenius with an API class
-    tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False, write_to_kv=True)
+    tip_genius = TipGenius(
+        api_pipeline=OddsAPI(), debug=False, write_to_kv=True, write_to_file=True
+    )
+
+    # Intermediate Result Storage (by default False)
+    tip_genius.store_api_results = True
+    tip_genius.store_llm_results = True
 
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)
