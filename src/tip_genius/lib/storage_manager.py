@@ -47,7 +47,30 @@ class EnvConfig:
         self.project_root = Path(project_root)
         self.env_file = env_file
         self.env_vars: Dict[str, str] = {}
-        self._load_env_file()
+
+        # Only attempt to load .env file if we're not in a CI environment
+        if not self._is_ci_environment():
+            self._load_env_file()
+
+    @staticmethod
+    def _is_ci_environment() -> bool:
+        """
+        Check if we're running in a CI environment.
+
+        Returns
+        -------
+        bool
+            True if running in a CI environment, False otherwise
+        """
+        return any(
+            [
+                os.environ.get("CI") == "true",  # GitHub Actions
+                os.environ.get("GITHUB_ACTIONS") == "true",
+                os.environ.get("GITLAB_CI") == "true",  # GitLab CI
+                os.environ.get("TRAVIS") == "true",  # Travis CI
+                os.environ.get("JENKINS_URL") is not None,  # Jenkins
+            ]
+        )
 
     def _load_env_file(self) -> None:
         """Load environment variables from the specified .env file."""
@@ -63,11 +86,11 @@ class EnvConfig:
                             self.env_vars[key.strip()] = (
                                 value.strip().strip("'").strip('"')
                             )
-                logger.info("Successfully loaded environment from: %s", self.env_file)
+                logger.debug("Successfully loaded environment from: %s", self.env_file)
             else:
-                logger.warning("Environment file not found: %s", env_path)
+                logger.debug("No local environment file found at: %s", env_path)
         except Exception as e:  # pylint: disable=broad-except
-            logger.error("Failed to load environment file: %s", str(e))
+            logger.warning("Error loading environment file: %s", str(e))
 
     def get(self, key: str, default: Any = None) -> Optional[str]:
         """
