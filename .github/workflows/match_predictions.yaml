@@ -1,0 +1,52 @@
+# GitHub Action Workflow for Tip-Genius Match Predictions
+
+name: Match Predictions Update
+
+on:
+  # Scheduled runs at 03:00 UTC on Tuesday and Friday
+  schedule:
+    - cron: '0 3 * * 2,5'
+  # Allow manual triggers through GitHub UI for testing and ad-hoc updates
+  workflow_dispatch:
+
+jobs:
+  update-predictions:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # Check out the repository code
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # Set up Python environment with caching for faster execution
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'  # Enable pip caching for faster dependency installation
+
+    # Install project dependencies from requirements.txt
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Run the main prediction script with required environment variables
+    - name: Run prediction update
+      env:
+        # API keys for odds data and LLM providers
+        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+        # Vercel KV storage credentials
+        KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+        KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+      run: |
+        cd src/tip_genius
+        python -m tip_genius
+
+    # Handle and report any errors that occur during execution
+    - name: Handle errors
+      if: failure()
+      run: |
+        echo "Prediction update failed. Check the logs for details."
+        exit 1
