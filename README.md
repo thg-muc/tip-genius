@@ -6,6 +6,10 @@ AI-powered soccer match predictions with a modern, responsive web interface.
 
 Tip Genius combines the power of Large Language Models (LLMs) with real-world odds data to generate informed soccer match predictions. The project features a clean, responsive web interface that displays predictions for various soccer leagues including the Bundesliga, Premier League, and UEFA Champions League.
 
+## LLM Integration
+
+Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The LLM selection prioritizes cost-effectiveness and reliability, focusing on models that offer free tiers or competitive pricing while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
+
 ## Features
 
 - 🎯 Match predictions using advanced LLMs (Anthropic, Mistral, DeepSeek)
@@ -24,13 +28,13 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
 - HTML5 with semantic markup
 - Vanilla JavaScript
 - Tailwind CSS for styling
-- Service Workers for PWA functionality
+- Service Workers for Progessive Web App (PWA) functionality
 
 ### Backend
 
 - Python 3.11+ for prediction generation
 - Polars for efficient data processing
-- Multiple LLM providers integration
+- Ability to integrate multiple LLM providers
 - GitHub Actions for automation
 
 ### Infrastructure
@@ -81,9 +85,11 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
     KV_REST_API_URL=your_vercel_kv_url
     ```
 
+    In case you make a deployment later, these variables should be added to Github Secrets.
+
 ### Running Locally
 
-1. Start the development server:
+1. Start the development server from the project root:
 
     ```bash
     vercel dev
@@ -98,10 +104,6 @@ The project is automatically deployed to Vercel when changes are pushed to the m
 ```bash
 vercel deploy --prod
 ```
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
 ## License
 
