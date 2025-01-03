@@ -268,8 +268,9 @@ class StorageManager:
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 for sport, matches in prediction_data.items():
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     json.dump(
-                        {"name": sport, "matches": matches},
+                        {"name": sport, "timestamp": timestamp, "matches": matches},
                         f,
                         ensure_ascii=False,
                     )
@@ -301,9 +302,10 @@ class StorageManager:
         headers = {"Authorization": f"Bearer {self.kv_token}"}
 
         try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             # Convert data to KV format (list of league data)
             kv_data = [
-                {"name": sport, "matches": matches}
+                {"name": sport, "timestamp": timestamp, "matches": matches}
                 for sport, matches in prediction_data.items()
             ]
 
