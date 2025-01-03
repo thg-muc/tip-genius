@@ -164,24 +164,26 @@
         const matchDate = formatDate(match.commence_time_str);
         const element = document.createElement('div');
         element.className = 'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-3 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0';
-        
+
         element.innerHTML = `
             <div class="flex flex-col">
-                <div class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 mb-1">
-                    ${formatTimeForDisplay(matchDate)}
-                </div>
-                <div class="text-sm sm:text-2xl font-semibold mb-1 text-gray-800 dark:text-gray-200">
-                    ${match.home_team} vs ${match.away_team}
+                <div class="flex items-center justify-between mb-1">
+                    <div class="text-sm sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
+                        ${match.home_team} vs ${match.away_team}
+                    </div>
+                    <div class="font-mono text-sm sm:text-2xl text-gray-500 dark:text-gray-400 ml-4">
+                        ${formatTimeForDisplay(matchDate)}
+                    </div>
                 </div>
                 <div class="flex items-end justify-between mt-1">
                     <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">
                         "${match.outlook}"
                     </p>
                     <div class="flex flex-col items-end justify-end ml-3">
-                        <span class="text-gray-500 dark:text-gray-400 text-[0.6rem] sm:text-base mb-0.5">
+                        <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
                             Prediction
                         </span>
-                        <span class="font-bold text-2xl sm:text-4xl text-sky-700 dark:text-sky-400">
+                        <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
                             ${match.prediction_home}-${match.prediction_away}
                         </span>
                     </div>
