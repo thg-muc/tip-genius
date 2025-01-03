@@ -115,7 +115,7 @@
             <div class="flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
                 <a href="http://linkedin.com/in/thomas-glanzer" class="text-xs sm:text-sm font-semibold hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Contact</a>
                 <a href="#" class="text-xs sm:text-sm font-semibold hover:text-sky-700 dark:hover:text-sky-400 transition duration-200 md:block hidden" onclick="scrollToTop()">Back to top</a>
-                <div class="text-xs sm:text-sm font-semibold">© 2024 THG</div>
+                <div class="text-xs sm:text-sm font-semibold">© 2025 THG</div>
             </div>
         </div>
     </footer>
@@ -199,7 +199,7 @@
     }
 
     // Match rendering function
-    function renderMatches(matches) {
+    function renderMatches(matches, timestamp) {
         const container = document.getElementById('matches-container');
         container.innerHTML = '';
         
@@ -220,6 +220,14 @@
             
             container.appendChild(createMatchElement(match));
         });
+        
+        // Add timestamp if available
+        if (timestamp) {
+            const timestampElement = document.createElement('p');
+            timestampElement.className = 'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-8';
+            timestampElement.textContent = `Last Update: ${timestamp}`;
+            container.appendChild(timestampElement);
+        }
     }
 
     // Data loading functions
@@ -237,7 +245,7 @@
                     (a, b) => formatDate(a.commence_time_str) - formatDate(b.commence_time_str)
                 );
                 
-                renderMatches(sortedMatches);
+                renderMatches(sortedMatches, leagueData.timestamp);
                 
                 // Smooth fade-in transition
                 requestAnimationFrame(() => {
