@@ -211,7 +211,7 @@ class TipGenius:
             odds_draw = df[i, "odds_draw"]
 
             if (odds_home == 0) or (odds_away == 0) or (odds_draw == 0):
-                logger.debug("Odds are invalid for row %d, skipping...", i)
+                logger.debug("Odds are invalid for row %d, skipping...", i + 1)
                 continue
 
             success = False
@@ -234,7 +234,7 @@ class TipGenius:
                     ) or (prediction_home < prediction_away and odds_home <= odds_away):
                         logger.warning(
                             "Prediction inconsistent with odds for row %d, retrying...",
-                            i,
+                            i + 1,
                         )
                         continue
 
@@ -245,7 +245,7 @@ class TipGenius:
                     logger.warning(
                         "LLM prediction attempt %d failed for row %d: %s",
                         attempt + 1,
-                        i,
+                        i + 1,
                         str(e),
                     )
 
@@ -253,7 +253,7 @@ class TipGenius:
                 var is None
                 for var in (reasoning, prediction_home, prediction_away, outlook)
             ):
-                logger.warning("No valid LLM response for row %d, skipping...", i)
+                logger.warning("No valid LLM response for row %d, skipping...", i + 1)
                 continue
 
             df[i, "reasoning"] = reasoning
