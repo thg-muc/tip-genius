@@ -23,16 +23,7 @@ from lib.api_data import BaseAPI, OddsAPI
 from lib.llm_manager import LLMManager
 from lib.storage_manager import StorageManager
 
-# %% --------------------------------------------
-# * Configuration and Logging
-
-DEBUG = False  # Limit number of API calls and other actions
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Set up logging
 logger = logging.getLogger(__name__)
 
 # %% --------------------------------------------
@@ -99,12 +90,12 @@ class TipGenius:
             self.store_api_results = True
             self.store_llm_results = True
 
-        # Initialize storage manager
-        self.storage_manager = StorageManager(
-            prediction_json_folder=self.prediction_json_folder,
-            debug=self.debug,
-            write_to_kv=write_to_kv,
-            write_to_file=write_to_file,
+        # Initialize logging
+        log_level = logging.DEBUG if self.debug else logging.INFO
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
         )
 
         logger.info(

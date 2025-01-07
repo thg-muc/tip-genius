@@ -18,12 +18,7 @@ from lib.llm_prompts import Prompt
 
 LLM_CONFIG_FILE = os.path.join("cfg", "llm_config.yaml")
 
-# Setup basic configuration for logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Set up logging
 logger = logging.getLogger(__name__)
 
 # %% --------------------------------------------
