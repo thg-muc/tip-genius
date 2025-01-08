@@ -7,16 +7,19 @@
 # %% --------------------------------------------
 # * Libraries
 
+import json
 import logging
 import os
 from ast import literal_eval
 from collections import defaultdict
 from datetime import datetime
 from itertools import product
+from pathlib import Path
 from typing import Any, Dict, List
 
 import polars as pl
 import yaml
+from dotenv import load_dotenv
 from tqdm import tqdm
 
 from lib.api_data import BaseAPI, OddsAPI
@@ -41,54 +44,60 @@ class TipGenius:
     debug : bool, optional
         Flag to enable debug mode, by default False.
         Will limit the number of LLM requests and increase logging verbosity,
-    write_to_kv : bool, optional
-        Flag to enable writing of result to Vercel KV storage, by default False.
-    write_to_file : bool, optional
-        Flag to enable writing of result to file system, by default False.
 
     Attributes
     ----------
+    project_root : str or Path
+        Path to the project root directory
+    export_to_kv : bool, optional
+        Flag to enable writing of result to Vercel KV storage, by default False.
+    export_to_file : bool, optional
+        Flag to enable writing of result to file system, by default False.
     store_api_results : bool, default False
         Flag to store intermediate API results to file system.
     store_llm_results : bool, default False
         Flag to store intermediate LLM results to file system.
     llm_attempts : int, default 5
         Number of attempts for LLM predictions before giving up.
+    api_data_folder : str, default 'data/api_result'
+        The folder path for storing API data.
     llm_data_folder : str, default 'data/llm_data'
         The folder path for storing LLM data.
-    prediction_json_folder : str, default 'data/match_predictions'
+    match_predictions_folder : str, default 'data/match_predictions'
         The folder path for storing prediction JSON and JSONL files.
     prediction_data : Dict[str, Dict[str, List[Dict[str, Any]]]]
         Nested dictionary to store prediction data for summary export.
+    storage_manager : StorageManager
+        An instance of the StorageManager class for handling storage operations.
     """
 
-    # Initialize class parameters
+    # Set project root
+    project_root = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+    # Initialize attributes with default values
+    export_to_kv = True
+    export_to_file = False
     store_api_results = False
     store_llm_results = False
     llm_attempts = 5
 
+    api_data_folder = os.path.join("data", "api_result")
     llm_data_folder = os.path.join("data", "llm_data")
-    prediction_json_folder = os.path.join("data", "match_predictions")
+    match_predictions_folder = os.path.join("data", "match_predictions")
+
+    prediction_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(dict)
 
     def __init__(
         self,
         api_pipeline: BaseAPI,
         debug: bool = False,
-        write_to_kv: bool = False,
-        write_to_file: bool = False,
     ):
         """Initialize the TipGenius class."""
 
-        # Initialize class paremeters
+        # Initialize parameters
         self.api_pipeline = api_pipeline
         self.debug = debug
-        self.prediction_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(
-            dict
-        )
-
-        if self.debug:
-            self.store_api_results = True
-            self.store_llm_results = True
+        self.storage_manager = None
 
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
@@ -130,13 +139,8 @@ class TipGenius:
             Whether additional information was included.
         """
         try:
-            # Determine the project root directory by navigating up from current file
-            project_root = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            )
-
             # Construct the full export path using the configured LLM data folder
-            llm_export_path = os.path.join(project_root, self.llm_data_folder)
+            llm_export_path = os.path.join(self.project_root, self.llm_data_folder)
             os.makedirs(llm_export_path, exist_ok=True)
 
             # Generate current timestamp for unique filename
@@ -167,6 +171,48 @@ class TipGenius:
         except Exception as e:
             logger.error("Error storing LLM data: %s", str(e))
             raise
+
+    def store_api_data(
+        self,
+        api_result: Dict[str, Any],
+        sport: str,
+        api_name: str,
+    ) -> None:
+        """
+        Store the raw API result data in a JSON file in the specified data folder.
+
+        Parameters
+        ----------
+        api_result : Dict[str, Any]
+            The raw data returned from the API.
+        sport : str
+            The name of the sport/league.
+        api_name : str
+            The name of the API used.
+
+        Returns
+        -------
+        None
+        """
+        suffix = f"_{sport}_{api_name}".replace(" ", "")
+        try:
+            # Construct the api_export_path using the configured data folder
+            api_export_path = os.path.join(self.project_root, self.api_data_folder)
+            os.makedirs(api_export_path, exist_ok=True)
+
+            # Generate a filename with a timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            filename = f"{timestamp}{suffix}.json"
+            file_path = os.path.join(api_export_path, filename)
+
+            # Write the raw API data to the JSON file
+            with open(file_path, "w", encoding="utf-8") as json_file:
+                json.dump(api_result, json_file, ensure_ascii=False, indent=4)
+
+            logger.debug("API result stored successfully at: %s", file_path)
+
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.error("A problem occurred while storing API result: %s", exc)
 
     def predict_results(
         self, df: pl.DataFrame, llm_provider: str, prediction_type: str
@@ -262,7 +308,7 @@ class TipGenius:
 
         return df
 
-    def store_predictions(
+    def save_results(
         self,
         sport: str,
         llm_provider: str,
@@ -272,7 +318,7 @@ class TipGenius:
         matches: List[Dict[str, Any]],
     ) -> None:
         """
-        Store predictions in the nested dictionary structure.
+        Save predictions in the nested dictionary structure.
 
         Parameters
         ----------
@@ -300,14 +346,30 @@ class TipGenius:
         """
         Export the summary of predictions to JSONL files and optionally to Vercel KV.
         """
+        if not self.storage_manager:
+            logger.warning(
+                "No storage manager configured. Skipping export of predictions."
+            )
+            return
+
         for key, sport_data in self.prediction_data.items():
-            base_filename = f"Match_Predictions_{key}"
+            base_key = f"Match_Predictions_{key}"
             if self.debug:
-                base_filename += "_debug"
+                base_key += "_debug"
 
-            self.storage_manager.store_predictions(sport_data, base_filename)
+            if self.export_to_file:
+                full_export_path = os.path.join(
+                    self.project_root, self.match_predictions_folder
+                )
+            else:
+                full_export_path = None
 
-        logger.info("All predictions exported successfully")
+            # Export predictions
+            self.storage_manager.store_predictions(
+                sport_data, base_key, full_export_path
+            )
+
+        logger.info("All predictions exported successfully.")
 
     def execute_workflow(self, config: Dict[str, Any]) -> None:
         """
@@ -328,6 +390,13 @@ class TipGenius:
             - additional_info_options : list
                 The list of additional info options to use.
         """
+        # Initialize storage manager
+        self.storage_manager = StorageManager(
+            match_predictions_folder=self.match_predictions_folder,
+            debug=self.debug,
+            write_to_kv=self.export_to_kv,
+            export_to_file=self.export_to_file,
+        )
         self.prediction_data.clear()
 
         sports_list = config["sports_list"]
@@ -351,10 +420,18 @@ class TipGenius:
             for sport in sports_list:
                 logger.debug("Retrieving odds for sport: %s", sport)
 
+                # Fetch the odds data
                 api_result = self.api_pipeline.fetch_api_data(
                     sport_key=sport,
-                    store_api_result=self.store_api_results,
                 )
+                # Store the API data to json file
+                if self.store_api_results:
+
+                    self.store_api_data(
+                        api_result=api_result,
+                        sport=sport,
+                        api_name=self.api_pipeline.api_name,
+                    )
 
                 combinations = product(
                     llm_provider_options,
@@ -385,7 +462,7 @@ class TipGenius:
 
                     # Process the API data into a DataFrame
                     df = self.api_pipeline.process_api_data(
-                        api_result,
+                        api_result=api_result,
                         named_teams=named_teams,
                         additional_info=additional_info,
                     )
@@ -422,13 +499,13 @@ class TipGenius:
                         ]
                     ).to_dicts()
 
-                    self.store_predictions(
-                        sport,
-                        llm_provider,
-                        prediction_type,
-                        named_teams,
-                        additional_info,
-                        matches,
+                    self.save_results(
+                        sport=sport,
+                        llm_provider=llm_provider,
+                        prediction_type=prediction_type,
+                        named_teams=named_teams,
+                        additional_info=additional_info,
+                        matches=matches,
                     )
 
                     logger.debug(
@@ -441,7 +518,9 @@ class TipGenius:
 
                     pbar.update(1)
 
-        self.export_results()
+        # Export the final results to KV / File
+        if self.export_to_kv or self.export_to_file:
+            self.export_results()
 
         logger.info("All workflows completed.")
 
@@ -451,19 +530,22 @@ class TipGenius:
 
 if __name__ == "__main__":
 
-    # Read configuration into a dictionary
+    # Read configuration
     config_path = os.path.join("cfg", "tip_genius_config.yaml")
     with open(config_path, "r", encoding="utf-8") as f:
         tip_genius_config = yaml.safe_load(f)
 
-    # Create an instance of TipGenius with an API class
-    tip_genius = TipGenius(
-        api_pipeline=OddsAPI(), debug=False, write_to_kv=True, write_to_file=True
-    )
+    # Read env.local (if available)
+    load_dotenv(dotenv_path="../../.env.local")
 
-    # Intermediate Result Storage (by default False)
-    tip_genius.store_api_results = True
-    tip_genius.store_llm_results = True
+    # Create an instance of TipGenius with an API class
+    tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False)
+
+    # Write / Save Options for (intermediate) results
+    tip_genius.store_api_results = False  # Intermediate API Results
+    tip_genius.store_llm_results = False  # Intermediate LLM Results
+    tip_genius.export_to_file = False  # Final Prediction Results
+    tip_genius.export_to_kv = True  # Final Prediction Results
 
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)
