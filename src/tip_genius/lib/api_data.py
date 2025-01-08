@@ -7,7 +7,6 @@
 # %% --------------------------------------------
 # * Libraries
 
-import json
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -58,7 +57,8 @@ class BaseAPI(ABC):
 
     @abstractmethod
     def fetch_api_data(
-        self, sport_key: str, store_api_result: bool = False
+        self,
+        sport_key: str,
     ) -> Dict[str, Any]:
         """
         Fetch odds data from the API for a specific sport.
@@ -67,8 +67,6 @@ class BaseAPI(ABC):
         ----------
         sport_key : str
             The key of the sport for which to retrieve odds.
-        store_api_result : bool, optional, default False
-            Whether to store the raw API result data.
 
         Returns
         -------
@@ -98,51 +96,6 @@ class BaseAPI(ABC):
             A Polars DataFrame with processed data.
         """
 
-    @staticmethod
-    def store_api_result_as_json(
-        api_result: Dict[str, Any], export_folder: str, suffix: str = ""
-    ) -> str:
-        """
-        Store the raw API result data in a JSON file in the specified data folder.
-
-        Parameters
-        ----------
-        api_result : Dict[str, Any]
-            The raw data returned from the API.
-        export_folder : str
-            The folder where the JSON file will be saved.
-        suffix : str, optional, default ''
-            The suffix to add to the filename
-
-        Returns
-        -------
-        str
-            The full path to the JSON file.
-        """
-        try:
-            # Determine the project root and create the full export path
-            project_root = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-            )
-            full_export_path = os.path.join(project_root, export_folder)
-            os.makedirs(full_export_path, exist_ok=True)
-
-            # Generate a filename with a timestamp
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            filename = f"{timestamp}{suffix}.json"
-            file_path = os.path.join(full_export_path, filename)
-
-            # Write the raw API data to the JSON file
-            with open(file_path, "w", encoding="utf-8") as f:
-                json.dump(api_result, f, ensure_ascii=False, indent=4)
-
-            logger.debug("API result stored successfully at: %s", file_path)
-            return file_path
-
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error("A problem occurred while storing API result: %s", exc)
-            return ""
-
 
 class OddsAPI(BaseAPI):
     """Class for interacting with 'The Odds API'."""
@@ -158,9 +111,7 @@ class OddsAPI(BaseAPI):
         self.sports_mapping = self.config["sports_mapping"]
         self.bookmaker_priority = self.config["bookmaker_priority"]
 
-    def fetch_api_data(
-        self, sport_key: str, store_api_result: bool = False
-    ) -> Dict[str, Any]:
+    def fetch_api_data(self, sport_key: str) -> Dict[str, Any]:
         """
         Fetch odds data from the Odds API for a specific sport.
 
@@ -169,8 +120,6 @@ class OddsAPI(BaseAPI):
         sport_key : str
             The key of the sport for which to retrieve odds.
             E.g., "Bundesliga - Germany", "Premier League - England", etc.
-        store_api_result : bool, optional, default False
-            Whether to store the raw API result data.
 
         Returns
         -------
@@ -210,15 +159,6 @@ class OddsAPI(BaseAPI):
 
         api_result = response.json()
         logger.debug("Successfully fetched odds data for sport: %s", sport_key)
-
-        if store_api_result:
-            suffix = f"_{sport_key}_{self.api_name}".replace(" ", "")
-            file_export_location = self.store_api_result_as_json(
-                api_result=api_result,
-                export_folder=self.api_result_folder,
-                suffix=suffix,
-            )
-            logger.debug("Raw API result data stored in: %s", file_export_location)
 
         return api_result
 
