@@ -1,6 +1,7 @@
-// Cache names
-const CACHE_NAME = 'tip-genius-v1';
-const DYNAMIC_CACHE = 'tip-genius-dynamic-v1';
+// Cache version management
+const VERSION = '2.0.0';
+const CACHE_NAME = `tip-genius-static-${VERSION}`;
+const DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`;
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -12,6 +13,14 @@ const STATIC_ASSETS = [
     '/images/icon-512x512.png',
     'https://cdn.tailwindcss.com'
 ];
+
+// Function to clean up old caches
+const deleteOldCaches = async () => {
+    const cacheKeepList = [CACHE_NAME, DYNAMIC_CACHE];
+    const keyList = await caches.keys();
+    const cachesToDelete = keyList.filter(key => !cacheKeepList.includes(key));
+    return Promise.all(cachesToDelete.map(key => caches.delete(key)));
+};
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
@@ -25,19 +34,18 @@ self.addEventListener('install', event => {
                 console.error('Error caching static assets:', error);
             })
     );
+    // Force the waiting service worker to become the active service worker
+    self.skipWaiting();
 });
 
-// Activate event - cleanup old caches
+// Activate event - cleanup old caches and claim clients
 self.addEventListener('activate', event => {
     event.waitUntil(
-        caches.keys()
-            .then(cacheNames => {
-                return Promise.all(
-                    cacheNames
-                        .filter(name => name !== CACHE_NAME && name !== DYNAMIC_CACHE)
-                        .map(name => caches.delete(name))
-                );
-            })
+        Promise.all([
+            deleteOldCaches(),
+            // Force new service worker to take control immediately
+            self.clients.claim()
+        ])
     );
 });
 
@@ -53,7 +61,7 @@ self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Handle API requests differently
+    // Handle API requests differently (network-first strategy)
     if (request.url.includes('/api/predictions')) {
         event.respondWith(
             fetch(request)
@@ -77,25 +85,42 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Handle static assets
+    // Handle static assets with stale-while-revalidate strategy
     event.respondWith(
-        caches.match(request)
-            .then(response => {
-                if (response) {
+        (async () => {
+            // Try to get from cache first
+            const cachedResponse = await caches.match(request);
+            
+            // Start fetch in background
+            const networkResponsePromise = fetch(request).then(
+                async response => {
+                    // Cache the new version if it's a successful response
+                    if (response.status === 200) {
+                        const cache = await caches.open(CACHE_NAME);
+                        cache.put(request, response.clone());
+                    }
                     return response;
                 }
-                return fetch(request)
-                    .then(response => {
-                        // Cache successful responses for static assets
-                        if (response.status === 200) {
-                            const responseToCache = response.clone();
-                            caches.open(CACHE_NAME)
-                                .then(cache => {
-                                    cache.put(request, responseToCache);
-                                });
-                        }
-                        return response;
-                    });
-            })
+            );
+
+            try {
+                // If we have a cached response, use it but still update cache in background
+                if (cachedResponse) {
+                    networkResponsePromise.catch(console.error);
+                    return cachedResponse;
+                }
+                
+                // If no cached response, wait for the network response
+                const networkResponse = await networkResponsePromise;
+                return networkResponse;
+                
+            } catch (error) {
+                // If network fails and we have a cached version, use it
+                if (cachedResponse) return cachedResponse;
+                
+                // Otherwise, propagate the error
+                throw error;
+            }
+        })()
     );
 });
