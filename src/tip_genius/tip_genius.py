@@ -19,8 +19,6 @@ from typing import Any, Dict, List
 
 import polars as pl
 import yaml
-from dotenv import load_dotenv
-from tqdm import tqdm
 
 from lib.api_data import BaseAPI, OddsAPI
 from lib.llm_manager import LLMManager
@@ -120,8 +118,8 @@ class TipGenius:
     # Set project root
     project_root = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-    # Initialize attributes with default values
-    export_to_kv = True
+    # Initialize all attributes with default values
+    export_to_kv = False
     export_to_file = False
     store_api_results = False
     store_llm_results = False
@@ -463,107 +461,110 @@ class TipGenius:
         if self.debug:
             logger.info("Debug mode is enabled, only processing first few rows...")
 
-        with tqdm(total=nr_total_combinations, desc="Processing combinations") as pbar:
-            for sport in sports_list:
-                logger.debug("Retrieving odds for sport: %s", sport)
+        logger.info(
+            "Starting workflow with %d total combinations", nr_total_combinations
+        )
+        processed_count = 0
 
-                # Fetch the odds data
-                api_result = self.api_pipeline.fetch_api_data(
-                    sport_key=sport,
-                )
-                # Store the API data to json file
-                if self.store_api_results:
+        for sport in sports_list:
+            logger.debug("Retrieving odds for sport: %s", sport)
 
-                    self.store_api_data(
-                        api_result=api_result,
-                        sport=sport,
-                        api_name=self.api_pipeline.api_name,
-                    )
-
-                combinations = product(
-                    llm_provider_options,
-                    prediction_type_options,
-                    named_teams_options,
-                    additional_info_options,
+            # Fetch the odds data
+            api_result = self.api_pipeline.fetch_api_data(
+                sport_key=sport,
+            )
+            # Store the API data to json file
+            if self.store_api_results:
+                self.store_api_data(
+                    api_result=api_result,
+                    sport=sport,
+                    api_name=self.api_pipeline.api_name,
                 )
 
-                for (
+            combinations = product(
+                llm_provider_options,
+                prediction_type_options,
+                named_teams_options,
+                additional_info_options,
+            )
+
+            for (
+                llm_provider,
+                prediction_type,
+                named_teams,
+                additional_info,
+            ) in combinations:
+                processed_count += 1
+                logger.info(
+                    "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",
+                    processed_count,
+                    nr_total_combinations,
                     llm_provider,
                     prediction_type,
                     named_teams,
                     additional_info,
-                ) in combinations:
-                    logger.debug(
-                        "Processing: %s, %s, Named Teams: %s, Additional Info: %s",
-                        llm_provider,
-                        prediction_type,
-                        named_teams,
-                        additional_info,
-                    )
+                )
 
-                    # If API Data is not available, skip this combination
-                    if api_result is None or len(api_result) == 0:
-                        logger.warning("No valid API data, skipping combination...")
-                        pbar.update(1)
-                        continue
+                # If API Data is not available, skip this combination
+                if api_result is None or len(api_result) == 0:
+                    logger.warning("No valid API data, skipping combination...")
+                    continue
 
-                    # Process the API data into a DataFrame
-                    df = self.api_pipeline.process_api_data(
-                        api_result=api_result,
-                        named_teams=named_teams,
-                        additional_info=additional_info,
-                    )
+                # Process the API data into a DataFrame
+                df = self.api_pipeline.process_api_data(
+                    api_result=api_result,
+                    named_teams=named_teams,
+                    additional_info=additional_info,
+                )
 
-                    # If debug mode is enabled, only process the first few rows
-                    if self.debug:
-                        df = df.limit(2)
+                # If debug mode is enabled, only process the first few rows
+                if self.debug:
+                    df = df.limit(2)
 
-                    df_processed = self.predict_results(
-                        df=df,
-                        llm_provider=llm_provider,
-                        prediction_type=prediction_type,
-                    )
+                df_processed = self.predict_results(
+                    df=df,
+                    llm_provider=llm_provider,
+                    prediction_type=prediction_type,
+                )
 
-                    # Store LLM results in CSV format
-                    if self.store_llm_results:
-                        self.store_llm_data(
-                            df=df_processed,
-                            sport=sport,
-                            llm_provider=llm_provider,
-                            prediction_type=prediction_type,
-                            named_teams=named_teams,
-                            additional_info=additional_info,
-                        )
-
-                    matches = df_processed.select(
-                        [
-                            "commence_time_str",
-                            "home_team",
-                            "away_team",
-                            "prediction_home",
-                            "prediction_away",
-                            "outlook",
-                        ]
-                    ).to_dicts()
-
-                    self.save_results(
+                # Store LLM results in CSV format
+                if self.store_llm_results:
+                    self.store_llm_data(
+                        df=df_processed,
                         sport=sport,
                         llm_provider=llm_provider,
                         prediction_type=prediction_type,
                         named_teams=named_teams,
                         additional_info=additional_info,
-                        matches=matches,
                     )
 
-                    logger.debug(
-                        "Completed: %s, %s, Named Teams: %s, Additional Info: %s",
-                        llm_provider,
-                        prediction_type,
-                        named_teams,
-                        additional_info,
-                    )
+                matches = df_processed.select(
+                    [
+                        "commence_time_str",
+                        "home_team",
+                        "away_team",
+                        "prediction_home",
+                        "prediction_away",
+                        "outlook",
+                    ]
+                ).to_dicts()
 
-                    pbar.update(1)
+                self.save_results(
+                    sport=sport,
+                    llm_provider=llm_provider,
+                    prediction_type=prediction_type,
+                    named_teams=named_teams,
+                    additional_info=additional_info,
+                    matches=matches,
+                )
+
+                logger.debug(
+                    "Completed: %s, %s, Named Teams: %s, Additional Info: %s",
+                    llm_provider,
+                    prediction_type,
+                    named_teams,
+                    additional_info,
+                )
 
         # Export the final results to KV / File
         if self.export_to_kv or self.export_to_file:
