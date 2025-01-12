@@ -496,7 +496,7 @@ class TipGenius:
             ) in combinations:
                 processed_count += 1
                 logger.info(
-                    "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",
+                    "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",  # pylint: disable=line-too-long
                     processed_count,
                     nr_total_combinations,
                     llm_provider,
@@ -582,12 +582,11 @@ if __name__ == "__main__":
     in_cloud = is_cloud_environment()
 
     if in_cloud:
-        ...
-        # logger.info("Running in cloud environment.")
+        logger.info("Running in cloud environment.")
     else:
         from dotenv import load_dotenv
 
-        # logger.info("Running in local environment.")
+        logger.info("Running in local environment.")
         # Read env.local (if available) for local development
         load_dotenv(dotenv_path="../../.env.local")
 
