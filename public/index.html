@@ -122,6 +122,7 @@
 
 <script>
     // Global variables
+    const DYNAMIC_CACHE = 'tip-genius-dynamic-2.0.0';
     let currentLeague = localStorage.getItem('lastUsedLeague');
     const API_URL = '/api/predictions';
     let cachedLeagueData = null;
@@ -232,7 +233,7 @@
         }
     }
 
-    // Data loading functions
+    // League Data processing and rendering
     async function loadLeagueData(leagueName) {
         hideError();
         const container = document.getElementById('matches-container');
@@ -369,26 +370,6 @@
         event.preventDefault();
         document.getElementById('about').scrollIntoView({ behavior: 'smooth' });
     };
-
-    // Service Worker configuration
-    const CACHE_NAME = 'tip-genius-v1';
-    const DYNAMIC_CACHE = 'tip-genius-dynamic-v1';
-    const STATIC_ASSETS = [
-        '/',
-        '/index.html',
-        '/manifest.json',
-        '/images/icon-128x128.png',
-        '/images/icon-256x256.png',
-        '/images/icon-512x512.png',
-        'https://cdn.tailwindcss.com'
-    ];
-
-    // Service Worker event handlers
-    async function handleApiResponse(request, response) {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        await cache.put(request, response.clone());
-        return response;
-    }
 
     // Initialize application
     createTabs();
