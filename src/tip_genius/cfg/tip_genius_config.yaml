@@ -7,9 +7,10 @@
   
   llm_provider_options:
     - "Mistral-Large"
-    # - "Deepseek-Chat" # Has issues with response format
-    # - "Anthropic-Haiku"
-    # - "Anthropic-Sonnet"
+    - "Google-Gemini-Flash"
+    # - "Deepseek-Chat" # Sometimes has issues with JSON response
+    # - "Anthropic-Claude-Haiku"
+    # - "Anthropic-Claude-Sonnet"
     
   
   prediction_type_options:

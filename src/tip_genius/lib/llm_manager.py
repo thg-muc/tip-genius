@@ -139,10 +139,12 @@ class LLMManager:
             "content-type": "application/json",
         }
 
-        # For Anthropic, we need to structure the request differently
+        # For Anthropic Claude, we need to structure the request differently
         if self.provider.startswith("anthropic"):
+            url = f"{self.base_url}/{self.operation}"
             headers["x-api-key"] = self.api_key
             headers["anthropic-version"] = "2023-06-01"
+
             data = {
                 "model": self.model,
                 "system": self.system_prompt,
@@ -152,10 +154,22 @@ class LLMManager:
                 "stream": False,
                 **llm_kwargs,
             }
+        # For Google Gemini, we need to structure the request differently
+        elif self.provider.startswith("google"):
+            url = f"{self.base_url}/models/{self.model}:{self.operation}"
+            headers["x-goog-api-key"] = self.api_key
 
-        # Other providers (OpenAI, Mistral, etc.)
+            data = {
+                "contents": [{"parts": [{"text": user_prompt}]}],
+                "generationConfig": {**llm_kwargs},
+                "system_instruction": {"parts": {"text": self.system_prompt}},
+            }
+
+        # Other providers (OpenAI compatible: Mistral, etc.)
         else:
+            url = f"{self.base_url}/{self.operation}"
             headers["authorization"] = f"Bearer {self.api_key}"
+
             data = {
                 "model": self.model,
                 "messages": [
@@ -168,7 +182,7 @@ class LLMManager:
         try:
             # Send the prompt to the LLM to receive the full response
             response = requests.post(
-                url=f"{self.base_url}/{self.operation}",
+                url=url,
                 headers=headers,
                 json=data,
                 timeout=timeout,
@@ -183,6 +197,10 @@ class LLMManager:
             # Get the prediction
             if self.provider.startswith("anthropic"):
                 prediction = full_response["content"][0]["text"]
+            elif self.provider.startswith("google"):
+                prediction = full_response["candidates"][0]["content"]["parts"][0][
+                    "text"
+                ]
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
 
