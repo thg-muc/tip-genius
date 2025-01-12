@@ -176,7 +176,7 @@ class StorageManager:
                         ensure_ascii=False,
                     )
                     f.write("\n")
-            logger.info("Successfully exported predictions to: %s", file_path)
+            logger.debug("Successfully exported predictions to: %s", file_path)
         except IOError as e:
             logger.error(
                 "Failed to write predictions to file %s: %s", file_path, str(e)
@@ -218,7 +218,7 @@ class StorageManager:
             )
 
             if response.status_code == 200:
-                logger.info(
+                logger.debug(
                     "Successfully stored predictions in Vercel KV with key: %s",
                     key_name,
                 )
