@@ -18,6 +18,7 @@ dependencies:
   - pipreqs
   - pylint
   - pytest
+  - python-dotenv
 
 
   - pip:
