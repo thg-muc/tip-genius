@@ -30,6 +30,52 @@ from lib.storage_manager import StorageManager
 logger = logging.getLogger(__name__)
 
 # %% --------------------------------------------
+# * Support Functions
+
+
+def is_cloud_environment() -> bool:
+    """
+    Check if the code is running in a cloud/CI environment.
+
+    The function checks for common environment variables used by different
+    cloud providers and CI/CD platforms to determine the execution context.
+
+    Returns
+    -------
+    bool
+        True if running in a cloud environment (AWS, GitHub Actions, Vercel, etc.),
+        False if running locally.
+
+    Notes
+    -----
+    Currently detects:
+    - GitHub Actions
+    - Vercel
+    - AWS Lambda
+    - AWS CodeBuild
+    - CircleCI
+    - GitLab CI
+    - Jenkins
+    - Heroku
+    - Render
+    """
+    # List of environment variables that indicate cloud/CI environments
+    cloud_indicators = [
+        "GITHUB_ACTIONS",  # GitHub Actions
+        "VERCEL",  # Vercel
+        "AWS_LAMBDA_FUNCTION_NAME",  # AWS Lambda
+        "CODEBUILD_BUILD_ID",  # AWS CodeBuild
+        "CIRCLECI",  # CircleCI
+        "GITLAB_CI",  # GitLab CI
+        "JENKINS_URL",  # Jenkins
+        "DYNO",  # Heroku
+        "RENDER",  # Render
+    ]
+
+    return any(indicator in os.environ for indicator in cloud_indicators)
+
+
+# %% --------------------------------------------
 # * TipGenius Class Definition
 
 
@@ -531,22 +577,36 @@ class TipGenius:
 
 if __name__ == "__main__":
 
-    # Read configuration
-    config_path = os.path.join("cfg", "tip_genius_config.yaml")
-    with open(config_path, "r", encoding="utf-8") as f:
-        tip_genius_config = yaml.safe_load(f)
+    # Check if running in cloud environment
+    in_cloud = is_cloud_environment()
 
-    # Read env.local (if available)
-    load_dotenv(dotenv_path="../../.env.local")
+    if in_cloud:
+        ...
+        # logger.info("Running in cloud environment.")
+    else:
+        from dotenv import load_dotenv
+
+        # logger.info("Running in local environment.")
+        # Read env.local (if available) for local development
+        load_dotenv(dotenv_path="../../.env.local")
 
     # Create an instance of TipGenius with an API class
     tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False)
 
-    # Write / Save Options for (intermediate) results
-    tip_genius.store_api_results = False  # Intermediate API Results
-    tip_genius.store_llm_results = False  # Intermediate LLM Results
-    tip_genius.export_to_file = False  # Final Prediction Results
-    tip_genius.export_to_kv = True  # Final Prediction Results
+    # Set attributes for the TipGenius instance
+    options = {
+        "store_api_results": not in_cloud,
+        "store_llm_results": not in_cloud,
+        "export_to_file": not in_cloud,
+        "export_to_kv": True,
+    }
 
+    for option, value in options.items():
+        setattr(tip_genius, option, value)
+
+    # Load Config
+    config_path = os.path.join("cfg", "tip_genius_config.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        tip_genius_config = yaml.safe_load(f)
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)
