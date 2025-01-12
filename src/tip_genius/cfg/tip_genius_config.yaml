@@ -9,8 +9,8 @@
     - "Mistral-Large"
     - "Google-Gemini-Flash"
     # - "Deepseek-Chat" # Sometimes has issues with JSON response
-    # - "Anthropic-Claude-Haiku"
-    # - "Anthropic-Claude-Sonnet"
+    # - "Anthropic-Claude-Haiku" # Sometimes has issues with JSON response
+    # - "Anthropic-Claude-Sonnet" # Sometimes has issues with JSON response
     
   
   prediction_type_options:
