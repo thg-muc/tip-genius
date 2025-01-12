@@ -44,7 +44,7 @@ anthropic-claude-sonnet:
     max_tokens: 8192
 
 google-gemini-flash:
-  api_rate_limit: 12 # requests per minute for free tier
+  api_rate_limit: 10 # requests per minute for free tier
   api_key_env_name: GOOGLE_API_KEY
   base_url: https://generativelanguage.googleapis.com/v1beta
   operation: generateContent # other Option: streamGenerateContent for stream
