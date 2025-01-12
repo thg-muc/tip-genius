@@ -75,12 +75,40 @@
                     <span class="text-base sm:text-2xl mr-2 hover:animate-bounce">⚽️</span>
                     <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                 </a>
-                <!-- GitHub link -->
-                <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                    </svg>
-                </a>
+                <!-- Header right section with GitHub and hamburger menu -->
+                <div class="flex items-center space-x-0 sm:space-x-1">
+                    <!-- GitHub link -->
+                    <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="text-gray-500 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">
+                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                        </svg>
+                    </a>                    
+                    <!-- Hamburger menu -->
+                    <div class="relative">
+                        <!-- Hamburger button -->
+                        <button id="menuButton" class="p-2 hover:bg-gray-100 dark:hover:bg-dark-card rounded-lg transition duration-200">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>                        
+                        <!-- Dropdown menu -->
+                        <div id="dropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-dark-card rounded-lg shadow-lg z-50">
+                            <div class="p-6">
+                                <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">LLM Provider</h3>
+                                <div class="space-y-3">
+                                    <label class="flex items-center space-x-3 cursor-pointer">
+                                        <input type="radio" name="llm-provider" value="Mistral-Large" class="form-radio text-sky-700 dark:text-sky-400" checked>
+                                        <span class="text-base text-gray-700 dark:text-gray-300">Mistral Large</span>
+                                    </label>
+                                    <label class="flex items-center space-x-3 cursor-pointer">
+                                        <input type="radio" name="llm-provider" value="Google-Gemini-Flash" class="form-radio text-sky-700 dark:text-sky-400">
+                                        <span class="text-base text-gray-700 dark:text-gray-300">Google Gemini</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -122,11 +150,14 @@
 
 <script>
     // Global variables
+    const DYNAMIC_CACHE = 'tip-genius-dynamic-2.0.0';
     let currentLeague = localStorage.getItem('lastUsedLeague');
     const API_URL = '/api/predictions';
     let cachedLeagueData = null;
     const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
     let lastFetchTime = 0;
+    const DEFAULT_LLM = 'Mistral-Large';
+    let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM;
 
     // Error handling functions
     const showError = msg => {
@@ -232,7 +263,7 @@
         }
     }
 
-    // Data loading functions
+    // League Data processing and rendering
     async function loadLeagueData(leagueName) {
         hideError();
         const container = document.getElementById('matches-container');
@@ -285,7 +316,9 @@
         }
         
         // Fetch fresh data
-        const response = await fetch(API_URL);
+        const storeKey = `Match_Predictions_${currentLLM}_FourPointsScoring_named_with-info`;
+        const response = await fetch(`${API_URL}?key=${storeKey}`);
+        
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         
         const data = parseApiResponse(await response.json());
@@ -359,6 +392,45 @@
         }
     }
 
+    // Menu handling
+    document.addEventListener('DOMContentLoaded', () => {
+        const menuButton = document.getElementById('menuButton');
+        const dropdownMenu = document.getElementById('dropdownMenu');
+        const llmRadios = document.querySelectorAll('input[name="llm-provider"]');
+
+        llmRadios.forEach(radio => {
+            if (radio.value === currentLLM) {
+                radio.checked = true;
+            }
+        });
+
+        menuButton.addEventListener('click', () => {
+            dropdownMenu.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+                dropdownMenu.classList.add('hidden');
+            }
+        });
+
+        llmRadios.forEach(radio => {
+            radio.addEventListener('change', async (event) => {
+                currentLLM = event.target.value;
+                localStorage.setItem('lastUsedLLM', currentLLM);
+                cachedLeagueData = null;
+                lastFetchTime = 0;
+                if (currentLeague) {
+                    await loadLeagueData(currentLeague);
+                }
+                dropdownMenu.classList.add('hidden');
+            });
+        });
+
+        document.querySelector('header a[href="#about"]').addEventListener('click', scrollToAbout);
+        document.body.classList.add('loaded');
+    });
+
     // Navigation functions
     const scrollToTop = () => {
         window.scrollTo({top: 0, behavior: 'smooth'});
@@ -370,34 +442,8 @@
         document.getElementById('about').scrollIntoView({ behavior: 'smooth' });
     };
 
-    // Service Worker configuration
-    const CACHE_NAME = 'tip-genius-v1';
-    const DYNAMIC_CACHE = 'tip-genius-dynamic-v1';
-    const STATIC_ASSETS = [
-        '/',
-        '/index.html',
-        '/manifest.json',
-        '/images/icon-128x128.png',
-        '/images/icon-256x256.png',
-        '/images/icon-512x512.png',
-        'https://cdn.tailwindcss.com'
-    ];
-
-    // Service Worker event handlers
-    async function handleApiResponse(request, response) {
-        const cache = await caches.open(DYNAMIC_CACHE);
-        await cache.put(request, response.clone());
-        return response;
-    }
-
-    // Initialize application
+    // Initialize application and set up periodic refresh
     createTabs();
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelector('header a[href="#about"]').addEventListener('click', scrollToAbout);
-        document.body.classList.add('loaded');
-    });
-
-    // Set up periodic refresh
     setInterval(() => {
         if (currentLeague) {
             loadLeagueData(currentLeague);

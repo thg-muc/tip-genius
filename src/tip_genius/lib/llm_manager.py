@@ -9,6 +9,7 @@
 
 import logging
 import os
+import time
 from typing import Any, Dict, List
 
 import requests
@@ -108,6 +109,31 @@ class LLMManager:
         self.operation = self.config["operation"]
         self.model = self.config["model"]
         self.kwargs: Dict[str, Any] = self.config.get("kwargs", {})
+        self.rate_limit: float = self.config.get(
+            "api_rate_limit", 0
+        )  # 0 or negative value means no rate limit
+
+    def _wait_for_rate_limit(self, request_duration: float) -> None:
+        """
+        Calculate and wait for the appropriate time to respect rate limits.
+
+        Parameters
+        ----------
+        request_duration : float
+            The duration of the last request in seconds.
+        """
+        # Calculate minimum time between requests (in s) with a small safety buffer
+        min_interval = (60.0 / self.rate_limit) * 1.1
+
+        # If request took less time than minimum interval, sleep for the difference
+        if request_duration < min_interval:
+            sleep_duration = min_interval - request_duration
+            logger.debug(
+                "Rate limiting: request took %s seconds, sleeping for %s seconds",
+                round(request_duration, 2),
+                round(sleep_duration, 2),
+            )
+            time.sleep(sleep_duration)
 
     def get_prediction(self, user_prompt: str, timeout: int = 30, **kwargs) -> str:
         """
@@ -132,6 +158,9 @@ class LLMManager:
         """
         logger.debug("Getting prediction for prompt: %.50s...", user_prompt)
 
+        # Record start time
+        start_time = time.time()
+
         # Get kwargs, give priority to kwargs passed to the function
         llm_kwargs = {**self.kwargs, **kwargs}
 
@@ -139,10 +168,12 @@ class LLMManager:
             "content-type": "application/json",
         }
 
-        # For Anthropic, we need to structure the request differently
+        # For Anthropic Claude, we need to structure the request differently
         if self.provider.startswith("anthropic"):
+            url = f"{self.base_url}/{self.operation}"
             headers["x-api-key"] = self.api_key
             headers["anthropic-version"] = "2023-06-01"
+
             data = {
                 "model": self.model,
                 "system": self.system_prompt,
@@ -152,10 +183,22 @@ class LLMManager:
                 "stream": False,
                 **llm_kwargs,
             }
+        # For Google Gemini, we need to structure the request differently
+        elif self.provider.startswith("google"):
+            url = f"{self.base_url}/models/{self.model}:{self.operation}"
+            headers["x-goog-api-key"] = self.api_key
 
-        # Other providers (OpenAI, Mistral, etc.)
+            data = {
+                "contents": [{"parts": [{"text": user_prompt}]}],
+                "generationConfig": {**llm_kwargs},
+                "system_instruction": {"parts": {"text": self.system_prompt}},
+            }
+
+        # Other providers (OpenAI compatible: Mistral, etc.)
         else:
+            url = f"{self.base_url}/{self.operation}"
             headers["authorization"] = f"Bearer {self.api_key}"
+
             data = {
                 "model": self.model,
                 "messages": [
@@ -168,7 +211,7 @@ class LLMManager:
         try:
             # Send the prompt to the LLM to receive the full response
             response = requests.post(
-                url=f"{self.base_url}/{self.operation}",
+                url=url,
                 headers=headers,
                 json=data,
                 timeout=timeout,
@@ -183,10 +226,19 @@ class LLMManager:
             # Get the prediction
             if self.provider.startswith("anthropic"):
                 prediction = full_response["content"][0]["text"]
+            elif self.provider.startswith("google"):
+                prediction = full_response["candidates"][0]["content"]["parts"][0][
+                    "text"
+                ]
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
 
             logger.debug("Received prediction: %.50s...", prediction)
+
+            # Observe a rate limit if specified
+            if self.rate_limit > 0:  # Check for rate limit
+                self._wait_for_rate_limit(request_duration=time.time() - start_time)
+
             return prediction
 
         except requests.RequestException as e:

@@ -19,8 +19,6 @@ from typing import Any, Dict, List
 
 import polars as pl
 import yaml
-from dotenv import load_dotenv
-from tqdm import tqdm
 
 from lib.api_data import BaseAPI, OddsAPI
 from lib.llm_manager import LLMManager
@@ -28,6 +26,52 @@ from lib.storage_manager import StorageManager
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# %% --------------------------------------------
+# * Support Functions
+
+
+def is_cloud_environment() -> bool:
+    """
+    Check if the code is running in a cloud/CI environment.
+
+    The function checks for common environment variables used by different
+    cloud providers and CI/CD platforms to determine the execution context.
+
+    Returns
+    -------
+    bool
+        True if running in a cloud environment (AWS, GitHub Actions, Vercel, etc.),
+        False if running locally.
+
+    Notes
+    -----
+    Currently detects:
+    - GitHub Actions
+    - Vercel
+    - AWS Lambda
+    - AWS CodeBuild
+    - CircleCI
+    - GitLab CI
+    - Jenkins
+    - Heroku
+    - Render
+    """
+    # List of environment variables that indicate cloud/CI environments
+    cloud_indicators = [
+        "GITHUB_ACTIONS",  # GitHub Actions
+        "VERCEL",  # Vercel
+        "AWS_LAMBDA_FUNCTION_NAME",  # AWS Lambda
+        "CODEBUILD_BUILD_ID",  # AWS CodeBuild
+        "CIRCLECI",  # CircleCI
+        "GITLAB_CI",  # GitLab CI
+        "JENKINS_URL",  # Jenkins
+        "DYNO",  # Heroku
+        "RENDER",  # Render
+    ]
+
+    return any(indicator in os.environ for indicator in cloud_indicators)
+
 
 # %% --------------------------------------------
 # * TipGenius Class Definition
@@ -74,8 +118,8 @@ class TipGenius:
     # Set project root
     project_root = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-    # Initialize attributes with default values
-    export_to_kv = True
+    # Initialize all attributes with default values
+    export_to_kv = False
     export_to_file = False
     store_api_results = False
     store_llm_results = False
@@ -233,51 +277,55 @@ class TipGenius:
         -------
         pl.DataFrame
             The processed dataframe with predictions.
-
-        Raises
-        ------
-        ValueError
-            If the LLM prediction is inconsistent with the odds.
         """
         llm = LLMManager(provider=llm_provider, prediction_type=prediction_type)
 
-        for i in range(df.shape[0]):
-            odds_summary = df[i, "odds_summary"]
-            odds_home = df[i, "odds_home"]
-            odds_away = df[i, "odds_away"]
-            odds_draw = df[i, "odds_draw"]
+        def is_prediction_consistent(
+            p_home: int, p_away: int, o_home: float, o_away: float
+        ) -> bool:
+            return not (
+                (p_home > p_away and o_home >= o_away)
+                or (p_home < p_away and o_home <= o_away)
+            )
 
-            if (odds_home == 0) or (odds_away == 0) or (odds_draw == 0):
+        def validate_prediction(pred: dict) -> bool:
+            return (
+                pred["reasoning"]
+                and pred["outlook"]
+                and isinstance(pred["prediction"]["home"], int)
+                and isinstance(pred["prediction"]["away"], int)
+            )
+
+        for i in range(df.shape[0]):
+            if any(df[i, f"odds_{key}"] == 0 for key in ["home", "away", "draw"]):
                 logger.debug("Odds are invalid for row %d, skipping...", i + 1)
                 continue
 
-            success = False
-            reasoning = prediction_home = prediction_away = outlook = None
+            last_response = None
+            attempt = 0
             for attempt in range(self.llm_attempts):
                 try:
-                    llm_response = llm.get_prediction(
-                        user_prompt=odds_summary,
-                        temperature=llm.kwargs.get("temperature", 0.0) + 0.2 * attempt,
-                    )
-
-                    response_dict = literal_eval(llm_response)
-                    reasoning = response_dict["reasoning"]
-                    prediction_home = response_dict["prediction"]["home"]
-                    prediction_away = response_dict["prediction"]["away"]
-                    outlook = response_dict["outlook"]
-
-                    if (
-                        prediction_home > prediction_away and odds_home >= odds_away
-                    ) or (prediction_home < prediction_away and odds_home <= odds_away):
-                        logger.warning(
-                            "Prediction inconsistent with odds for row %d, retrying...",
-                            i + 1,
+                    response = literal_eval(
+                        llm.get_prediction(
+                            user_prompt=df[i, "odds_summary"],
+                            temperature=llm.kwargs.get("temperature", 0.0)
+                            + 0.2 * attempt,
                         )
-                        continue
+                    )
+                    last_response = response
 
-                    success = True
-                    break
-
+                    if is_prediction_consistent(
+                        response["prediction"]["home"],
+                        response["prediction"]["away"],
+                        df[i, "odds_home"],
+                        df[i, "odds_away"],
+                    ):
+                        break
+                    logger.warning(
+                        "Prediction inconsistent with odds for row %d, attempt %d",
+                        i + 1,
+                        attempt + 1,
+                    )
                 except Exception as e:  # pylint: disable=broad-except
                     logger.warning(
                         "LLM prediction attempt %d failed for row %d: %s",
@@ -286,25 +334,22 @@ class TipGenius:
                         str(e),
                     )
 
-            if not success or any(
-                var is None
-                for var in (reasoning, prediction_home, prediction_away, outlook)
-            ):
+            if not last_response:
                 logger.warning("No valid LLM response for row %d, skipping...", i + 1)
                 continue
 
-            df[i, "reasoning"] = reasoning
-            df[i, "prediction_home"] = prediction_home
-            df[i, "prediction_away"] = prediction_away
-            df[i, "outlook"] = outlook
+            if attempt == self.llm_attempts - 1:
+                logger.warning(
+                    "Using inconsistent prediction for row %d after %d attempts",
+                    i + 1,
+                    self.llm_attempts,
+                )
 
-            validity = (
-                reasoning != ""
-                and outlook != ""
-                and isinstance(prediction_home, (int))
-                and isinstance(prediction_away, (int))
-            )
-            df[i, "validity"] = validity
+            df[i, "reasoning"] = last_response["reasoning"]
+            df[i, "prediction_home"] = last_response["prediction"]["home"]
+            df[i, "prediction_away"] = last_response["prediction"]["away"]
+            df[i, "outlook"] = last_response["outlook"]
+            df[i, "validity"] = validate_prediction(last_response)
 
         return df
 
@@ -416,107 +461,110 @@ class TipGenius:
         if self.debug:
             logger.info("Debug mode is enabled, only processing first few rows...")
 
-        with tqdm(total=nr_total_combinations, desc="Processing combinations") as pbar:
-            for sport in sports_list:
-                logger.debug("Retrieving odds for sport: %s", sport)
+        logger.info(
+            "Starting workflow with %d total combinations", nr_total_combinations
+        )
+        processed_count = 0
 
-                # Fetch the odds data
-                api_result = self.api_pipeline.fetch_api_data(
-                    sport_key=sport,
-                )
-                # Store the API data to json file
-                if self.store_api_results:
+        for sport in sports_list:
+            logger.debug("Retrieving odds for sport: %s", sport)
 
-                    self.store_api_data(
-                        api_result=api_result,
-                        sport=sport,
-                        api_name=self.api_pipeline.api_name,
-                    )
-
-                combinations = product(
-                    llm_provider_options,
-                    prediction_type_options,
-                    named_teams_options,
-                    additional_info_options,
+            # Fetch the odds data
+            api_result = self.api_pipeline.fetch_api_data(
+                sport_key=sport,
+            )
+            # Store the API data to json file
+            if self.store_api_results:
+                self.store_api_data(
+                    api_result=api_result,
+                    sport=sport,
+                    api_name=self.api_pipeline.api_name,
                 )
 
-                for (
+            combinations = product(
+                llm_provider_options,
+                prediction_type_options,
+                named_teams_options,
+                additional_info_options,
+            )
+
+            for (
+                llm_provider,
+                prediction_type,
+                named_teams,
+                additional_info,
+            ) in combinations:
+                processed_count += 1
+                logger.info(
+                    "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",  # pylint: disable=line-too-long
+                    processed_count,
+                    nr_total_combinations,
                     llm_provider,
                     prediction_type,
                     named_teams,
                     additional_info,
-                ) in combinations:
-                    logger.debug(
-                        "Processing: %s, %s, Named Teams: %s, Additional Info: %s",
-                        llm_provider,
-                        prediction_type,
-                        named_teams,
-                        additional_info,
-                    )
+                )
 
-                    # If API Data is not available, skip this combination
-                    if api_result is None or len(api_result) == 0:
-                        logger.warning("No valid API data, skipping combination...")
-                        pbar.update(1)
-                        continue
+                # If API Data is not available, skip this combination
+                if api_result is None or len(api_result) == 0:
+                    logger.warning("No valid API data, skipping combination...")
+                    continue
 
-                    # Process the API data into a DataFrame
-                    df = self.api_pipeline.process_api_data(
-                        api_result=api_result,
-                        named_teams=named_teams,
-                        additional_info=additional_info,
-                    )
+                # Process the API data into a DataFrame
+                df = self.api_pipeline.process_api_data(
+                    api_result=api_result,
+                    named_teams=named_teams,
+                    additional_info=additional_info,
+                )
 
-                    # If debug mode is enabled, only process the first few rows
-                    if self.debug:
-                        df = df.limit(2)
+                # If debug mode is enabled, only process the first few rows
+                if self.debug:
+                    df = df.limit(2)
 
-                    df_processed = self.predict_results(
-                        df=df,
-                        llm_provider=llm_provider,
-                        prediction_type=prediction_type,
-                    )
+                df_processed = self.predict_results(
+                    df=df,
+                    llm_provider=llm_provider,
+                    prediction_type=prediction_type,
+                )
 
-                    # Store LLM results in CSV format
-                    if self.store_llm_results:
-                        self.store_llm_data(
-                            df=df_processed,
-                            sport=sport,
-                            llm_provider=llm_provider,
-                            prediction_type=prediction_type,
-                            named_teams=named_teams,
-                            additional_info=additional_info,
-                        )
-
-                    matches = df_processed.select(
-                        [
-                            "commence_time_str",
-                            "home_team",
-                            "away_team",
-                            "prediction_home",
-                            "prediction_away",
-                            "outlook",
-                        ]
-                    ).to_dicts()
-
-                    self.save_results(
+                # Store LLM results in CSV format
+                if self.store_llm_results:
+                    self.store_llm_data(
+                        df=df_processed,
                         sport=sport,
                         llm_provider=llm_provider,
                         prediction_type=prediction_type,
                         named_teams=named_teams,
                         additional_info=additional_info,
-                        matches=matches,
                     )
 
-                    logger.debug(
-                        "Completed: %s, %s, Named Teams: %s, Additional Info: %s",
-                        llm_provider,
-                        prediction_type,
-                        named_teams,
-                        additional_info,
-                    )
+                matches = df_processed.select(
+                    [
+                        "commence_time_str",
+                        "home_team",
+                        "away_team",
+                        "prediction_home",
+                        "prediction_away",
+                        "outlook",
+                    ]
+                ).to_dicts()
 
-                    pbar.update(1)
+                self.save_results(
+                    sport=sport,
+                    llm_provider=llm_provider,
+                    prediction_type=prediction_type,
+                    named_teams=named_teams,
+                    additional_info=additional_info,
+                    matches=matches,
+                )
+
+                logger.debug(
+                    "Completed: %s, %s, Named Teams: %s, Additional Info: %s",
+                    llm_provider,
+                    prediction_type,
+                    named_teams,
+                    additional_info,
+                )
 
         # Export the final results to KV / File
         if self.export_to_kv or self.export_to_file:
@@ -530,22 +578,35 @@ class TipGenius:
 
 if __name__ == "__main__":
 
-    # Read configuration
-    config_path = os.path.join("cfg", "tip_genius_config.yaml")
-    with open(config_path, "r", encoding="utf-8") as f:
-        tip_genius_config = yaml.safe_load(f)
+    # Check if running in cloud environment
+    in_cloud = is_cloud_environment()
 
-    # Read env.local (if available)
-    load_dotenv(dotenv_path="../../.env.local")
+    if in_cloud:
+        logger.info("Running in cloud environment.")
+    else:
+        from dotenv import load_dotenv
+
+        logger.info("Running in local environment.")
+        # Read env.local (if available) for local development
+        load_dotenv(dotenv_path="../../.env.local")
 
     # Create an instance of TipGenius with an API class
     tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False)
 
-    # Write / Save Options for (intermediate) results
-    tip_genius.store_api_results = False  # Intermediate API Results
-    tip_genius.store_llm_results = False  # Intermediate LLM Results
-    tip_genius.export_to_file = False  # Final Prediction Results
-    tip_genius.export_to_kv = True  # Final Prediction Results
+    # Set attributes for the TipGenius instance
+    options = {
+        "store_api_results": not in_cloud,
+        "store_llm_results": not in_cloud,
+        "export_to_file": not in_cloud,
+        "export_to_kv": True,
+    }
 
+    for option, value in options.items():
+        setattr(tip_genius, option, value)
+
+    # Load Config
+    config_path = os.path.join("cfg", "tip_genius_config.yaml")
+    with open(config_path, "r", encoding="utf-8") as f:
+        tip_genius_config = yaml.safe_load(f)
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)

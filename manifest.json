@@ -1,8 +1,9 @@
 {
+  "version": "2.0.0",
   "name": "The Tip Genius",
   "short_name": "TipGenius",
   "description": "Making you look like a soccer expert, one AI tip at a time...",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "display": "standalone",
   "background_color": "#f0f4f8",
   "theme_color": "#ffffff",

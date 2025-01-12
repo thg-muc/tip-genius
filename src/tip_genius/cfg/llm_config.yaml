@@ -1,6 +1,7 @@
 # LLM Configuration File
 
 mistral-large:
+  api_rate_limit: 30 # requests per minute for free tier
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
@@ -15,29 +16,40 @@ deepseek-chat:
   api_key_env_name: DEEPSEEK_API_KEY
   base_url: https://api.deepseek.com
   operation: chat/completions
-  model: "deepseek-chat"
+  model: deepseek-chat
   kwargs:
     temperature: 0.0
     stream: false
     response_format:
       type: "json_object"
 
-anthropic-haiku:
+anthropic-claude-haiku:
   api_key_env_name: ANTHROPIC_API_KEY
   base_url: https://api.anthropic.com/v1
   operation: messages
-  model: "claude-3-5-haiku-20241022"
+  model: claude-3-5-haiku-20241022
   kwargs:
     temperature: 0.0
     stream: false
-    max_tokens: 4096
+    max_tokens: 8192
 
-anthropic-sonnet:
+anthropic-claude-sonnet:
   api_key_env_name: ANTHROPIC_API_KEY
   base_url: https://api.anthropic.com/v1
   operation: messages
-  model: "claude-3-5-sonnet-20241022"
+  model: claude-3-5-sonnet-20241022
   kwargs:
     temperature: 0.0
     stream: false
-    max_tokens: 4096
+    max_tokens: 8192
+
+google-gemini-flash:
+  api_rate_limit: 10 # requests per minute for free tier
+  api_key_env_name: GOOGLE_API_KEY
+  base_url: https://generativelanguage.googleapis.com/v1beta
+  operation: generateContent # other Option: streamGenerateContent for stream
+  model: gemini-2.0-flash-exp # gemini-1.5-flash-latest
+  kwargs:
+    temperature: 0.0
+    maxOutputTokens: 8192
+    response_mime_type: "application/json"
