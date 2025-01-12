@@ -233,51 +233,55 @@ class TipGenius:
         -------
         pl.DataFrame
             The processed dataframe with predictions.
-
-        Raises
-        ------
-        ValueError
-            If the LLM prediction is inconsistent with the odds.
         """
         llm = LLMManager(provider=llm_provider, prediction_type=prediction_type)
 
-        for i in range(df.shape[0]):
-            odds_summary = df[i, "odds_summary"]
-            odds_home = df[i, "odds_home"]
-            odds_away = df[i, "odds_away"]
-            odds_draw = df[i, "odds_draw"]
+        def is_prediction_consistent(
+            p_home: int, p_away: int, o_home: float, o_away: float
+        ) -> bool:
+            return not (
+                (p_home > p_away and o_home >= o_away)
+                or (p_home < p_away and o_home <= o_away)
+            )
 
-            if (odds_home == 0) or (odds_away == 0) or (odds_draw == 0):
+        def validate_prediction(pred: dict) -> bool:
+            return (
+                pred["reasoning"]
+                and pred["outlook"]
+                and isinstance(pred["prediction"]["home"], int)
+                and isinstance(pred["prediction"]["away"], int)
+            )
+
+        for i in range(df.shape[0]):
+            if any(df[i, f"odds_{key}"] == 0 for key in ["home", "away", "draw"]):
                 logger.debug("Odds are invalid for row %d, skipping...", i + 1)
                 continue
 
-            success = False
-            reasoning = prediction_home = prediction_away = outlook = None
+            last_response = None
+            attempt = 0
             for attempt in range(self.llm_attempts):
                 try:
-                    llm_response = llm.get_prediction(
-                        user_prompt=odds_summary,
-                        temperature=llm.kwargs.get("temperature", 0.0) + 0.2 * attempt,
-                    )
-
-                    response_dict = literal_eval(llm_response)
-                    reasoning = response_dict["reasoning"]
-                    prediction_home = response_dict["prediction"]["home"]
-                    prediction_away = response_dict["prediction"]["away"]
-                    outlook = response_dict["outlook"]
-
-                    if (
-                        prediction_home > prediction_away and odds_home >= odds_away
-                    ) or (prediction_home < prediction_away and odds_home <= odds_away):
-                        logger.warning(
-                            "Prediction inconsistent with odds for row %d, retrying...",
-                            i + 1,
+                    response = literal_eval(
+                        llm.get_prediction(
+                            user_prompt=df[i, "odds_summary"],
+                            temperature=llm.kwargs.get("temperature", 0.0)
+                            + 0.2 * attempt,
                         )
-                        continue
+                    )
+                    last_response = response
 
-                    success = True
-                    break
-
+                    if is_prediction_consistent(
+                        response["prediction"]["home"],
+                        response["prediction"]["away"],
+                        df[i, "odds_home"],
+                        df[i, "odds_away"],
+                    ):
+                        break
+                    logger.warning(
+                        "Prediction inconsistent with odds for row %d, attempt %d",
+                        i + 1,
+                        attempt + 1,
+                    )
                 except Exception as e:  # pylint: disable=broad-except
                     logger.warning(
                         "LLM prediction attempt %d failed for row %d: %s",
@@ -286,25 +290,22 @@ class TipGenius:
                         str(e),
                     )
 
-            if not success or any(
-                var is None
-                for var in (reasoning, prediction_home, prediction_away, outlook)
-            ):
+            if not last_response:
                 logger.warning("No valid LLM response for row %d, skipping...", i + 1)
                 continue
 
-            df[i, "reasoning"] = reasoning
-            df[i, "prediction_home"] = prediction_home
-            df[i, "prediction_away"] = prediction_away
-            df[i, "outlook"] = outlook
+            if attempt == self.llm_attempts - 1:
+                logger.warning(
+                    "Using inconsistent prediction for row %d after %d attempts",
+                    i + 1,
+                    self.llm_attempts,
+                )
 
-            validity = (
-                reasoning != ""
-                and outlook != ""
-                and isinstance(prediction_home, (int))
-                and isinstance(prediction_away, (int))
-            )
-            df[i, "validity"] = validity
+            df[i, "reasoning"] = last_response["reasoning"]
+            df[i, "prediction_home"] = last_response["prediction"]["home"]
+            df[i, "prediction_away"] = last_response["prediction"]["away"]
+            df[i, "outlook"] = last_response["outlook"]
+            df[i, "validity"] = validate_prediction(last_response)
 
         return df
 
