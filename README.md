@@ -10,6 +10,13 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
 
 Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The LLM selection prioritizes cost-effectiveness and reliability, focusing on models that offer free tiers or competitive pricing while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
 
+The following LLMs have been tested with Tip Genius:
+
+- Mistral Large
+- Google Gemini
+- DeepSeek Chat
+- Anthropic Claude
+
 ## Features
 
 - 🎯 Match predictions using advanced LLMs (Anthropic, Mistral, DeepSeek)
