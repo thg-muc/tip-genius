@@ -1,7 +1,7 @@
 {
   "version": "2.0.0",
   "name": "The Tip Genius",
-  "short_name": "TipGenius",
+  "short_name": "Tip Genius",
   "description": "Making you look like a soccer expert, one AI tip at a time...",
   "start_url": "/?source=pwa",
   "display": "standalone",
