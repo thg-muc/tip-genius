@@ -1,4 +1,4 @@
-// Cache version management
+// Config and utility functions for the Tip Genius web app
 const CONFIG = {
     ALLOWED_ORIGINS: [
         'http://localhost:3000',
@@ -6,7 +6,7 @@ const CONFIG = {
         'http://localhost:8000',
         'https://tip-genius.vercel.app'
     ],
-    CACHE_DURATION: 300, // Cache in seconds
+    CACHE_DURATION: 3600, // Cache in seconds
     DYNAMIC_CACHE: 'tip-genius-dynamic-2.0.0',
     DEFAULT_LLM: 'Mistral-Large',
     API_URL: '/api/predictions'
@@ -14,9 +14,21 @@ const CONFIG = {
 
 // Global variables
 let currentLeague = localStorage.getItem('lastUsedLeague');
+let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0;
 let cachedLeagueData = null;
-let lastFetchTime = 0;
 let currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM;
+
+// Try to restore cached data if it's still valid
+const storedData = localStorage.getItem('cachedLeagueData');
+if (storedData && Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000) {
+    try {
+        cachedLeagueData = JSON.parse(storedData);
+    } catch (e) {
+        console.warn('Failed to parse cached data:', e);
+        localStorage.removeItem('cachedLeagueData');
+        localStorage.removeItem('lastFetchTime');
+    }
+}
 
 // Error handling functions
 const showError = msg => {
@@ -160,20 +172,26 @@ async function loadLeagueData(leagueName) {
 async function fetchLeagueData() {
     console.log('Fetching data using LLM Provider:', currentLLM);
     const currentTime = Date.now();
+    const timeDiff = currentTime - lastFetchTime;
+    const cacheDuration = CONFIG.CACHE_DURATION * 1000;
     
-    // Check if cache should be invalidated
-    if (currentTime - lastFetchTime > CONFIG.CACHE_DURATION * 1000) {
-        console.log('Cache invalidated, fetching fresh data');
-        cachedLeagueData = null;
-        
-        // Clear KV cache if using service worker
-        if ('caches' in window) {
-            try {
-                const cache = await caches.open(CONFIG.DYNAMIC_CACHE);
-                await cache.delete(CONFIG.API_URL);
-            } catch (error) {
-                console.warn('Cache clear failed:', error);
-            }
+    // Check if we have valid cached data
+    if (cachedLeagueData !== null && timeDiff <= cacheDuration) {
+        console.log('Using cached data');
+        return cachedLeagueData;
+    }
+    
+    // If we reach here, we need to fetch fresh data
+    console.log('Cache invalidated or empty, fetching fresh data');
+    cachedLeagueData = null;
+    
+    // Clear KV cache if using service worker
+    if ('caches' in window) {
+        try {
+            const cache = await caches.open(CONFIG.DYNAMIC_CACHE);
+            await cache.delete(CONFIG.API_URL);
+        } catch (error) {
+            console.warn('Cache clear failed:', error);
         }
     }
     
@@ -184,8 +202,13 @@ async function fetchLeagueData() {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const data = parseApiResponse(await response.json());
-    cachedLeagueData = data;
-    lastFetchTime = currentTime;
+    if (data) {
+        cachedLeagueData = data;
+        lastFetchTime = currentTime;
+        localStorage.setItem('lastFetchTime', currentTime.toString());
+        // Also cache the data itself
+        localStorage.setItem('cachedLeagueData', JSON.stringify(data));
+    }
     return data;
 }
 
@@ -350,11 +373,20 @@ const scrollToAbout = event => {
 
 // Initialize application and set up periodic refresh
 createTabs();
-setInterval(() => {
-    if (currentLeague) {
-        loadLeagueData(currentLeague);
+
+// Set up periodic refresh only if we don't have valid cached data
+const refreshData = () => {
+    const currentTime = Date.now();
+    const lastFetch = parseInt(localStorage.getItem('lastFetchTime')) || 0;
+    
+    if (currentTime - lastFetch > CONFIG.CACHE_DURATION * 1000) {
+        if (currentLeague) {
+            loadLeagueData(currentLeague);
+        }
     }
-}, CONFIG.CACHE_DURATION * 1000);
+};
+
+setInterval(refreshData, CONFIG.CACHE_DURATION * 1000);
 
 // Service Worker registration
 if ('serviceWorker' in navigator) {
