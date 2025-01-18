@@ -502,15 +502,17 @@
 
 <!-- Vercel Analytics -->
 <script>
-    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
+    // Do not load analytics on localhost
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        // Vercel Analytics
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+        document.write('<script defer src="/_vercel/insights/script.js"><\/script>');
 
-<!-- Vercel Speed Insights -->
-<script>
-    window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+        // Vercel Speed Insights
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+        document.write('<script defer src="/_vercel/speed-insights/script.js"><\/script>');
+    }
 </script>
-<script defer src="/_vercel/speed-insights/script.js"></script>
 
 </body>
 </html>
