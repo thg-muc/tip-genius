@@ -9,8 +9,8 @@
     - Mistral-Large
     - Google-Gemini-Flash
     - Deepseek-Chat
-    - microsoft-phi-medium
-    - meta-llama-70b
+    - Meta-Llama-70b
+    - Microsoft-Phi-Medium
     # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
     # - Anthropic-Claude-Sonnet # No Json Mode: sometimes issues JSON response
 
