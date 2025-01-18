@@ -1,7 +1,7 @@
 # LLM Configuration File
 
 mistral-large:
-  api_rate_limit: 30 # requests per minute for free tier
+  api_rate_limit: 20 # requests per minute for free tier
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
