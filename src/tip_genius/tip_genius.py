@@ -321,7 +321,7 @@ class TipGenius:
                         df[i, "odds_away"],
                     ):
                         break
-                    logger.warning(
+                    logger.debug(
                         "Prediction inconsistent with odds for row %d, attempt %d",
                         i + 1,
                         attempt + 1,
