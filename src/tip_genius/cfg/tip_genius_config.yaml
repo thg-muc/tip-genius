@@ -1,21 +1,24 @@
 # Tip Genius Main Configuration File
 
   sports_list:
-    - "Bundesliga - Germany"
-    - "Premier League - England"
-    - "UEFA Champions League"
+    - Bundesliga - Germany
+    - Premier League - England
+    - UEFA Champions League
   
   llm_provider_options:
-    - "Mistral-Large"
-    - "Google-Gemini-Flash"
-    # - "Deepseek-Chat" # Sometimes has issues with JSON response
-    # - "Anthropic-Claude-Haiku" # Sometimes has issues with JSON response
-    # - "Anthropic-Claude-Sonnet" # Sometimes has issues with JSON response
+    - Mistral-Large
+    - Google-Gemini-Flash
+    - Deepseek-Chat
+    - Meta-Llama-70b
+    - Microsoft-Phi-Medium
+    # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
+    # - Anthropic-Claude-Sonnet # No Json Mode: sometimes issues JSON response
+
     
   
   prediction_type_options:
-    - "FourPointsScoring"
-    # - "Default"
+    - FourPointsScoring
+    # - Default
   
   named_teams_options:
     - true

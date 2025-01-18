@@ -321,7 +321,7 @@ class TipGenius:
                         df[i, "odds_away"],
                     ):
                         break
-                    logger.warning(
+                    logger.debug(
                         "Prediction inconsistent with odds for row %d, attempt %d",
                         i + 1,
                         attempt + 1,
@@ -340,9 +340,10 @@ class TipGenius:
 
             if attempt == self.llm_attempts - 1:
                 logger.warning(
-                    "Using inconsistent prediction for row %d after %d attempts",
+                    "Using inconsistent prediction for row %d after %d attempts: %s",
                     i + 1,
                     self.llm_attempts,
+                    last_response,
                 )
 
             df[i, "reasoning"] = last_response["reasoning"]

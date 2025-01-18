@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
     '/',
     '/index.html',
     '/manifest.json',
+    '/js/main.js',
     '/images/icon-128x128.png',
     '/images/icon-256x256.png',
     '/images/icon-512x512.png',
@@ -21,6 +22,24 @@ const deleteOldCaches = async () => {
     const cachesToDelete = keyList.filter(key => !cacheKeepList.includes(key));
     return Promise.all(cachesToDelete.map(key => caches.delete(key)));
 };
+
+// Helper function to handle API responses
+async function handleApiResponse(request, response) {
+    const cache = await caches.open(DYNAMIC_CACHE);
+    await cache.put(request, response.clone());
+    return response;
+}
+
+// Helper function to handle offline fallback
+async function handleOfflineFallback(request) {
+    // If it's a page navigation, return index.html
+    if (request.mode === 'navigate') {
+        const cache = await caches.open(CACHE_NAME);
+        return cache.match('/index.html');
+    }
+    // For other requests, throw error
+    throw new Error('Network and cache unavailable');
+}
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
@@ -49,19 +68,12 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Helper function to handle API responses
-async function handleApiResponse(request, response) {
-    const cache = await caches.open(DYNAMIC_CACHE);
-    await cache.put(request, response.clone());
-    return response;
-}
-
 // Fetch event - handle requests
 self.addEventListener('fetch', event => {
     const { request } = event;
     const url = new URL(request.url);
 
-    // Handle API requests differently (network-first strategy)
+    // Handle API requests differently (network-first strategy with offline support)
     if (request.url.includes('/api/predictions')) {
         event.respondWith(
             fetch(request)
@@ -79,31 +91,31 @@ self.addEventListener('fetch', event => {
                         });
                         return cachedResponse;
                     }
-                    throw new Error('No cached data available');
+                    return handleOfflineFallback(request);
                 })
         );
         return;
     }
 
-    // Handle static assets with stale-while-revalidate strategy
+    // Handle static assets with improved cache-first strategy
     event.respondWith(
         (async () => {
-            // Try to get from cache first
-            const cachedResponse = await caches.match(request);
-            
-            // Start fetch in background
-            const networkResponsePromise = fetch(request).then(
-                async response => {
-                    // Cache the new version if it's a successful response
-                    if (response.status === 200) {
-                        const cache = await caches.open(CACHE_NAME);
-                        cache.put(request, response.clone());
-                    }
-                    return response;
-                }
-            );
-
             try {
+                // Try to get from cache first
+                const cachedResponse = await caches.match(request);
+                
+                // Start fetch in background for cache update
+                const networkResponsePromise = fetch(request).then(
+                    async response => {
+                        // Cache the new version if it's a successful response
+                        if (response.status === 200) {
+                            const cache = await caches.open(CACHE_NAME);
+                            await cache.put(request, response.clone());
+                        }
+                        return response;
+                    }
+                );
+
                 // If we have a cached response, use it but still update cache in background
                 if (cachedResponse) {
                     networkResponsePromise.catch(console.error);
@@ -116,10 +128,11 @@ self.addEventListener('fetch', event => {
                 
             } catch (error) {
                 // If network fails and we have a cached version, use it
+                const cachedResponse = await caches.match(request);
                 if (cachedResponse) return cachedResponse;
                 
-                // Otherwise, propagate the error
-                throw error;
+                // If nothing works, try offline fallback
+                return handleOfflineFallback(request);
             }
         })()
     );
