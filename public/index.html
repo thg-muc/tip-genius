@@ -95,15 +95,8 @@
                         <div id="dropdownMenu" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-dark-card rounded-lg shadow-lg z-50">
                             <div class="p-6">
                                 <h3 class="text-base font-semibold text-gray-800 dark:text-gray-200 mb-3">LLM Provider</h3>
-                                <div class="space-y-3">
-                                    <label class="flex items-center space-x-3 cursor-pointer">
-                                        <input type="radio" name="llm-provider" value="Mistral-Large" class="form-radio text-sky-700 dark:text-sky-400" checked>
-                                        <span class="text-base text-gray-700 dark:text-gray-300">Mistral Large</span>
-                                    </label>
-                                    <label class="flex items-center space-x-3 cursor-pointer">
-                                        <input type="radio" name="llm-provider" value="Google-Gemini-Flash" class="form-radio text-sky-700 dark:text-sky-400">
-                                        <span class="text-base text-gray-700 dark:text-gray-300">Google Gemini</span>
-                                    </label>
+                                <div id="llm-providers" class="space-y-3">
+                                    <!-- LLM provider options will be dynamically inserted here -->
                                 </div>
                             </div>
                         </div>
@@ -265,6 +258,7 @@
 
     // League Data processing and rendering
     async function loadLeagueData(leagueName) {
+        console.log('Loading data for league:', leagueName);
         hideError();
         const container = document.getElementById('matches-container');
         container.style.opacity = '0';
@@ -298,10 +292,12 @@
 
     // API data fetching (with caching)
     async function fetchLeagueData() {
+        console.log('Fetching data using LLM Provider:', currentLLM);
         const currentTime = Date.now();
         
         // Check if cache should be invalidated
         if (currentTime - lastFetchTime > CACHE_DURATION) {
+            console.log('Cache invalidated, fetching fresh data');
             cachedLeagueData = null;
             
             // Clear KV cache if using service worker
@@ -396,13 +392,54 @@
     document.addEventListener('DOMContentLoaded', () => {
         const menuButton = document.getElementById('menuButton');
         const dropdownMenu = document.getElementById('dropdownMenu');
-        const llmRadios = document.querySelectorAll('input[name="llm-provider"]');
+        
+        // Initialize currentLLM if it hasn't been done yet
+        if (typeof currentLLM === 'undefined') {
+            currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM;
+        }
 
-        llmRadios.forEach(radio => {
-            if (radio.value === currentLLM) {
-                radio.checked = true;
-            }
+        // LLM provider configuration
+        const llmProviders = [
+            { value: 'Mistral-Large', label: 'Mistral Large' },
+            { value: 'Google-Gemini-Flash', label: 'Gemini Flash' },
+            { value: 'Deepseek-Chat', label: 'DeepSeek Chat' },
+            { value: 'Meta-Llama-70b', label: 'Meta Llama 70b' },
+            { value: 'Microsoft-Phi-Medium', label: 'Phi Medium' }
+        ];
+
+        // Make sure the container exists
+        const providersContainer = document.getElementById('llm-providers');
+        if (!providersContainer) {
+            console.warn('LLM providers container not found');
+            return;
+        }
+
+        // Clear any existing content
+        providersContainer.innerHTML = '';
+
+        // Generate radio buttons for LLM providers
+        llmProviders.forEach(provider => {
+            const label = document.createElement('label');
+            label.className = 'flex items-center space-x-3 cursor-pointer';
+            
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'llm-provider';
+            input.value = provider.value;
+            input.className = 'form-radio text-sky-700 dark:text-sky-400';
+            input.checked = provider.value === currentLLM;
+            
+            const span = document.createElement('span');
+            span.className = 'text-base text-gray-700 dark:text-gray-300';
+            span.textContent = provider.label;
+            
+            label.appendChild(input);
+            label.appendChild(span);
+            providersContainer.appendChild(label);
         });
+
+        // Get all radio buttons after they've been created
+        const llmRadios = document.querySelectorAll('input[name="llm-provider"]');
 
         menuButton.addEventListener('click', () => {
             dropdownMenu.classList.toggle('hidden');
@@ -428,7 +465,10 @@
         });
 
         document.querySelector('header a[href="#about"]').addEventListener('click', scrollToAbout);
+        // Add loaded class to body after all initialization is complete
         document.body.classList.add('loaded');
+        // Verify initialization
+        console.log('Menu initialization complete, providers:', llmProviders.length);
     });
 
     // Navigation functions
