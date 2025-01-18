@@ -9,6 +9,7 @@ mistral-large:
   kwargs:
     temperature: 0.0
     stream: false
+    max_tokens: 8192
     response_format:
       type: "json_object"
 
@@ -20,6 +21,7 @@ deepseek-chat:
   kwargs:
     temperature: 0.0
     stream: false
+    max_tokens: 8192
     response_format:
       type: "json_object"
 
@@ -53,3 +55,27 @@ google-gemini-flash:
     temperature: 0.0
     maxOutputTokens: 8192
     response_mime_type: "application/json"
+
+microsoft-phi-medium:
+  api_key_env_name: DEEPINFRA_API_KEY
+  base_url: https://api.deepinfra.com/v1
+  operation: openai/chat/completions
+  model: microsoft/phi-4
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 8192
+    response_format:
+      type: "json_object"
+
+meta-llama-70b:
+  api_key_env_name: DEEPINFRA_API_KEY
+  base_url: https://api.deepinfra.com/v1
+  operation: openai/chat/completions
+  model: meta-llama/Llama-3.3-70B-Instruct-Turbo
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 8192
+    response_format:
+      type: "json_object"
