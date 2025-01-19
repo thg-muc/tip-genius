@@ -468,7 +468,7 @@ class TipGenius:
         processed_count = 0
 
         for sport in sports_list:
-            logger.debug("Retrieving odds for sport: %s", sport)
+            logger.info("Retrieving odds for sport: %s", sport)
 
             # Fetch the odds data
             api_result = self.api_pipeline.fetch_api_data(
