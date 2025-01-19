@@ -274,7 +274,8 @@ async function createTabs () {
 
       button.id = tabId
       button.className = `
-                px-4 py-2 text-xs sm:text-lg focus:z-10 
+                px-2 sm:px-4 py-2 text-xs sm:text-lg focus:z-10
+                min-w-[90px] sm:w-[180px]
                 transition duration-200 ease-in-out shadow-md
                 bg-gray-100 dark:bg-dark text-gray-500 dark:text-gray-400 font-normal
                 hover:bg-gray-50 dark:hover:bg-dark hover:text-sky-700 dark:hover:text-sky-400
