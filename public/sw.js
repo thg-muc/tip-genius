@@ -5,13 +5,28 @@ const DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`;
 
 // Assets to cache on install
 const STATIC_ASSETS = [
+    // Core app files
     '/',
     '/index.html',
     '/manifest.json',
     '/js/main.js',
+    '/sw.js',
+    
+    // App icons
     '/images/icon-128x128.png',
     '/images/icon-256x256.png',
     '/images/icon-512x512.png',
+    
+    // LLM Provider logos
+    '/images/llm-logos/Anthropic.png',
+    '/images/llm-logos/DeepSeek.png',
+    '/images/llm-logos/Google.png',
+    '/images/llm-logos/Meta.png',
+    '/images/llm-logos/Microsoft.png',
+    '/images/llm-logos/Mistral.png',
+    '/images/llm-logos/OpenAI.png',
+    
+    // External dependencies
     'https://cdn.tailwindcss.com'
 ];
 
