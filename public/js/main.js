@@ -287,13 +287,43 @@ document.addEventListener('DOMContentLoaded', () => {
         currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM;
     }
 
-    // LLM provider configuration
+    // LLM provider configuration with PNG logos
     const llmProviders = [
-        { value: 'Mistral-Large', label: 'Mistral Large' },
-        { value: 'Google-Gemini-Flash', label: 'Gemini Flash' },
-        { value: 'Deepseek-Chat', label: 'DeepSeek Chat' },
-        { value: 'Meta-Llama-70b', label: 'Meta Llama 70b' },
-        { value: 'Microsoft-Phi-Medium', label: 'Phi Medium' }
+        { 
+            value: 'Mistral-Large', 
+            label: 'Mistral Large',
+            logo: `/images/llm-logos/Mistral.png`
+        },
+        { 
+            value: 'Google-Gemini-Flash', 
+            label: 'Gemini Flash',
+            logo: `/images/llm-logos/Google.png`
+        },
+        { 
+            value: 'Deepseek-Chat', 
+            label: 'DeepSeek',
+            logo: `/images/llm-logos/DeepSeek.png`
+        },
+        { 
+            value: 'Meta-Llama-70b', 
+            label: 'Llama 70b',
+            logo: `/images/llm-logos/Meta.png`
+        },
+        { 
+            value: 'Microsoft-Phi-Medium', 
+            label: 'Phi Medium',
+            logo: `/images/llm-logos/Microsoft.png`
+        },
+        // { 
+        //     value: 'Anthropic-Claude-Haiku', 
+        //     label: 'Claude Haiku',
+        //     logo: `/images/llm-logos/Anthropic.png`
+        // },
+        // { 
+        //     value: 'OpenAI-ChatGPT-Mini', 
+        //     label: 'ChatGPT Mini',
+        //     logo: `/images/llm-logos/OpenAI.png`
+        // },
     ];
 
     // Make sure the container exists
@@ -309,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Generate radio buttons for LLM providers
     llmProviders.forEach(provider => {
         const label = document.createElement('label');
-        label.className = 'flex items-center space-x-3 cursor-pointer';
+        label.className = 'flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card p-2 rounded-lg transition-colors';
         
         const input = document.createElement('input');
         input.type = 'radio';
@@ -318,12 +348,33 @@ document.addEventListener('DOMContentLoaded', () => {
         input.className = 'form-radio text-sky-700 dark:text-sky-400';
         input.checked = provider.value === currentLLM;
         
+        // Create container for logo and label
+        const contentContainer = document.createElement('div');
+        contentContainer.className = 'flex items-center ml-2';
+        
+        // Add the logo image
+        const img = document.createElement('img');
+        img.src = provider.logo;
+        img.alt = `${provider.label} logo`;
+        img.className = 'w-5 h-5 mr-2 object-contain'; // Scale image while maintaining aspect ratio
+        
+        // Add error handling for the image
+        img.onerror = () => {
+            console.warn(`Failed to load logo for ${provider.label}`);
+            img.style.display = 'none';
+        };
+        
+        // Add the label text
         const span = document.createElement('span');
         span.className = 'text-base text-gray-700 dark:text-gray-300';
         span.textContent = provider.label;
         
+        // Assemble all pieces
+        contentContainer.appendChild(img);
+        contentContainer.appendChild(span);
+        
         label.appendChild(input);
-        label.appendChild(span);
+        label.appendChild(contentContainer);
         providersContainer.appendChild(label);
     });
 
