@@ -1,8 +1,10 @@
 # Tip Genius Main Configuration File
 
   sports_list:
-    - Bundesliga - Germany
     - Premier League - England
+    - Bundesliga - Germany
+    # - La Liga - Spain
+    # - Bundesliga - Austria
     - UEFA Champions League
   
   llm_provider_options:
