@@ -224,8 +224,11 @@ class StorageManager:
                 )
             else:
                 logger.error(
-                    "Failed to store predictions in KV: HTTP %d", response.status_code
+                    "Failed to write predictions in Vercel KV: HTTP %d, Response: %s",
+                    response.status_code,
+                    # Truncate the response text to avoid excessive logging
+                    response.text[:200],
                 )
 
         except Exception as e:  # pylint: disable=broad-except
-            logger.error("Error storing predictions in KV: %s", str(e))
+            logger.error("Failed to write predictions to KV: %s", str(e))
