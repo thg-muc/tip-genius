@@ -1,9 +1,12 @@
-# Odds API Configuration File
+# API Configuration File for Odd Prvoiders
 
+# Configuration for Odds API
 odds_api:
   api_key_env_name: ODDS_API_KEY
   base_url: https://api.the-odds-api.com/v4/sports/
   parameters: odds?regions=eu&oddsFormat=decimal
+
+  # Mapping of User Friendly Sport Names to API Sport Keys
   sports_mapping:
     Premier League - England : soccer_epl
     La Liga - Spain: soccer_spain_la_liga
@@ -11,6 +14,8 @@ odds_api:
     Bundesliga - Austria: soccer_austria_bundesliga
     UEFA Champions League: soccer_uefa_champs_league
     UEFA Europa League: soccer_uefa_europa_league
+  
+  # Define the Bookmakers to be used for Odds API (in order of priority)
   bookmaker_priority:
     - tipico_de
     - nordicbet
