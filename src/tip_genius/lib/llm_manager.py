@@ -242,5 +242,5 @@ class LLMManager:
             return prediction
 
         except requests.RequestException as e:
-            logger.error("Error in getting prediction: %s", str(e))
+            logger.error("Failed to get prediction: %s", str(e))
             raise

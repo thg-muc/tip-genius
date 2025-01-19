@@ -1,29 +1,33 @@
 # Tip Genius Main Configuration File
 
-  sports_list:
-    - Bundesliga - Germany
-    - Premier League - England
-    - UEFA Champions League
-  
-  llm_provider_options:
-    - Mistral-Large
-    - Google-Gemini-Flash
-    - Deepseek-Chat
-    - Meta-Llama-70b
-    - Microsoft-Phi-Medium
-    # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
-    # - Anthropic-Claude-Sonnet # No Json Mode: sometimes issues JSON response
+# List of Sports for which Tips will be generated
+sports_list:
+  - Premier League - England
+  - Bundesliga - Germany
+  - La Liga - Spain
+  - UEFA Champions League
 
-    
-  
-  prediction_type_options:
-    - FourPointsScoring
-    # - Default
-  
-  named_teams_options:
-    - true
-    # - false
-  
-  additional_info_options:
-    - true
-    # - false
+# List of LLM Providers to use for Tips generation
+llm_provider_options:
+  - Mistral-Large
+  - Google-Gemini-Flash
+  - Deepseek-Chat
+  - Meta-Llama-70b
+  - Microsoft-Phi-Medium
+  # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
+  # - Anthropic-Claude-Sonnet # No Json Mode: sometimes issues JSON response
+
+# LLM Prompt Option - Include Point Scoring System
+prediction_type_options:
+  - FourPointsScoring
+  # - Default
+
+# LLM Prompt Option - Include Team Names
+named_teams_options:
+  - true
+  # - false
+
+# LLM Prompt Option - Include Additional Information in the Prompt
+additional_info_options:
+  - true
+  # - false

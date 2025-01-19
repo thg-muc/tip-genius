@@ -213,7 +213,7 @@ class TipGenius:
             logger.debug("LLM data stored in CSV: %s", csv_path)
 
         except Exception as e:
-            logger.error("Error storing LLM data: %s", str(e))
+            logger.error("Failed to store LLM data: %s", str(e))
             raise
 
     def store_api_data(
@@ -468,7 +468,7 @@ class TipGenius:
         processed_count = 0
 
         for sport in sports_list:
-            logger.debug("Retrieving odds for sport: %s", sport)
+            logger.info("Retrieving odds for sport: %s", sport)
 
             # Fetch the odds data
             api_result = self.api_pipeline.fetch_api_data(

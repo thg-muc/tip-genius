@@ -4,18 +4,20 @@ AI-powered soccer match predictions with a modern, responsive web interface.
 
 ## Overview
 
-Tip Genius combines the power of Large Language Models (LLMs) with real-world odds data to generate informed soccer match predictions. The project features a clean, responsive web interface that displays predictions for various soccer leagues including the Bundesliga, Premier League, and UEFA Champions League.
+Tip Genius combines the power of Large Language Models (LLMs) with real-world odds data to generate informed soccer match predictions. The project features a clean, responsive web interface that displays predictions for various soccer leagues including the Premier League, Bundesliga, La Liga and UEFA Champions League.
 
 ## LLM Integration
 
 Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The LLM selection prioritizes cost-effectiveness and reliability, focusing on models that offer free tiers or competitive pricing while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
 
-The following LLMs have been tested with Tip Genius:
+So far, the following LLM families have been successfully tested with Tip Genius:
 
-- Mistral Large
+- Mistral AI
 - Google Gemini
 - DeepSeek Chat
-- Anthropic Claude
+- Meta Llama
+- Microsoft Phi
+- Anthropic Claude (Claude 3.5 Models do not have a native JSON mode, so they sometimes struggle to generate predictions)
 
 ## Features
 
