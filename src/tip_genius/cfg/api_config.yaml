@@ -11,7 +11,6 @@ odds_api:
     Premier League - England : soccer_epl
     La Liga - Spain: soccer_spain_la_liga
     Bundesliga - Germany : soccer_germany_bundesliga
-    Bundesliga - Austria: soccer_austria_bundesliga
     UEFA Champions League: soccer_uefa_champs_league
     UEFA Europa League: soccer_uefa_europa_league
   
