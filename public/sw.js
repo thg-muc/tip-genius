@@ -3,7 +3,7 @@ const VERSION = '2.0.0'
 const CACHE_NAME = `tip-genius-static-${VERSION}`
 const DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
 
-// Assets to cache on install
+// Assets to cache
 const STATIC_ASSETS = [
   // Core app files
   '/',
@@ -16,6 +16,12 @@ const STATIC_ASSETS = [
   '/images/icon-128x128.png',
   '/images/icon-256x256.png',
   '/images/icon-512x512.png',
+
+  // League logos
+  '/images/leagues/Bundesliga-Germany.png',
+  '/images/leagues/LaLiga-Spain.png',
+  '/images/leagues/PremierLeague-England.png',
+  '/images/leagues/UEFAChampionsLeague.png',
 
   // LLM Provider logos
   '/images/llm-logos/Anthropic.png',
