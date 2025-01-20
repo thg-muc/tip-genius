@@ -8,7 +8,7 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
 
 ## LLM Integration
 
-Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The LLM selection prioritizes cost-effectiveness and reliability, focusing on models that offer free tiers or competitive pricing while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
+Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The project uses a lightweight approach with direct API calls instead of individual LLM libraries, minimizing dependencies while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
 
 So far, the following LLM families have been successfully tested with Tip Genius:
 
@@ -17,11 +17,11 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - DeepSeek Chat
 - Meta Llama
 - Microsoft Phi
-- Anthropic Claude (Claude 3.5 Models do not have a native JSON mode, so they sometimes struggle to generate predictions)
+- Anthropic Claude (Claude 3.5 does not have a native JSON mode, so it sometimes struggles to generate valid predictions)
 
 ## Features
 
-- 🎯 Match predictions using advanced LLMs (Anthropic, Mistral, DeepSeek)
+- 🎯 Match predictions using advanced LLMs
 - 🌐 Clean, responsive web interface with dark mode support
 - 📊 Real-time odds data integration
 - ⚡️ Fast, serverless architecture using Vercel
@@ -37,13 +37,12 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - HTML5 with semantic markup
 - Vanilla JavaScript
 - Tailwind CSS for styling
-- Service Workers for Progessive Web App (PWA) functionality
+- Service Workers for Progressive Web App (PWA) functionality
 
 ### Backend
 
 - Python 3.11+ for prediction generation
-- Polars for efficient data processing
-- Ability to integrate multiple LLM providers
+- Lightweight LLM integration via direct API calls (no heavy LLM libraries required)
 - GitHub Actions for automation
 
 ### Infrastructure
@@ -52,12 +51,28 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - Vercel KV Store for data persistence
 - GitHub for version control and CI/CD
 
+### Dependencies
+
+The project intentionally maintains minimal dependencies:
+
+- `polars`: Fast, parallel data processing
+- `PyYAML`: Configuration management
+- `requests`: HTTP client for API calls
+
+This lightweight approach ensures:
+
+- Easier updates and maintenance
+- Faster deployment
+- Better performance
+
 ## Local Development
 
 ### Prerequisites
 
 - Python 3.11 or higher
+- Vercel CLI
 - Node.js and npm (latest LTS version)
+- Vercel account and KV store setup
 
 ### Setup
 
@@ -81,24 +96,38 @@ So far, the following LLM families have been successfully tested with Tip Genius
     pip install -r requirements.txt
     ```
 
-4. Configure environment variables:
+4. Install Vercel CLI and login:
+
+    ```bash
+    npm i -g vercel
+    vercel login
+    ```
+
+5. Configure environment variables:
 
     Create a `.env.local` file in the project root with the following variables:
 
     ```bash
+    # API Keys for Odds Data
     ODDS_API_KEY=your_odds_api_key
+
+    # API Keys for LLM Providers
     ANTHROPIC_API_KEY=your_anthropic_api_key
-    MISTRAL_API_KEY=your_mistral_api_key
+    DEEPINFRA_API_KEY=your_deepinfra_api_key
     DEEPSEEK_API_KEY=your_deepseek_api_key
+    GOOGLE_API_KEY=your_google_api_key
+    MISTRAL_API_KEY=your_mistral_api_key
+
+    # Vercel KV (Redis) Configuration
     KV_REST_API_TOKEN=your_vercel_kv_token
     KV_REST_API_URL=your_vercel_kv_url
     ```
 
-    In case you make a deployment later, these variables should be added to Github Secrets.
+    For deployment, these variables should be added to Github Secrets and Vercel Environment Variables.
 
 ### Running Locally
 
-1. Start the development server from the project root:
+1. Start the development server:
 
     ```bash
     vercel dev
@@ -108,11 +137,24 @@ So far, the following LLM families have been successfully tested with Tip Genius
 
 ## Deployment
 
-The project is automatically deployed to Vercel when changes are pushed to the main branch. Manual deployments can be triggered using:
+The project is designed to be deployed on Vercel's infrastructure. It uses:
+
+- Vercel Hosting for the frontend
+- Vercel Serverless Functions for the API
+- Vercel KV (Redis) for data storage
+
+Automatic deployment is configured when changes are pushed to the main branch. Manual deployments can be triggered using:
 
 ```bash
 vercel deploy --prod
 ```
+
+### Required Vercel Configuration
+
+1. Create a new project in Vercel
+2. Set up a Vercel KV store
+3. Configure all environment variables in Vercel project settings
+4. Link your repository for automatic deployments
 
 ## License
 

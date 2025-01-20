@@ -220,18 +220,33 @@ async function fetchLeagueData () {
   return data
 }
 
-// Tab management functions
+// Tab creation and handling
 function setActiveTab (tabId) {
   document.querySelectorAll('button[id^="tab-"]').forEach(tab => {
     const isActive = tab.id === tabId
+
+    // First, remove all state-related classes
+    tab.classList.remove(
+      // Inactive state classes
+      'bg-gray-100',
+      'dark:bg-dark',
+      'text-gray-500',
+      'dark:text-gray-400',
+      'font-normal',
+      'hover:bg-gray-50',
+      'dark:hover:bg-dark',
+      'hover:text-sky-700',
+      'dark:hover:text-sky-400',
+      // Active state classes
+      'bg-white',
+      'dark:bg-dark-card',
+      'text-sky-700',
+      'dark:text-sky-400',
+      'font-semibold'
+    )
+
+    // Then add appropriate classes for current state
     if (isActive) {
-      tab.classList.remove(
-        'bg-gray-100',
-        'dark:bg-dark',
-        'text-gray-500',
-        'dark:text-gray-400',
-        'font-normal'
-      )
       tab.classList.add(
         'bg-white',
         'dark:bg-dark-card',
@@ -240,25 +255,69 @@ function setActiveTab (tabId) {
         'font-semibold'
       )
     } else {
-      tab.classList.remove(
-        'bg-white',
-        'dark:bg-dark-card',
-        'text-sky-700',
-        'dark:text-sky-400',
-        'font-semibold'
-      )
       tab.classList.add(
         'bg-gray-100',
         'dark:bg-dark',
         'text-gray-500',
         'dark:text-gray-400',
-        'font-normal'
+        'font-normal',
+        'hover:bg-gray-50',
+        'dark:hover:bg-dark',
+        'hover:text-sky-700',
+        'dark:hover:text-sky-400'
       )
     }
   })
 }
 
-// Tab creation and initialization
+// Create Tab helper function
+function createTab (league, index, totalLeagues) {
+  const button = document.createElement('button')
+  const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
+  button.id = tabId
+
+  // Base classes that don't change
+  const baseClasses = [
+    'flex',
+    'items-center',
+    'justify-center',
+    'gap-2',
+    'px-2',
+    'sm:px-4',
+    'py-2',
+    'text-[10px]',
+    'sm:text-lg',
+    'focus:z-10',
+    'min-w-[90px]',
+    'sm:w-[180px]',
+    'transition',
+    'duration-200',
+    'ease-in-out',
+    'shadow-lg'
+  ]
+
+  // Conditional rounding classes
+  if (index === 0) baseClasses.push('rounded-l-lg')
+  if (index === totalLeagues - 1) baseClasses.push('rounded-r-lg')
+
+  // Interactive state classes
+  const stateClasses = [
+    'bg-gray-100',
+    'dark:bg-dark',
+    'text-gray-500',
+    'dark:text-gray-400',
+    'font-normal',
+    'hover:bg-gray-50',
+    'dark:hover:bg-dark',
+    'hover:text-sky-700',
+    'dark:hover:text-sky-400'
+  ]
+
+  button.className = [...baseClasses, ...stateClasses].join(' ')
+  return button
+}
+
+// Create Tabs function
 async function createTabs () {
   const tabContainer = document.getElementById('league-tabs')
 
@@ -269,26 +328,44 @@ async function createTabs () {
     tabContainer.innerHTML = ''
 
     leagues.forEach((league, index) => {
-      const button = document.createElement('button')
-      const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
+      const button = createTab(league, index, leagues.length)
 
-      button.id = tabId
-      button.className = `
-                px-2 sm:px-4 py-2 text-xs sm:text-lg focus:z-10
-                min-w-[90px] sm:w-[180px]
-                transition duration-200 ease-in-out shadow-md
-                bg-gray-100 dark:bg-dark text-gray-500 dark:text-gray-400 font-normal
-                hover:bg-gray-50 dark:hover:bg-dark hover:text-sky-700 dark:hover:text-sky-400
-                ${index === 0 ? 'rounded-l-lg' : ''}
-                ${index === leagues.length - 1 ? 'rounded-r-lg' : ''}
-            `
-      button.textContent = league.name
+      // Create and add the logo image
+      const img = document.createElement('img')
+      const logoFilename = league.name
+        .split(' - ')
+        .map(part => part.replace(/\s+/g, ''))
+        .join('-')
+      img.src = `/images/leagues/${logoFilename}.png`
+      img.alt = `${league.name} logo`
+      img.className = 'w-4 h-4 sm:w-6 sm:h-6 object-contain'
+      img.loading = 'lazy'
+      img.onerror = () => {
+        console.warn(
+          'Failed to load logo for: %s (tried path: %s)',
+          league.name,
+          img.src
+        )
+        img.style.display = 'none'
+      }
 
+      // Create span for league name
+      const span = document.createElement('span')
+      let displayName = league.name
+        .replace(/UEFA\s+/, '') // Remove "UEFA" prefix
+        .split(' - ')[0] // Remove country suffix
+      span.textContent = displayName
+
+      // Add both elements to button
+      button.appendChild(img)
+      button.appendChild(span)
+
+      // Add click handler
       button.addEventListener('click', () => {
         hideError()
         currentLeague = league.name
         loadLeagueData(currentLeague)
-        setActiveTab(tabId)
+        setActiveTab(button.id)
       })
 
       tabContainer.appendChild(button)
