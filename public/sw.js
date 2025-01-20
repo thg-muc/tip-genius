@@ -12,28 +12,20 @@ const STATIC_ASSETS = [
   '/js/main.js',
   '/sw.js',
 
-  // App icons
-  '/images/icon-128x128.png',
-  '/images/icon-256x256.png',
-  '/images/icon-512x512.png',
-
-  // League logos
-  '/images/leagues/Bundesliga-Germany.png',
-  '/images/leagues/LaLiga-Spain.png',
-  '/images/leagues/PremierLeague-England.png',
-  '/images/leagues/UEFAChampionsLeague.png',
-
-  // LLM Provider logos
-  '/images/llm-logos/Anthropic.png',
-  '/images/llm-logos/DeepSeek.png',
-  '/images/llm-logos/Google.png',
-  '/images/llm-logos/Meta.png',
-  '/images/llm-logos/Microsoft.png',
-  '/images/llm-logos/Mistral.png',
-  '/images/llm-logos/OpenAI.png',
+  // Image directories (will be matched by pattern)
+  '/images/icon-', // Will match all icon sizes
+  '/images/leagues/',
+  '/images/llm-logos/',
 
   // External dependencies
   'https://cdn.tailwindcss.com'
+]
+
+// Cache patterns for image directories
+const IMAGE_PATTERNS = [
+  new RegExp('^/images/icon-.*\\.png$'),
+  new RegExp('^/images/leagues/.*\\.png$'),
+  new RegExp('^/images/llm-logos/.*\\.png$')
 ]
 
 // Function to clean up old caches
@@ -123,13 +115,21 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     (async () => {
       try {
+        // Check if request matches any image pattern
+        const isImageRequest = IMAGE_PATTERNS.some(pattern =>
+          pattern.test(url.pathname)
+        )
+
         // Try to get from cache first
         const cachedResponse = await caches.match(request)
 
         // Start fetch in background for cache update
         const networkResponsePromise = fetch(request).then(async response => {
           // Cache the new version if it's a successful response
-          if (response.status === 200) {
+          if (
+            response.status === 200 &&
+            (STATIC_ASSETS.includes(url.pathname) || isImageRequest)
+          ) {
             const cache = await caches.open(CACHE_NAME)
             await cache.put(request, response.clone())
           }
