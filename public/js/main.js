@@ -293,7 +293,7 @@ function createTab (league, index, totalLeagues) {
     'transition',
     'duration-200',
     'ease-in-out',
-    'shadow-md'
+    'shadow-lg'
   ]
 
   // Conditional rounding classes
