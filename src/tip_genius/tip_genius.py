@@ -101,7 +101,7 @@ class TipGenius:
         Flag to store intermediate API results to file system.
     store_llm_results : bool, default False
         Flag to store intermediate LLM results to file system.
-    llm_attempts : int, default 5
+    llm_attempts : int, default 4
         Number of attempts for LLM predictions before giving up.
     api_data_folder : str, default 'data/api_result'
         The folder path for storing API data.
@@ -123,7 +123,7 @@ class TipGenius:
     export_to_file = False
     store_api_results = False
     store_llm_results = False
-    llm_attempts = 5
+    llm_attempts = 4
 
     api_data_folder = os.path.join("data", "api_result")
     llm_data_folder = os.path.join("data", "llm_data")
@@ -309,7 +309,7 @@ class TipGenius:
                         llm.get_prediction(
                             user_prompt=df[i, "odds_summary"],
                             temperature=llm.kwargs.get("temperature", 0.0)
-                            + 0.2 * attempt,
+                            + 0.33 * attempt,
                         )
                     )
                     last_response = response
