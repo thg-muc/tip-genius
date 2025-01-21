@@ -25,26 +25,6 @@ deepseek-chat:
     response_format:
       type: "json_object"
 
-anthropic-claude-haiku:
-  api_key_env_name: ANTHROPIC_API_KEY
-  base_url: https://api.anthropic.com/v1
-  operation: messages
-  model: claude-3-5-haiku-20241022
-  kwargs:
-    temperature: 0.0
-    stream: false
-    max_tokens: 8192
-
-anthropic-claude-sonnet:
-  api_key_env_name: ANTHROPIC_API_KEY
-  base_url: https://api.anthropic.com/v1
-  operation: messages
-  model: claude-3-5-sonnet-20241022
-  kwargs:
-    temperature: 0.0
-    stream: false
-    max_tokens: 8192
-
 google-gemini-flash:
   api_rate_limit: 8 # requests per minute for free tier
   api_key_env_name: GOOGLE_API_KEY
@@ -79,3 +59,26 @@ meta-llama-70b:
     max_tokens: 8192
     response_format:
       type: "json_object"
+
+openai-gpt-mini:
+  api_key_env_name: OPENAI_API_KEY
+  base_url: https://api.openai.com/v1
+  operation: chat/completions
+  model: gpt-4o-mini
+  kwargs:
+    seed: 42
+    temperature: 0.0
+    stream: false
+    max_tokens: 8192
+    response_format:
+      type: "json_object"
+
+anthropic-claude-haiku:
+  api_key_env_name: ANTHROPIC_API_KEY
+  base_url: https://api.anthropic.com/v1
+  operation: messages
+  model: claude-3-5-haiku-20241022
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 8192
