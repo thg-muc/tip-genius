@@ -38,6 +38,7 @@ jobs:
         # API keys for odds data
         ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         # API keys for LLM providers
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
         DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
