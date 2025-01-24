@@ -12,11 +12,12 @@ Tip Genius leverages LLMs to generate match predictions by analyzing odds data a
 
 So far, the following LLM families have been successfully tested with Tip Genius:
 
-- Mistral AI
-- Google Gemini
+- Mistral AI (Free API available)
+- Google Gemini (Free API available)
 - DeepSeek Chat
-- Meta Llama
-- Microsoft Phi
+- OpenAI ChatGPT
+- Meta Llama (via DeepInfra)
+- Microsoft Phi (via DeepInfra)
 - Anthropic Claude (Claude 3.5 does not have a native JSON mode, so it sometimes struggles to generate valid predictions)
 
 ## Features
@@ -117,6 +118,7 @@ This lightweight approach ensures:
     DEEPSEEK_API_KEY=your_deepseek_api_key
     GOOGLE_API_KEY=your_google_api_key
     MISTRAL_API_KEY=your_mistral_api_key
+    OPENAI_API_KEY=your_openai_api_key
 
     # Vercel KV (Redis) Configuration
     KV_REST_API_TOKEN=your_vercel_kv_token
