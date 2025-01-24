@@ -265,7 +265,13 @@ class TipGenius:
         pl.DataFrame
             The processed dataframe with predictions.
         """
-        llm = LLMManager(provider=llm_provider, prediction_type=prediction_type)
+        try:
+            llm = LLMManager(provider=llm_provider, prediction_type=prediction_type)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.error(
+                "Failed to initialize LLM provider %s: %s", llm_provider, str(e)
+            )
+            return df  # Return unmodified dataframe if LLM initialization fails
 
         def is_prediction_consistent(
             p_home: int, p_away: int, o_home: float, o_away: float
@@ -288,56 +294,65 @@ class TipGenius:
                 logger.debug("Odds are invalid for row %d, skipping...", i + 1)
                 continue
 
-            last_response = None
-            attempt = 0
-            for attempt in range(self.llm_attempts):
-                try:
-                    response = literal_eval(
-                        llm.get_prediction(
-                            user_prompt=df[i, "odds_summary"],
-                            temperature=llm.kwargs.get("temperature", 0.0)
-                            + 0.33 * attempt,
+            try:
+                last_response = None
+                attempt = 0
+                for attempt in range(self.llm_attempts):
+                    try:
+                        response = literal_eval(
+                            llm.get_prediction(
+                                user_prompt=df[i, "odds_summary"],
+                                temperature=llm.kwargs.get("temperature", 0.0)
+                                + 0.2 * attempt,
+                            )
                         )
-                    )
-                    last_response = response
+                        last_response = response
 
-                    if is_prediction_consistent(
-                        response["prediction"]["home"],
-                        response["prediction"]["away"],
-                        df[i, "odds_home"],
-                        df[i, "odds_away"],
-                    ):
-                        break
-                    logger.debug(
-                        "Prediction inconsistent with odds for row %d, attempt %d",
-                        i + 1,
-                        attempt + 1,
-                    )
-                except Exception as e:  # pylint: disable=broad-except
+                        if is_prediction_consistent(
+                            response["prediction"]["home"],
+                            response["prediction"]["away"],
+                            df[i, "odds_home"],
+                            df[i, "odds_away"],
+                        ):
+                            break
+                        logger.debug(
+                            "Prediction inconsistent with odds for row %d, attempt %d",
+                            i + 1,
+                            attempt + 1,
+                        )
+                    except Exception as e:  # pylint: disable=broad-except
+                        logger.warning(
+                            "LLM prediction attempt %d failed for row %d: %s",
+                            attempt + 1,
+                            i + 1,
+                            str(e),
+                        )
+                        continue  # Try next attempt even if this one fails
+
+                if not last_response:
                     logger.warning(
-                        "LLM prediction attempt %d failed for row %d: %s",
-                        attempt + 1,
+                        "No valid LLM response for row %d, skipping...", i + 1
+                    )
+                    continue
+
+                if attempt == self.llm_attempts - 1:
+                    logger.warning(
+                        "Using inconsistent prediction for row %d after %d failed attempts: %s",
                         i + 1,
-                        str(e),
+                        self.llm_attempts,
+                        last_response,
                     )
 
-            if not last_response:
-                logger.warning("No valid LLM response for row %d, skipping...", i + 1)
-                continue
+                # Update DataFrame with prediction results
+                df[i, "reasoning"] = last_response["reasoning"]
+                df[i, "prediction_home"] = last_response["prediction"]["home"]
+                df[i, "prediction_away"] = last_response["prediction"]["away"]
+                df[i, "outlook"] = last_response["outlook"]
+                df[i, "validity"] = validate_prediction(last_response)
 
-            if attempt == self.llm_attempts - 1:
-                logger.warning(
-                    "Using inconsistent prediction for row %d after %d attempts: %s",
-                    i + 1,
-                    self.llm_attempts,
-                    last_response,
-                )
-
-            df[i, "reasoning"] = last_response["reasoning"]
-            df[i, "prediction_home"] = last_response["prediction"]["home"]
-            df[i, "prediction_away"] = last_response["prediction"]["away"]
-            df[i, "outlook"] = last_response["outlook"]
-            df[i, "validity"] = validate_prediction(last_response)
+            except Exception as e:  # pylint: disable=broad-except
+                logger.warning("Failed to process row %d: %s", i + 1, str(e))
+                continue  # Skip this row but continue processing others
 
         return df
 
@@ -407,158 +422,185 @@ class TipGenius:
     def execute_workflow(self, config: Dict[str, Any]) -> None:
         """
         Execute the Tip Genius workflow for a given configuration.
+        Continues execution in case individual combinations fail.
 
         Parameters
         ----------
         config : Dict[str, Any]
-            The configuration dictionary with the following keys:
-            - sports_list : list
-                The list of sports to process.
-            - llm_provider_options : list
-                The list of LLM providers to use.
-            - prediction_type_options : list
-                The list of prediction types to use.
-            - named_teams_options : list
-                The list of named teams options to use.
-            - additional_info_options : list
-                The list of additional info options to use.
+            The configuration dictionary with workflow parameters.
         """
-        # Initialize storage manager
-        self.storage_manager = StorageManager(
-            match_predictions_folder=self.match_predictions_folder,
-            debug=self.debug,
-            write_to_kv=self.export_to_kv,
-            export_to_file=self.export_to_file,
-        )
-        self.prediction_data.clear()
-
-        sports_list = config["sports_list"]
-        llm_provider_options = config["llm_provider_options"]
-        prediction_type_options = config["prediction_type_options"]
-        named_teams_options = config["named_teams_options"]
-        additional_info_options = config["additional_info_options"]
-
-        nr_total_combinations = (
-            len(llm_provider_options)
-            * len(prediction_type_options)
-            * len(named_teams_options)
-            * len(additional_info_options)
-            * len(sports_list)
-        )
-
-        if self.debug:
-            logger.info("Debug mode is enabled, only processing first few rows...")
-
-        logger.info(
-            "Starting workflow with %d total combinations", nr_total_combinations
-        )
-        processed_count = 0
-
-        for sport in sports_list:
-            logger.info("Retrieving odds for sport: %s", sport)
-
-            # Fetch the odds data
-            api_result = self.api_pipeline.fetch_api_data(
-                sport_key=sport,
+        try:
+            # Initialize storage manager
+            self.storage_manager = StorageManager(
+                match_predictions_folder=self.match_predictions_folder,
+                debug=self.debug,
+                write_to_kv=self.export_to_kv,
+                export_to_file=self.export_to_file,
             )
-            # Store the API data to json file
-            if self.store_api_results:
-                self.store_api_data(
-                    api_result=api_result,
-                    sport=sport,
-                    api_name=self.api_pipeline.api_name,
+            self.prediction_data.clear()
+
+            sports_list = config["sports_list"]
+            llm_provider_options = config["llm_provider_options"]
+            prediction_type_options = config["prediction_type_options"]
+            named_teams_options = config["named_teams_options"]
+            additional_info_options = config["additional_info_options"]
+
+            nr_total_combinations = (
+                len(llm_provider_options)
+                * len(prediction_type_options)
+                * len(named_teams_options)
+                * len(additional_info_options)
+                * len(sports_list)
+            )
+
+            if self.debug:
+                logger.info("Debug mode is enabled, only processing first few rows...")
+
+            logger.info(
+                "Starting workflow with %d total combinations", nr_total_combinations
+            )
+            processed_count = 0
+            failed_combinations = []
+
+            for sport in sports_list:
+                logger.info("Retrieving odds for sport: %s", sport)
+
+                try:
+                    # Fetch the odds data
+                    api_result = self.api_pipeline.fetch_api_data(sport_key=sport)
+                    if self.store_api_results:
+                        self.store_api_data(
+                            api_result=api_result,
+                            sport=sport,
+                            api_name=self.api_pipeline.api_name,
+                        )
+                except Exception as e:  # pylint: disable=broad-except
+                    logger.error("Failed to fetch odds for sport %s: %s", sport, str(e))
+                    continue  # Skip this sport but continue with others
+
+                combinations = product(
+                    llm_provider_options,
+                    prediction_type_options,
+                    named_teams_options,
+                    additional_info_options,
                 )
 
-            combinations = product(
-                llm_provider_options,
-                prediction_type_options,
-                named_teams_options,
-                additional_info_options,
-            )
-
-            for (
-                llm_provider,
-                prediction_type,
-                named_teams,
-                additional_info,
-            ) in combinations:
-                processed_count += 1
-                logger.info(
-                    "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",  # pylint: disable=line-too-long
-                    processed_count,
-                    nr_total_combinations,
+                for (
                     llm_provider,
                     prediction_type,
                     named_teams,
                     additional_info,
+                ) in combinations:
+                    processed_count += 1
+                    try:
+                        logger.info(
+                            "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",
+                            processed_count,
+                            nr_total_combinations,
+                            llm_provider,
+                            prediction_type,
+                            named_teams,
+                            additional_info,
+                        )
+
+                        if not api_result:
+                            logger.warning("No valid API data, skipping combination...")
+                            failed_combinations.append(
+                                (sport, llm_provider, "No valid API data")
+                            )
+                            continue
+
+                        df = self.api_pipeline.process_api_data(
+                            api_result=api_result,
+                            named_teams=named_teams,
+                            additional_info=additional_info,
+                        )
+
+                        if self.debug:
+                            df = df.limit(2)
+
+                        df_processed = self.predict_results(
+                            df=df,
+                            llm_provider=llm_provider,
+                            prediction_type=prediction_type,
+                        )
+
+                        if self.store_llm_results:
+                            self.store_llm_data(
+                                df=df_processed,
+                                sport=sport,
+                                llm_provider=llm_provider,
+                                prediction_type=prediction_type,
+                                named_teams=named_teams,
+                                additional_info=additional_info,
+                            )
+
+                        # Save successful predictions even if some rows failed
+                        # pylint: disable=singleton-comparison
+                        valid_matches = (
+                            df_processed.filter(pl.col("validity") == True)
+                            .select(
+                                [
+                                    "commence_time_str",
+                                    "home_team",
+                                    "away_team",
+                                    "prediction_home",
+                                    "prediction_away",
+                                    "outlook",
+                                ]
+                            )
+                            .to_dicts()
+                        )
+
+                        if valid_matches:
+                            self.save_results(
+                                sport=sport,
+                                llm_provider=llm_provider,
+                                prediction_type=prediction_type,
+                                named_teams=named_teams,
+                                additional_info=additional_info,
+                                matches=valid_matches,
+                            )
+
+                    except Exception as e:  # pylint: disable=broad-except
+                        logger.error(
+                            "Failed to process combination: %s, %s, %s",
+                            sport,
+                            llm_provider,
+                            str(e),
+                        )
+                        failed_combinations.append((sport, llm_provider, str(e)))
+                        continue  # Skip this combination but continue with others
+
+            # Export results even if some combinations failed
+            if self.prediction_data and (self.export_to_kv or self.export_to_file):
+                try:
+                    self.export_results()
+                except Exception as e:  # pylint: disable=broad-except
+                    logger.error("Failed to export results: %s", str(e))
+
+            # Log summary of failures
+            if failed_combinations:
+                logger.warning(
+                    "Workflow completed with %d failed combinations:",
+                    len(failed_combinations),
                 )
+                for sport, provider, error in failed_combinations:
+                    logger.warning("- %s / %s: %s", sport, provider, error)
+            else:
+                logger.info("All workflows completed successfully")
 
-                # If API Data is not available, skip this combination
-                if api_result is None or len(api_result) == 0:
-                    logger.warning("No valid API data, skipping combination...")
-                    continue
-
-                # Process the API data into a DataFrame
-                df = self.api_pipeline.process_api_data(
-                    api_result=api_result,
-                    named_teams=named_teams,
-                    additional_info=additional_info,
-                )
-
-                # If debug mode is enabled, only process the first few rows
-                if self.debug:
-                    df = df.limit(2)
-
-                df_processed = self.predict_results(
-                    df=df,
-                    llm_provider=llm_provider,
-                    prediction_type=prediction_type,
-                )
-
-                # Store LLM results in CSV format
-                if self.store_llm_results:
-                    self.store_llm_data(
-                        df=df_processed,
-                        sport=sport,
-                        llm_provider=llm_provider,
-                        prediction_type=prediction_type,
-                        named_teams=named_teams,
-                        additional_info=additional_info,
+        except Exception as e:
+            logger.error("Critical workflow error: %s", str(e))
+            # Try to save any collected data even if workflow fails
+            if self.prediction_data and (self.export_to_kv or self.export_to_file):
+                try:
+                    self.export_results()
+                except Exception as export_error:  # pylint: disable=broad-except
+                    logger.error(
+                        "Failed to export results after error: %s", str(export_error)
                     )
-
-                matches = df_processed.select(
-                    [
-                        "commence_time_str",
-                        "home_team",
-                        "away_team",
-                        "prediction_home",
-                        "prediction_away",
-                        "outlook",
-                    ]
-                ).to_dicts()
-
-                self.save_results(
-                    sport=sport,
-                    llm_provider=llm_provider,
-                    prediction_type=prediction_type,
-                    named_teams=named_teams,
-                    additional_info=additional_info,
-                    matches=matches,
-                )
-
-                logger.debug(
-                    "Completed: %s, %s, Named Teams: %s, Additional Info: %s",
-                    llm_provider,
-                    prediction_type,
-                    named_teams,
-                    additional_info,
-                )
-
-        # Export the final results to KV / File
-        if self.export_to_kv or self.export_to_file:
-            self.export_results()
-
-        logger.info("All workflows completed.")
+            raise  # Re-raise the exception after attempting to save data
 
 
 # %% --------------------------------------------
