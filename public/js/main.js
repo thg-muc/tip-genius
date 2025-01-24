@@ -424,16 +424,16 @@ document.addEventListener('DOMContentLoaded', () => {
       value: 'Microsoft-Phi-Medium',
       label: 'Phi Medium',
       logo: `/images/llm-logos/Microsoft.png`
+    },
+    {
+      value: 'OpenAI-ChatGPT-Mini',
+      label: 'ChatGPT Mini',
+      logo: `/images/llm-logos/OpenAI.png`
     }
     // {
     //     value: 'Anthropic-Claude-Haiku',
     //     label: 'Claude Haiku',
     //     logo: `/images/llm-logos/Anthropic.png`
-    // },
-    // {
-    //     value: 'OpenAI-ChatGPT-Mini',
-    //     label: 'ChatGPT Mini',
-    //     logo: `/images/llm-logos/OpenAI.png`
     // },
   ]
 
