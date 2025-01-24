@@ -43,19 +43,6 @@ def is_cloud_environment() -> bool:
     bool
         True if running in a cloud environment (AWS, GitHub Actions, Vercel, etc.),
         False if running locally.
-
-    Notes
-    -----
-    Currently detects:
-    - GitHub Actions
-    - Vercel
-    - AWS Lambda
-    - AWS CodeBuild
-    - CircleCI
-    - GitLab CI
-    - Jenkins
-    - Heroku
-    - Render
     """
     # List of environment variables that indicate cloud/CI environments
     cloud_indicators = [
