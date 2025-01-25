@@ -14,7 +14,7 @@ llm_provider_options:
   - Deepseek-Chat
   - Meta-Llama-70b
   - Microsoft-Phi-Medium
-  - Openai-GPT-Mini
+  - OpenAI-GPT-Mini
   # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
 
 # LLM Prompt Option - Include Point Scoring System

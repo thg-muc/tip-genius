@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
       logo: `/images/llm-logos/Microsoft.png`
     },
     {
-      value: 'OpenAI-ChatGPT-Mini',
+      value: 'OpenAI-GPT-Mini',
       label: 'ChatGPT Mini',
       logo: `/images/llm-logos/OpenAI.png`
     }
