@@ -160,6 +160,10 @@ class OddsAPI(BaseAPI):
 
         api_result = response.json()
         logger.debug("Successfully fetched odds data for sport: %s", sport_key)
+        logger.debug(
+            "API credits remaining: %s",
+            response.headers.get("x-requests-remaining", "unknown"),
+        )
 
         return api_result
 
