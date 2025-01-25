@@ -145,9 +145,9 @@ class OddsAPI(BaseAPI):
         # Construct the URL for the API request
         url = f"{self.base_url}{sports_value}/{self.parameters}&apiKey={self.api_key}"
 
-        # Fetch data from the API (sufficient timeout for slower LLMs)
+        # Fetch data from the API
         logger.debug("Fetching odds data for sport: %s", sport_key)
-        response = requests.get(url, timeout=45)
+        response = requests.get(url, timeout=10)
 
         # Check if the response was successful
         if response.status_code != 200:
