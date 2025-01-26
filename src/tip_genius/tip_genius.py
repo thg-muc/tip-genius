@@ -445,6 +445,15 @@ class TipGenius:
             named_teams_options = config["named_teams_options"]
             additional_info_options = config["additional_info_options"]
 
+            if not sports_list:
+                logger.warning("No sports defined in the configuration, aborting.")
+                return
+            if not llm_provider_options:
+                logger.warning(
+                    "No LLM providers defined in the configuration, aborting."
+                )
+                return
+
             nr_total_combinations = (
                 len(llm_provider_options)
                 * len(prediction_type_options)
