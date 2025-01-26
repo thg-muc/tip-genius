@@ -72,8 +72,6 @@ class TipGenius:
     ----------
     api_pipeline : BaseAPI
         The API pipeline to use for fetching odds data.
-    debug : bool, optional
-        Flag to enable debug mode, by default False.
         Will limit the number of LLM requests and increase logging verbosity,
 
     Attributes
@@ -121,13 +119,17 @@ class TipGenius:
     def __init__(
         self,
         api_pipeline: BaseAPI,
-        debug: bool = False,
     ):
         """Initialize the TipGenius class."""
 
         # Initialize parameters
         self.api_pipeline = api_pipeline
-        self.debug = debug
+
+        # Read debug settings from environment
+        self.debug = os.environ.get("DEBUG_MODE", "FALSE").upper() == "TRUE"
+        self.debug_limit = int(os.environ.get("DEBUG_PROCESSING_LIMIT", 0))
+
+        # Initialize class attributes
         self.storage_manager = None
 
         # Initialize logging
@@ -138,9 +140,14 @@ class TipGenius:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
+        # Log initialization
+        if self.debug:
+            logger.info("Debug mode is enabled...")
+
         logger.info(
             "TipGenius initialized with API: %s", api_pipeline.__class__.__name__
         )
+        logger.debug("Project root directory: %s", self.project_root)
 
     def store_llm_data(
         self,
@@ -462,9 +469,6 @@ class TipGenius:
                 * len(sports_list)
             )
 
-            if self.debug:
-                logger.info("Debug mode is enabled, only processing first few rows...")
-
             logger.info(
                 "Starting workflow with %d total combinations", nr_total_combinations
             )
@@ -525,8 +529,8 @@ class TipGenius:
                             additional_info=additional_info,
                         )
 
-                        if self.debug:
-                            df = df.limit(2)
+                        if self.debug and self.debug_limit > 0:
+                            df = df.limit(self.debug_limit)
 
                         df_processed = self.predict_results(
                             df=df,
@@ -631,7 +635,7 @@ if __name__ == "__main__":
         load_dotenv(dotenv_path="../../.env.local")
 
     # Create an instance of TipGenius with an API class
-    tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False)
+    tip_genius = TipGenius(api_pipeline=OddsAPI())
 
     # Set attributes for the TipGenius instance
     options = {
