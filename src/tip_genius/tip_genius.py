@@ -72,8 +72,6 @@ class TipGenius:
     ----------
     api_pipeline : BaseAPI
         The API pipeline to use for fetching odds data.
-    debug : bool, optional
-        Flag to enable debug mode, by default False.
         Will limit the number of LLM requests and increase logging verbosity,
 
     Attributes
@@ -121,13 +119,17 @@ class TipGenius:
     def __init__(
         self,
         api_pipeline: BaseAPI,
-        debug: bool = False,
     ):
         """Initialize the TipGenius class."""
 
         # Initialize parameters
         self.api_pipeline = api_pipeline
-        self.debug = debug
+
+        # Read debug settings from environment
+        self.debug = os.environ.get("DEBUG_MODE", "FALSE").upper() == "TRUE"
+        self.debug_limit = int(os.environ.get("DEBUG_PROCESSING_LIMIT", 0))
+
+        # Initialize class attributes
         self.storage_manager = None
 
         # Initialize logging
@@ -138,9 +140,14 @@ class TipGenius:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
 
+        # Log initialization
+        if self.debug:
+            logger.info("Debug mode is enabled...")
+
         logger.info(
             "TipGenius initialized with API: %s", api_pipeline.__class__.__name__
         )
+        logger.debug("Project root directory: %s", self.project_root)
 
     def store_llm_data(
         self,
@@ -445,6 +452,15 @@ class TipGenius:
             named_teams_options = config["named_teams_options"]
             additional_info_options = config["additional_info_options"]
 
+            if not sports_list:
+                logger.warning("No sports defined in the configuration, aborting.")
+                return
+            if not llm_provider_options:
+                logger.warning(
+                    "No LLM providers defined in the configuration, aborting."
+                )
+                return
+
             nr_total_combinations = (
                 len(llm_provider_options)
                 * len(prediction_type_options)
@@ -452,9 +468,6 @@ class TipGenius:
                 * len(additional_info_options)
                 * len(sports_list)
             )
-
-            if self.debug:
-                logger.info("Debug mode is enabled, only processing first few rows...")
 
             logger.info(
                 "Starting workflow with %d total combinations", nr_total_combinations
@@ -516,8 +529,8 @@ class TipGenius:
                             additional_info=additional_info,
                         )
 
-                        if self.debug:
-                            df = df.limit(2)
+                        if self.debug and self.debug_limit > 0:
+                            df = df.limit(self.debug_limit)
 
                         df_processed = self.predict_results(
                             df=df,
@@ -535,7 +548,7 @@ class TipGenius:
                                 additional_info=additional_info,
                             )
 
-                        # Save successful predictions even if some rows failed
+                        # Keep valid predictions only
                         # pylint: disable=singleton-comparison
                         valid_matches = (
                             df_processed.filter(pl.col("validity") == True)
@@ -552,6 +565,7 @@ class TipGenius:
                             .to_dicts()
                         )
 
+                        # Save valid predictions
                         if valid_matches:
                             self.save_results(
                                 sport=sport,
@@ -588,7 +602,7 @@ class TipGenius:
                 for sport, provider, error in failed_combinations:
                     logger.warning("- %s / %s: %s", sport, provider, error)
             else:
-                logger.info("All workflows completed successfully")
+                logger.info("All workflows completed successfully.")
 
         except Exception as e:
             logger.error("Critical workflow error: %s", str(e))
@@ -617,11 +631,11 @@ if __name__ == "__main__":
         from dotenv import load_dotenv
 
         logger.info("Running in local environment.")
-        # Read env.local (if available) for local development
+        # Read env.local (local development)
         load_dotenv(dotenv_path="../../.env.local")
 
     # Create an instance of TipGenius with an API class
-    tip_genius = TipGenius(api_pipeline=OddsAPI(), debug=False)
+    tip_genius = TipGenius(api_pipeline=OddsAPI())
 
     # Set attributes for the TipGenius instance
     options = {
