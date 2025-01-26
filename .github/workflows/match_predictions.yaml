@@ -47,6 +47,9 @@ jobs:
         # Vercel KV storage credentials
         KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
         KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+        # Debug Configuration 
+        DEBUG_MODE: ${{ vars.DEBUG_MODE }}
+        DEBUG_PROCESS_LIMIT: ${{ vars.DEBUG_PROCESS_LIMIT }}
       working-directory: src/tip_genius
       run: python -m tip_genius
 
