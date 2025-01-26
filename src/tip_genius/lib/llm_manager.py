@@ -135,7 +135,7 @@ class LLMManager:
             )
             time.sleep(sleep_duration)
 
-    def get_prediction(self, user_prompt: str, timeout: int = 45, **kwargs) -> str:
+    def get_prediction(self, user_prompt: str, timeout: int = 60, **kwargs) -> str:
         """
         Get the prediction from the LLM.
 
@@ -144,7 +144,7 @@ class LLMManager:
         user_prompt : str
             The prompt to send to the LLM.
         timeout : int, optional
-            Timeout for in seconds, by default 45 (sufficient for most LLMs).
+            Timeout for in seconds, by default 60 (sufficient for most LLMs).
         **kwargs : dict, optional
             Additional keyword arguments to pass to the LLM (override defaults).
 
