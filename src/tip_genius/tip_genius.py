@@ -544,7 +544,7 @@ class TipGenius:
                                 additional_info=additional_info,
                             )
 
-                        # Save successful predictions even if some rows failed
+                        # Keep valid predictions only
                         # pylint: disable=singleton-comparison
                         valid_matches = (
                             df_processed.filter(pl.col("validity") == True)
@@ -561,6 +561,7 @@ class TipGenius:
                             .to_dicts()
                         )
 
+                        # Save valid predictions
                         if valid_matches:
                             self.save_results(
                                 sport=sport,
@@ -597,7 +598,7 @@ class TipGenius:
                 for sport, provider, error in failed_combinations:
                     logger.warning("- %s / %s: %s", sport, provider, error)
             else:
-                logger.info("All workflows completed successfully")
+                logger.info("All workflows completed successfully.")
 
         except Exception as e:
             logger.error("Critical workflow error: %s", str(e))
@@ -626,7 +627,7 @@ if __name__ == "__main__":
         from dotenv import load_dotenv
 
         logger.info("Running in local environment.")
-        # Read env.local (if available) for local development
+        # Read env.local (local development)
         load_dotenv(dotenv_path="../../.env.local")
 
     # Create an instance of TipGenius with an API class
