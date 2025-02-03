@@ -113,7 +113,7 @@ class LLMManager:
             "api_rate_limit", 0
         )  # 0 or negative value means no rate limit
 
-    def _wait_for_rate_limit(self, request_duration: float) -> None:
+    def wait_for_rate_limit(self, request_duration: float) -> None:
         """
         Calculate and wait for the appropriate time to respect rate limits.
 
@@ -239,7 +239,7 @@ class LLMManager:
 
             # Observe a rate limit if specified
             if self.rate_limit > 0:  # Check for rate limit
-                self._wait_for_rate_limit(request_duration=time.time() - start_time)
+                self.wait_for_rate_limit(request_duration=time.time() - start_time)
 
             return prediction
 
