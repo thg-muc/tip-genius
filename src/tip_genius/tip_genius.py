@@ -10,6 +10,7 @@
 import json
 import logging
 import os
+import time
 from ast import literal_eval
 from collections import defaultdict
 from datetime import datetime
@@ -304,8 +305,15 @@ class TipGenius:
             try:
                 last_response = None
                 attempt = 0
+                start_time = time.time()  # Track start time for rate limiting
+
                 for attempt in range(self.llm_attempts):
                     try:
+                        # Calculate time since last request for rate limiting
+                        if attempt > 0 and llm.rate_limit > 0:
+                            elapsed = time.time() - start_time
+                            llm.wait_for_rate_limit(elapsed)
+
                         response = literal_eval(
                             llm.get_prediction(
                                 user_prompt=df[i, "odds_summary"],
