@@ -402,33 +402,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const llmProviders = [
     {
       value: 'Mistral-Large',
-      label: 'Mistral Large',
+      label: 'Mistral Large 2',
       logo: `/images/llm-logos/Mistral.png`
     },
     {
       value: 'Google-Gemini-Flash',
-      label: 'Gemini Flash',
+      label: 'Gemini Flash 2',
       logo: `/images/llm-logos/Google.png`
     },
     {
+      value: 'OpenAI-GPT-Mini',
+      label: 'GPT-4o Mini',
+      logo: `/images/llm-logos/OpenAI.png`
+    },
+    {
       value: 'Deepseek-Chat',
-      label: 'DeepSeek',
+      label: 'DeepSeek V3',
       logo: `/images/llm-logos/DeepSeek.png`
     },
     {
       value: 'Meta-Llama-70b',
-      label: 'Llama 70b',
+      label: 'Llama 3 70b',
       logo: `/images/llm-logos/Meta.png`
     },
     {
       value: 'Microsoft-Phi-Medium',
-      label: 'Phi Medium',
+      label: 'Phi 4 Medium',
       logo: `/images/llm-logos/Microsoft.png`
-    },
-    {
-      value: 'OpenAI-GPT-Mini',
-      label: 'ChatGPT Mini',
-      logo: `/images/llm-logos/OpenAI.png`
     }
     // {
     //     value: 'Anthropic-Claude-Haiku',
