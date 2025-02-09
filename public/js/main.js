@@ -478,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add the label text
     const span = document.createElement('span')
-    span.className = 'text-base text-gray-700 dark:text-gray-300'
+    span.className = 'text-sm sm:text-base text-gray-700 dark:text-gray-300'
     span.textContent = provider.label
 
     // Assemble all pieces
