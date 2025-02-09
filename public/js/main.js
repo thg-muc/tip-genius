@@ -168,7 +168,7 @@ async function loadLeagueData (leagueName) {
 
       localStorage.setItem('lastUsedLeague', leagueName)
     } else {
-      showError(`No data found for league: ${leagueName}`)
+      showError(`Currently no predictions available for this LLM / League.`)
     }
   } catch (error) {
     console.error(`Error loading ${leagueName} data:`, error)
