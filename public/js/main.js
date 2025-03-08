@@ -1,6 +1,48 @@
 // Main JavaScript for Tip Genius PWA
 // Handles UI, data fetching, caching and interactions
 
+// LLM provider configuration with PNG logos
+const LLM_PROVIDERS = [
+  {
+    value: 'Mistral-Large',
+    label: 'Mistral Large 2',
+    logo: `/images/llm-logos/Mistral.png`
+  },
+  {
+    value: 'Google-Gemini-Flash',
+    label: 'Gemini Flash 2',
+    logo: `/images/llm-logos/Google.png`
+  },
+  {
+    value: 'OpenAI-GPT-Mini',
+    label: 'GPT-4o Mini',
+    logo: `/images/llm-logos/OpenAI.png`
+  },
+  {
+    value: 'Deepseek-Chat',
+    label: 'DeepSeek V3',
+    logo: `/images/llm-logos/DeepSeek.png`
+  },
+  {
+    value: 'Meta-Llama-70b',
+    label: 'Llama 3 70b',
+    logo: `/images/llm-logos/Meta.png`
+  },
+  {
+    value: 'Microsoft-Phi-Medium',
+    label: 'Phi 4 Medium',
+    logo: `/images/llm-logos/Microsoft.png`
+  }
+  // {
+  //     value: 'Anthropic-Claude-Haiku',
+  //     label: 'Claude Haiku',
+  //     logo: `/images/llm-logos/Anthropic.png`
+  // },
+]
+
+// Default provider is the first one in the list
+const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
+
 // Default fallback version in YYMMDDhhmm format
 let appVersion = '2501010000'
 
@@ -11,7 +53,7 @@ let CONFIG
 let currentLeague = localStorage.getItem('lastUsedLeague')
 let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
-let currentLLM = localStorage.getItem('lastUsedLLM') || 'Mistral-Large'
+let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM_PROVIDER
 
 // Initialize the application
 async function initializeApp () {
@@ -37,7 +79,7 @@ async function initializeApp () {
     ],
     CACHE_DURATION: 3600, // Cache in seconds (1 hour)
     DYNAMIC_CACHE: `tip-genius-dynamic-${appVersion}`,
-    DEFAULT_LLM: 'Mistral-Large',
+    DEFAULT_LLM: DEFAULT_LLM_PROVIDER,
     API_URL: '/api/predictions'
   }
 
@@ -581,45 +623,6 @@ document.addEventListener('DOMContentLoaded', () => {
     currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM
   }
 
-  // LLM provider configuration with PNG logos
-  const llmProviders = [
-    {
-      value: 'Mistral-Large',
-      label: 'Mistral Large 2',
-      logo: `/images/llm-logos/Mistral.png`
-    },
-    {
-      value: 'Google-Gemini-Flash',
-      label: 'Gemini Flash 2',
-      logo: `/images/llm-logos/Google.png`
-    },
-    {
-      value: 'OpenAI-GPT-Mini',
-      label: 'GPT-4o Mini',
-      logo: `/images/llm-logos/OpenAI.png`
-    },
-    {
-      value: 'Deepseek-Chat',
-      label: 'DeepSeek V3',
-      logo: `/images/llm-logos/DeepSeek.png`
-    },
-    {
-      value: 'Meta-Llama-70b',
-      label: 'Llama 3 70b',
-      logo: `/images/llm-logos/Meta.png`
-    },
-    {
-      value: 'Microsoft-Phi-Medium',
-      label: 'Phi 4 Medium',
-      logo: `/images/llm-logos/Microsoft.png`
-    }
-    // {
-    //     value: 'Anthropic-Claude-Haiku',
-    //     label: 'Claude Haiku',
-    //     logo: `/images/llm-logos/Anthropic.png`
-    // },
-  ]
-
   // Make sure the container exists
   const providersContainer = document.getElementById('llm-providers')
   if (!providersContainer) {
@@ -631,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
   providersContainer.innerHTML = ''
 
   // Generate radio buttons for LLM providers
-  llmProviders.forEach(provider => {
+  LLM_PROVIDERS.forEach(provider => {
     const label = document.createElement('label')
     label.className =
       'flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card p-2 rounded-lg transition-colors'
@@ -708,7 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add loaded class to body after all initialization is complete
   document.body.classList.add('loaded')
   // Verify initialization
-  console.log('Menu initialization complete, providers:', llmProviders.length)
+  console.log('Menu initialization complete, providers:', LLM_PROVIDERS.length)
 })
 
 // Navigation functions
