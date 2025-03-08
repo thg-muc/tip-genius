@@ -1,0 +1,80 @@
+"""Utility script to standardize image filenames to be URL-friendly."""
+
+# * Author(s): Thomas Glanzer
+# * Creation : Feb 2025
+# * License: MIT license
+
+# %% --------------------------------------------
+# * Libraries
+
+import logging
+from pathlib import Path
+
+from slugify import slugify
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
+# %% --------------------------------------------
+# * Code Execution
+
+
+def purify_image_filename(filename: str) -> str:
+    """
+    Convert a filename to a URL-friendly format.
+
+    Parameters
+    ----------
+    filename : str
+        Original filename to be purified
+
+    Returns
+    -------
+    str
+        URL-friendly filename with special characters handled:
+        - Spaces converted to underscores
+        - Accents removed
+        - Special characters removed
+        - Lowercase conversion
+    """
+    name, ext = Path(filename).stem, Path(filename).suffix
+    purified_name = slugify(name, separator="_", lowercase=True)
+    return f"{purified_name}{ext.lower()}"
+
+
+def purify_image_directory(directory: str | Path = ".") -> None:
+    """
+    Purify all image filenames in a directory to make them URL-friendly.
+
+    Parameters
+    ----------
+    directory : str or Path, optional
+        Directory containing PNG files to process, by default "."
+    """
+    try:
+        directory = Path(directory)
+        logger.info("Processing PNG files in: %s", directory.absolute())
+
+        for filepath in directory.glob("*.png"):
+            original_name = filepath.name
+            new_filename = purify_image_filename(original_name)
+
+            if original_name != new_filename:
+                try:
+                    filepath.rename(directory / new_filename)
+                    logger.info('Renamed: "%s" -> "%s"', original_name, new_filename)
+                except OSError as e:
+                    logger.error('Failed to rename "%s": %s', original_name, str(e))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error("Error processing directory: %s", str(e))
+
+
+if __name__ == "__main__":
+    script_dir = Path(__file__).resolve().parent
+    project_root = script_dir.parent
+    target_dir = project_root / "public" / "images" / "teams"
+    purify_image_directory(target_dir)
