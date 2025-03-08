@@ -696,15 +696,66 @@ const refreshData = () => {
 
 setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
 
-// Service Worker registration
+// Service Worker registration with update handling
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .then(registration =>
+      .then(registration => {
         console.log('ServiceWorker registration successful')
-      )
-      .catch(err => console.log('ServiceWorker registration failed:', err))
+
+        // Check for updates to the Service Worker
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing
+
+          newWorker.addEventListener('statechange', () => {
+            // When the service worker is activated
+            if (
+              newWorker.state === 'activated' &&
+              navigator.serviceWorker.controller
+            ) {
+              // Show update notification if not first install
+              const notification = document.createElement('div')
+              notification.className =
+                'fixed bottom-4 right-4 bg-white dark:bg-dark-card rounded-lg shadow-lg p-4 z-50 flex items-center'
+              notification.innerHTML = `
+                <div class="mr-3 text-sky-700 dark:text-sky-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm text-gray-800 dark:text-gray-200">App updated!</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Refresh to apply changes</p>
+                </div>
+                <button id="update-btn" class="ml-4 px-3 py-1 bg-sky-700 text-white text-sm rounded hover:bg-sky-800 transition-colors">
+                  Refresh
+                </button>
+              `
+
+              document.body.appendChild(notification)
+              document
+                .getElementById('update-btn')
+                .addEventListener('click', () => {
+                  window.location.reload()
+                })
+            }
+          })
+        })
+      })
+      .catch(err => {
+        console.error('ServiceWorker registration failed:', err)
+        // Continue without service worker functionality
+      })
+  })
+
+  // Handle page refresh when service worker is updated
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true
+      window.location.reload() // Refresh the page to get the new version
+    }
   })
 }
 
