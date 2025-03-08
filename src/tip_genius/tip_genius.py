@@ -24,6 +24,7 @@ import yaml
 from lib.api_data import BaseAPI, OddsAPI
 from lib.llm_manager import LLMManager
 from lib.storage_manager import StorageManager
+from lib.team_matching import TeamLogoMatcher
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -132,6 +133,7 @@ class TipGenius:
 
         # Initialize class attributes
         self.storage_manager = None
+        self.logo_matcher = None
 
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
@@ -381,7 +383,7 @@ class TipGenius:
         matches: List[Dict[str, Any]],
     ) -> None:
         """
-        Save predictions in the nested dictionary structure.
+        Save predictions in the nested dictionary structure and (optionally) add logos.
 
         Parameters
         ----------
@@ -398,6 +400,15 @@ class TipGenius:
         matches : List[Dict[str, Any]]
             The list of match predictions to store.
         """
+        # Add logo matching for each match
+        for match in matches:
+            if self.logo_matcher is not None:
+                match["home_logo"] = self.logo_matcher.find_logo(match["home_team"])
+                match["away_logo"] = self.logo_matcher.find_logo(match["away_team"])
+            else:
+                match["home_logo"] = None
+                match["away_logo"] = None
+
         key = (
             f"{llm_provider}_{prediction_type}_"
             f"{'named' if named_teams else 'anonymized'}_"
@@ -453,6 +464,21 @@ class TipGenius:
                 export_to_file=self.export_to_file,
             )
             self.prediction_data.clear()
+
+            # Initialize logo matcher if folder is configured and exists
+            if team_logos_path := config.get("team_logos_folder"):
+                full_path = os.path.join(self.project_root, team_logos_path)
+                if os.path.exists(full_path):
+                    try:
+                        self.logo_matcher = TeamLogoMatcher(logo_directory=full_path)
+                        logger.debug("TeamLogoMatcher successfully initialized.")
+                    except Exception as e:  # pylint: disable=broad-except
+                        logger.warning("Failed to initialize logo matcher: %s", str(e))
+                else:
+                    logger.warning(
+                        "Not performing Logo matching, logo dir does not exist: %s",
+                        full_path,
+                    )
 
             sports_list = config["sports_list"]
             llm_provider_options = config["llm_provider_options"]
