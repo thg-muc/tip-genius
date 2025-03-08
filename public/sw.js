@@ -25,7 +25,8 @@ const STATIC_ASSETS = [
 const IMAGE_PATTERNS = [
   new RegExp('^/images/icon-.*\\.png$'),
   new RegExp('^/images/leagues/.*\\.png$'),
-  new RegExp('^/images/llm-logos/.*\\.png$')
+  new RegExp('^/images/llm-logos/.*\\.png$'),
+  new RegExp('^/images/teams/.*\\.png$')
 ]
 
 // Function to clean up old caches
@@ -87,26 +88,29 @@ self.addEventListener('fetch', event => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Handle API requests differently (network-first strategy with offline support)
-  if (request.url.includes('/api/predictions')) {
+  // Special handling for team logos - use cache-first strategy
+  if (url.pathname.startsWith('/images/teams/')) {
     event.respondWith(
-      fetch(request)
-        .then(response => handleApiResponse(request, response))
-        .catch(async () => {
-          const cachedResponse = await caches.match(request)
-          if (cachedResponse) {
-            // Send message to client about using cached data
-            const clients = await self.clients.matchAll()
-            clients.forEach(client => {
-              client.postMessage({
-                type: 'USING_CACHED_DATA',
-                timestamp: new Date().toISOString()
-              })
-            })
-            return cachedResponse
+      (async () => {
+        // Check cache first
+        const cachedResponse = await caches.match(request)
+        if (cachedResponse) {
+          return cachedResponse
+        }
+
+        // If not in cache, fetch from network and cache for long term
+        try {
+          const networkResponse = await fetch(request)
+          if (networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME)
+            cache.put(request, networkResponse.clone())
           }
-          return handleOfflineFallback(request)
-        })
+          return networkResponse
+        } catch (error) {
+          console.error('Error fetching team logo:', error)
+          return new Response('', { status: 404 })
+        }
+      })()
     )
     return
   }
