@@ -162,25 +162,114 @@ function renderMatches (matches, timestamp) {
 }
 
 function preloadTeamLogos (leagues) {
-  // Create a set to store unique logo paths
-  const logoSet = new Set()
+  if (!leagues || leagues.length === 0) return
 
-  // Extract all unique logo paths from the data
+  // Get current league (first one or from localStorage)
+  const currentLeague =
+    localStorage.getItem('lastUsedLeague') || leagues[0].name
+  const currentLeagueData = leagues.find(l => l.name === currentLeague)
+
+  // Step 1: Create a prioritized logo queue system
+  const priorityLogos = new Set() // Current league logos (high priority)
+  const backgroundLogos = new Set() // Other leagues' logos (low priority)
+
+  // Categorize logos into priority groups
   leagues.forEach(league => {
     league.matches.forEach(match => {
+      const logoSet =
+        league.name === currentLeague ? priorityLogos : backgroundLogos
+
       if (hasLogo(match.home_logo)) logoSet.add(match.home_logo)
       if (hasLogo(match.away_logo)) logoSet.add(match.away_logo)
     })
   })
 
-  // Preload each logo in the background
-  logoSet.forEach(logoName => {
-    const img = new Image()
-    img.src = `/images/teams/${logoName}`
-    // Don't need to append to DOM - just loading into browser cache
-  })
+  // Step 2: Preload current league logos immediately
+  preloadLogoSet(priorityLogos, true)
 
-  console.log(`Preloaded ${logoSet.size} team logos`)
+  // Step 3: Load other leagues' logos only during browser idle time
+  if (backgroundLogos.size > 0) {
+    scheduleBackgroundLoading(Array.from(backgroundLogos))
+  }
+
+  console.log(
+    `Prioritized preloading: ${priorityLogos.size} immediate, ${backgroundLogos.size} deferred`
+  )
+}
+
+// Helper function to preload a set of logos
+function preloadLogoSet (logoSet, isHighPriority = false) {
+  // Convert to array for batch processing if needed
+  const logos = Array.from(logoSet)
+
+  // Simple check to avoid reloading already cached images
+  const cachedLogos = new Set(
+    Object.keys(
+      window.performance
+        .getEntriesByType('resource')
+        .filter(r => r.name.includes('/images/teams/'))
+        .map(r => r.name.split('/').pop())
+    )
+  )
+
+  // Process logos
+  logos.forEach(logoName => {
+    // Skip if we have evidence it's already cached
+    if (cachedLogos.has(logoName)) return
+
+    const img = new Image()
+
+    // Set loading priority based on group
+    if (!isHighPriority) {
+      img.loading = 'lazy' // Use native lazy loading for low priority
+      img.fetchPriority = 'low'
+    }
+
+    // Load the image
+    img.src = `/images/teams/${logoName}`
+  })
+}
+
+// Helper function to schedule background loading in batches
+function scheduleBackgroundLoading (logos) {
+  // Use requestIdleCallback if available, otherwise use a deferred timeout
+  const scheduleWhenIdle =
+    window.requestIdleCallback || (fn => setTimeout(fn, 1000)) // Fallback with 1 second delay
+
+  // Process in smaller batches to avoid locking up the browser
+  const BATCH_SIZE = 10
+  let currentIndex = 0
+
+  function loadNextBatch (deadline) {
+    // Check if we're done
+    if (currentIndex >= logos.length) return
+
+    // Calculate how many to process in this batch
+    const endIndex = Math.min(currentIndex + BATCH_SIZE, logos.length)
+    const timeRemaining =
+      deadline && typeof deadline.timeRemaining === 'function'
+        ? deadline.timeRemaining()
+        : 50 // Default time slice of 50ms
+
+    // Skip this cycle if we're low on time
+    if (timeRemaining < 10) {
+      scheduleWhenIdle(loadNextBatch)
+      return
+    }
+
+    // Process a batch
+    const batch = logos.slice(currentIndex, endIndex)
+    preloadLogoSet(new Set(batch), false)
+    currentIndex = endIndex
+
+    // Schedule next batch
+    if (currentIndex < logos.length) {
+      scheduleWhenIdle(loadNextBatch)
+    }
+  }
+
+  // Start the process
+  scheduleWhenIdle(loadNextBatch)
 }
 
 // League Data processing and rendering
