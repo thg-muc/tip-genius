@@ -161,6 +161,28 @@ function renderMatches (matches, timestamp) {
   }
 }
 
+function preloadTeamLogos (leagues) {
+  // Create a set to store unique logo paths
+  const logoSet = new Set()
+
+  // Extract all unique logo paths from the data
+  leagues.forEach(league => {
+    league.matches.forEach(match => {
+      if (hasLogo(match.home_logo)) logoSet.add(match.home_logo)
+      if (hasLogo(match.away_logo)) logoSet.add(match.away_logo)
+    })
+  })
+
+  // Preload each logo in the background
+  logoSet.forEach(logoName => {
+    const img = new Image()
+    img.src = `/images/teams/${logoName}`
+    // Don't need to append to DOM - just loading into browser cache
+  })
+
+  console.log(`Preloaded ${logoSet.size} team logos`)
+}
+
 // League Data processing and rendering
 async function loadLeagueData (leagueName) {
   console.log('Loading data for league:', leagueName)
@@ -233,9 +255,13 @@ async function fetchLeagueData () {
   if (data) {
     cachedLeagueData = data
     lastFetchTime = currentTime
+    // Store the last fetch time in local storage
     localStorage.setItem('lastFetchTime', currentTime.toString())
-    // Also cache the data itself
+    // Store the fetched data in local storage
     localStorage.setItem('cachedLeagueData', JSON.stringify(data))
+
+    // Preload the Team Data
+    preloadTeamLogos(data)
   }
   return data
 }
