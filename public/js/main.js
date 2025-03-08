@@ -132,6 +132,8 @@ function renderMatches (matches, timestamp) {
   const container = document.getElementById('matches-container')
   container.innerHTML = ''
 
+  // Create a document fragment for batched DOM operations
+  const fragment = document.createDocumentFragment()
   let currentDate = null
 
   matches.forEach(match => {
@@ -144,11 +146,11 @@ function renderMatches (matches, timestamp) {
       dateHeader.className =
         'text-base sm:text-2xl font-bold text-gray-500 dark:text-gray-400 mb-0 mt-8'
       dateHeader.textContent = formattedDate
-      container.appendChild(dateHeader)
+      fragment.appendChild(dateHeader)
       currentDate = formattedDate
     }
 
-    container.appendChild(createMatchElement(match))
+    fragment.appendChild(createMatchElement(match))
   })
 
   // Add timestamp if available
@@ -157,8 +159,11 @@ function renderMatches (matches, timestamp) {
     timestampElement.className =
       'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-8'
     timestampElement.textContent = `Last Update: ${timestamp}`
-    container.appendChild(timestampElement)
+    fragment.appendChild(timestampElement)
   }
+
+  // Append all elements at once
+  container.appendChild(fragment)
 }
 
 function preloadTeamLogos (leagues) {
