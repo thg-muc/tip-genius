@@ -1,33 +1,66 @@
-// Config and utility functions for the Tip Genius web app
-const CONFIG = {
-  ALLOWED_ORIGINS: [
-    'http://localhost:3000',
-    'http://localhost:5000',
-    'http://localhost:8000',
-    'https://tip-genius.vercel.app'
-  ],
-  CACHE_DURATION: 3600, // Cache in seconds
-  DYNAMIC_CACHE: 'tip-genius-dynamic-2.0.0',
-  DEFAULT_LLM: 'Mistral-Large',
-  API_URL: '/api/predictions'
-}
+// Main JavaScript for Tip Genius PWA
+// Handles UI, data fetching, caching and interactions
 
-// Global variables
+// Default fallback version in YYMMDDhhmm format
+let appVersion = '2501010000'
+
+// Configuration will be initialized after version is loaded
+let CONFIG
+
+// Global state variables
 let currentLeague = localStorage.getItem('lastUsedLeague')
 let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
-let currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM
+let currentLLM = localStorage.getItem('lastUsedLLM') || 'Mistral-Large'
 
-// Try to restore cached data if it's still valid
-const storedData = localStorage.getItem('cachedLeagueData')
-if (storedData && Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000) {
+// Initialize the application
+async function initializeApp () {
   try {
-    cachedLeagueData = JSON.parse(storedData)
-  } catch (e) {
-    console.warn('Failed to parse cached data:', e)
-    localStorage.removeItem('cachedLeagueData')
-    localStorage.removeItem('lastFetchTime')
+    // Fetch the version information first
+    const response = await fetch('/version.json?v=' + Date.now())
+    if (response.ok) {
+      const data = await response.json()
+      appVersion = data.version
+      console.log('App initialized with version:', appVersion)
+    }
+  } catch (error) {
+    console.warn('Could not load version, using fallback:', appVersion)
   }
+
+  // Initialize configuration with the correct version
+  CONFIG = {
+    ALLOWED_ORIGINS: [
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'http://localhost:8000',
+      'https://tip-genius.vercel.app'
+    ],
+    CACHE_DURATION: 3600, // Cache in seconds (1 hour)
+    DYNAMIC_CACHE: `tip-genius-dynamic-${appVersion}`,
+    DEFAULT_LLM: 'Mistral-Large',
+    API_URL: '/api/predictions'
+  }
+
+  // Try to restore cached data if it's still valid
+  const storedData = localStorage.getItem('cachedLeagueData')
+  if (
+    storedData &&
+    Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000
+  ) {
+    try {
+      cachedLeagueData = JSON.parse(storedData)
+    } catch (e) {
+      console.warn('Failed to parse cached data:', e)
+      localStorage.removeItem('cachedLeagueData')
+      localStorage.removeItem('lastFetchTime')
+    }
+  }
+
+  // Initialize the application tabs
+  await createTabs()
+
+  // Set up periodic refresh for data
+  setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
 }
 
 // Error handling functions
@@ -84,7 +117,7 @@ function createMatchElement (match) {
                    ${match.home_team}
                    ${
                      hasLogo(match.home_logo)
-                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2">`
+                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2" loading="lazy">`
                        : '<span class="text-xl sm:text-3xl ml-1 sm:ml-2">⚽️</span>'
                    }
                </div>
@@ -92,7 +125,7 @@ function createMatchElement (match) {
                <div class="flex items-center">
                    ${
                      hasLogo(match.away_logo)
-                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2">`
+                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2" loading="lazy">`
                        : '<span class="text-xl sm:text-3xl mr-1 sm:mr-2">⚽️</span>'
                    }
                    ${match.away_team}
@@ -127,7 +160,7 @@ function createMatchElement (match) {
   return element
 }
 
-// Match rendering function
+// Match rendering function with optimized DOM operations
 function renderMatches (matches, timestamp) {
   const container = document.getElementById('matches-container')
   container.innerHTML = ''
@@ -160,6 +193,13 @@ function renderMatches (matches, timestamp) {
       'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-8'
     timestampElement.textContent = `Last Update: ${timestamp}`
     fragment.appendChild(timestampElement)
+
+    // Add version info below the timestamp with the same styling
+    const versionElement = document.createElement('p')
+    versionElement.className =
+      'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-1'
+    versionElement.textContent = `v${appVersion}`
+    fragment.appendChild(versionElement)
   }
 
   // Append all elements at once
@@ -530,6 +570,9 @@ async function createTabs () {
 
 // Menu handling
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize the application
+  initializeApp()
+
   const menuButton = document.getElementById('menuButton')
   const dropdownMenu = document.getElementById('dropdownMenu')
 
@@ -679,9 +722,6 @@ const scrollToAbout = event => {
   document.getElementById('about').scrollIntoView({ behavior: 'smooth' })
 }
 
-// Initialize application and set up periodic refresh
-createTabs()
-
 // Set up periodic refresh only if we don't have valid cached data
 const refreshData = () => {
   const currentTime = Date.now()
@@ -694,9 +734,7 @@ const refreshData = () => {
   }
 }
 
-setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
-
-// Service Worker registration with update handling
+// Service Worker registration with update notification
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
