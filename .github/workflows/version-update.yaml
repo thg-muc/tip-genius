@@ -1,0 +1,28 @@
+name: Update Version
+
+on:
+  # Run before other workflows that deploy content
+  workflow_dispatch:
+  push:
+    branches: ["*"]
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate new version
+        run: |
+          VERSION=$(date '+%y%m%d%H%M')
+          BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{ \"version\": \"$VERSION\", \"buildDate\": \"$BUILD_DATE\" }" > public/version.json
+          echo "Generated version: $VERSION"
+          
+      - name: Commit version update
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add public/version.json
+          git commit -m "chore: update version to $(cat public/version.json | jq -r .version)" || echo "No changes to commit"
+          git push
