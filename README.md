@@ -7,7 +7,7 @@ AI-powered soccer match predictions with a modern, responsive web interface.
 Tip Genius combines the power of Large Language Models (LLMs) with real-world odds data to generate informed soccer match predictions. The project features a clean, responsive web interface that displays predictions for various soccer leagues including the Premier League, Bundesliga, La Liga and UEFA Champions League.
 
 ![Tip Genius iOS PWA](/.github/assets/screenshot_ios_pwa.png)
-*Mobile Progressive Web App running on iOS (showing match predictions / LLM picker)*
+*Mobile Progressive Web App running on iOS (showing dark mode / predictions / LLM picker)*
 
 ## LLM Integration
 
