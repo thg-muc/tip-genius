@@ -65,40 +65,60 @@ const formatTimeForDisplay = date =>
     hour12: false
   })
 
-// UI element creation functions
+// Check if logo is available
+const hasLogo = logo =>
+  logo && logo !== 'null' && logo !== 'None' && logo !== ''
+
+// UI match element creation
 function createMatchElement (match) {
   const matchDate = formatDate(match.commence_time_str)
   const element = document.createElement('div')
   element.className =
-    'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-3 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0'
+    'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0'
 
   element.innerHTML = `
-        <div class="flex flex-col">
-            <div class="flex items-center justify-between mb-1">
-                <div class="text-sm sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
-                    ${match.home_team} vs ${match.away_team}
-                </div>
-                <div class="font-mono text-sm sm:text-2xl text-gray-500 dark:text-gray-400 ml-4">
-                    ${formatTimeForDisplay(matchDate)}
-                </div>
-            </div>
-            <div class="flex items-end justify-between mt-1">
-                <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">
-                    "${match.outlook}"
-                </p>
-                <div class="flex flex-col items-end justify-end ml-3">
-                    <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
-                        Prediction
-                    </span>
-                    <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
-                        ${match.prediction_home}-${match.prediction_away}
-                    </span>
-                </div>
-            </div>
-        </div>
-    `
+   <div class="flex flex-col">
+       <div class="flex items-center justify-between mb-1">
+           <div class="flex items-center text-xs sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
+               <div class="flex items-center">
+                   ${match.home_team}
+                   ${
+                     hasLogo(match.home_logo)
+                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2">`
+                       : '<span class="text-xl sm:text-3xl ml-1 sm:ml-2">⚽️</span>'
+                   }
+               </div>
+               <span class="mx-1 sm:mx-4">–</span>
+               <div class="flex items-center">
+                   ${
+                     hasLogo(match.away_logo)
+                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2">`
+                       : '<span class="text-xl sm:text-3xl mr-1 sm:mr-2">⚽️</span>'
+                   }
+                   ${match.away_team}
+               </div>
+           </div>
+           <div class="font-mono text-sm sm:text-2xl text-gray-500 dark:text-gray-400 ml-2 sm:ml-4">
+               ${formatTimeForDisplay(matchDate)}
+           </div>
+       </div>
+       <div class="flex items-end justify-between mt-1">
+           <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">
+               "${match.outlook}"
+           </p>
+           <div class="flex flex-col items-end justify-end ml-3">
+               <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
+                   Prediction
+               </span>
+               <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
+                   ${match.prediction_home}-${match.prediction_away}
+               </span>
+           </div>
+       </div>
+   </div>
+   `
 
-  // Fade in animation
+  // Smooth fade-in transition
   requestAnimationFrame(() => {
     element.style.opacity = '1'
     element.style.transition = 'opacity 100ms ease-in-out'
