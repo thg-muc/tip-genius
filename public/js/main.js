@@ -232,15 +232,15 @@ function renderMatches (matches, timestamp) {
   if (timestamp) {
     const timestampElement = document.createElement('p')
     timestampElement.className =
-      'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-8'
+      'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-6 mb-2'
     timestampElement.textContent = `Last Update: ${timestamp}`
     fragment.appendChild(timestampElement)
 
     // Add version info below the timestamp with the same styling
     const versionElement = document.createElement('p')
     versionElement.className =
-      'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-1'
-    versionElement.textContent = `v${appVersion}`
+      'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-2 mb-6'
+    versionElement.textContent = `Build Version: ${appVersion}`
     fragment.appendChild(versionElement)
   }
 
