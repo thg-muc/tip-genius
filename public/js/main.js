@@ -459,12 +459,17 @@ function setActiveTab (tabId) {
       'dark:hover:bg-dark',
       'hover:text-sky-700',
       'dark:hover:text-sky-400',
+      'border-transparent',
       // Active state classes
       'bg-white',
       'dark:bg-dark-card',
       'text-sky-700',
       'dark:text-sky-400',
-      'font-semibold'
+      'font-semibold',
+      'border-sky-500',
+      'dark:border-sky-400',
+      'shadow-md',
+      'tab-active'
     )
 
     // Then add appropriate classes for current state
@@ -474,7 +479,11 @@ function setActiveTab (tabId) {
         'dark:bg-dark-card',
         'text-sky-700',
         'dark:text-sky-400',
-        'font-semibold'
+        'font-semibold',
+        'border-sky-500',
+        'dark:border-sky-400',
+        'shadow-md',
+        'tab-active'
       )
     } else {
       tab.classList.add(
@@ -486,7 +495,8 @@ function setActiveTab (tabId) {
         'hover:bg-gray-50',
         'dark:hover:bg-dark',
         'hover:text-sky-700',
-        'dark:hover:text-sky-400'
+        'dark:hover:text-sky-400',
+        'border-transparent'
       )
     }
   })
@@ -498,7 +508,7 @@ function createTab (league, index, totalLeagues) {
   const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
   button.id = tabId
 
-  // Base classes that don't change
+  // Base classes for tabs
   const baseClasses = [
     'flex',
     'items-center',
@@ -512,10 +522,11 @@ function createTab (league, index, totalLeagues) {
     'focus:z-10',
     'min-w-[90px]',
     'sm:w-[180px]',
-    'transition',
-    'duration-200',
-    'ease-in-out',
-    'shadow-lg'
+    'transition-all',
+    'duration-300',
+    'relative',
+    'border-b-2',
+    'border-transparent'
   ]
 
   // Conditional rounding classes
@@ -532,7 +543,9 @@ function createTab (league, index, totalLeagues) {
     'hover:bg-gray-50',
     'dark:hover:bg-dark',
     'hover:text-sky-700',
-    'dark:hover:text-sky-400'
+    'dark:hover:text-sky-400',
+    'hover:shadow-md',
+    'hover:-translate-y-0.5'
   ]
 
   button.className = [...baseClasses, ...stateClasses].join(' ')
