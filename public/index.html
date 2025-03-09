@@ -20,49 +20,8 @@
     <link rel="manifest" href="manifest.json">
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'media',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            DEFAULT: '#1a1a1a',
-                            card: '#2d2d2d'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Core styles -->
-    <style>
-        /* Smooth scrolling behavior for the entire page */
-        html { 
-            scroll-behavior: smooth; 
-        }
-        /* Light mode styles */
-        body { 
-            /* Gradient background for light theme */
-            background-image: linear-gradient(to bottom right, #f0f4f8, #d9e2ec);
-            /* Initial state for fade-in animation */
-            opacity: 0;
-            /* Smooth fade-in transition */
-            transition: opacity 0.4s ease-in;
-        }
-        /* Dark mode gradient */
-        @media (prefers-color-scheme: dark) {
-            body { 
-                background-image: linear-gradient(to bottom right, #1a1a1a, #2d2d2d); 
-            }
-        }
-        /* Animation class for content fade-in */
-        body.loaded {
-            opacity: 1;
-        }
-    </style>
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/css/tailwind.css">
 </head>
 
 <body class="font-sans flex flex-col min-h-screen">
