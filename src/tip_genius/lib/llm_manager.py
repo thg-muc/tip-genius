@@ -113,7 +113,7 @@ class LLMManager:
             "api_rate_limit", 0
         )  # 0 or negative value means no rate limit
 
-    def _wait_for_rate_limit(self, request_duration: float) -> None:
+    def wait_for_rate_limit(self, request_duration: float) -> None:
         """
         Calculate and wait for the appropriate time to respect rate limits.
 
@@ -135,7 +135,7 @@ class LLMManager:
             )
             time.sleep(sleep_duration)
 
-    def get_prediction(self, user_prompt: str, timeout: int = 45, **kwargs) -> str:
+    def get_prediction(self, user_prompt: str, timeout: int = 60, **kwargs) -> str:
         """
         Get the prediction from the LLM.
 
@@ -144,7 +144,7 @@ class LLMManager:
         user_prompt : str
             The prompt to send to the LLM.
         timeout : int, optional
-            Timeout for in seconds, by default 45 (sufficient for most LLMs).
+            Timeout for in seconds, by default 60 (sufficient for most LLMs).
         **kwargs : dict, optional
             Additional keyword arguments to pass to the LLM (override defaults).
 
@@ -239,7 +239,7 @@ class LLMManager:
 
             # Observe a rate limit if specified
             if self.rate_limit > 0:  # Check for rate limit
-                self._wait_for_rate_limit(request_duration=time.time() - start_time)
+                self.wait_for_rate_limit(request_duration=time.time() - start_time)
 
             return prediction
 

@@ -1,33 +1,108 @@
-// Config and utility functions for the Tip Genius web app
-const CONFIG = {
-  ALLOWED_ORIGINS: [
-    'http://localhost:3000',
-    'http://localhost:5000',
-    'http://localhost:8000',
-    'https://tip-genius.vercel.app'
-  ],
-  CACHE_DURATION: 3600, // Cache in seconds
-  DYNAMIC_CACHE: 'tip-genius-dynamic-2.0.0',
-  DEFAULT_LLM: 'Mistral-Large',
-  API_URL: '/api/predictions'
-}
+// Main JavaScript for Tip Genius PWA
+// Handles UI, data fetching, caching and interactions
 
-// Global variables
+// LLM provider configuration with PNG logos
+const LLM_PROVIDERS = [
+  {
+    value: 'Mistral-Large',
+    label: 'Mistral Large 2',
+    logo: `/images/llm-logos/Mistral.png`
+  },
+  {
+    value: 'Google-Gemini-Flash',
+    label: 'Gemini Flash 2',
+    logo: `/images/llm-logos/Google.png`
+  },
+  {
+    value: 'OpenAI-GPT-Mini',
+    label: 'GPT-4o Mini',
+    logo: `/images/llm-logos/OpenAI.png`
+  },
+  {
+    value: 'Deepseek-Chat',
+    label: 'DeepSeek V3',
+    logo: `/images/llm-logos/DeepSeek.png`
+  },
+  {
+    value: 'Meta-Llama-70b',
+    label: 'Llama 3 70b',
+    logo: `/images/llm-logos/Meta.png`
+  },
+  {
+    value: 'Microsoft-Phi-Medium',
+    label: 'Phi 4 Medium',
+    logo: `/images/llm-logos/Microsoft.png`
+  }
+  // {
+  //     value: 'Anthropic-Claude-Haiku',
+  //     label: 'Claude Haiku',
+  //     logo: `/images/llm-logos/Anthropic.png`
+  // },
+]
+
+// Default provider is the first one in the list
+const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
+
+// Default fallback version in YYMMDDhhmm format
+let appVersion = '2501010000'
+
+// Configuration will be initialized after version is loaded
+let CONFIG
+
+// Global state variables
 let currentLeague = localStorage.getItem('lastUsedLeague')
 let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
-let currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM
+let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM_PROVIDER
 
-// Try to restore cached data if it's still valid
-const storedData = localStorage.getItem('cachedLeagueData')
-if (storedData && Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000) {
+// Initialize the application
+async function initializeApp () {
   try {
-    cachedLeagueData = JSON.parse(storedData)
-  } catch (e) {
-    console.warn('Failed to parse cached data:', e)
-    localStorage.removeItem('cachedLeagueData')
-    localStorage.removeItem('lastFetchTime')
+    // Fetch the version information first
+    const response = await fetch('/version.json?v=' + Date.now())
+    if (response.ok) {
+      const data = await response.json()
+      appVersion = data.version
+      console.log('App initialized with version:', appVersion)
+    }
+  } catch (error) {
+    console.warn('Could not load version, using fallback:', appVersion)
   }
+
+  // Initialize configuration with the correct version
+  CONFIG = {
+    ALLOWED_ORIGINS: [
+      'http://localhost:3000',
+      'http://localhost:5000',
+      'http://localhost:8000',
+      'https://tip-genius.vercel.app'
+    ],
+    CACHE_DURATION: 3600, // Cache in seconds (1 hour)
+    DYNAMIC_CACHE: `tip-genius-dynamic-${appVersion}`,
+    DEFAULT_LLM: DEFAULT_LLM_PROVIDER,
+    API_URL: '/api/predictions'
+  }
+
+  // Try to restore cached data if it's still valid
+  const storedData = localStorage.getItem('cachedLeagueData')
+  if (
+    storedData &&
+    Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000
+  ) {
+    try {
+      cachedLeagueData = JSON.parse(storedData)
+    } catch (e) {
+      console.warn('Failed to parse cached data:', e)
+      localStorage.removeItem('cachedLeagueData')
+      localStorage.removeItem('lastFetchTime')
+    }
+  }
+
+  // Initialize the application tabs
+  await createTabs()
+
+  // Set up periodic refresh for data
+  setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
 }
 
 // Error handling functions
@@ -65,40 +140,60 @@ const formatTimeForDisplay = date =>
     hour12: false
   })
 
-// UI element creation functions
+// Check if logo is available
+const hasLogo = logo =>
+  logo && logo !== 'null' && logo !== 'None' && logo !== ''
+
+// UI match element creation
 function createMatchElement (match) {
   const matchDate = formatDate(match.commence_time_str)
   const element = document.createElement('div')
   element.className =
-    'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-3 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0'
+    'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0'
 
   element.innerHTML = `
-        <div class="flex flex-col">
-            <div class="flex items-center justify-between mb-1">
-                <div class="text-sm sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
-                    ${match.home_team} vs ${match.away_team}
-                </div>
-                <div class="font-mono text-sm sm:text-2xl text-gray-500 dark:text-gray-400 ml-4">
-                    ${formatTimeForDisplay(matchDate)}
-                </div>
-            </div>
-            <div class="flex items-end justify-between mt-1">
-                <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">
-                    "${match.outlook}"
-                </p>
-                <div class="flex flex-col items-end justify-end ml-3">
-                    <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
-                        Prediction
-                    </span>
-                    <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
-                        ${match.prediction_home}-${match.prediction_away}
-                    </span>
-                </div>
-            </div>
-        </div>
-    `
+   <div class="flex flex-col">
+       <div class="flex items-center justify-between mb-1">
+           <div class="flex items-center text-xs sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
+               <div class="flex items-center">
+                   ${match.home_team}
+                   ${
+                     hasLogo(match.home_logo)
+                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2 transition-transform duration-200 hover:scale-110" loading="lazy">`
+                       : '<span class="text-xl sm:text-3xl ml-1 sm:ml-2">⚽️</span>'
+                   }
+               </div>
+               <span class="mx-1 sm:mx-4">–</span>
+               <div class="flex items-center">
+                   ${
+                     hasLogo(match.away_logo)
+                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2 transition-transform duration-200 hover:scale-110" loading="lazy">`
+                       : '<span class="text-xl sm:text-3xl mr-1 sm:mr-2">⚽️</span>'
+                   }
+                   ${match.away_team}
+               </div>
+           </div>
+           <div class="font-mono text-sm sm:text-2xl text-gray-500 dark:text-gray-400 ml-2 sm:ml-4">
+               ${formatTimeForDisplay(matchDate)}
+           </div>
+       </div>
+       <div class="flex items-end justify-between mt-1">
+           <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">
+               "${match.outlook}"
+           </p>
+           <div class="flex flex-col items-end justify-end ml-3">
+               <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
+                   Prediction
+               </span>
+               <span class="font-mono font-extrabold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
+                   ${match.prediction_home}-${match.prediction_away}
+               </span>
+           </div>
+       </div>
+   </div>
+   `
 
-  // Fade in animation
+  // Smooth fade-in transition
   requestAnimationFrame(() => {
     element.style.opacity = '1'
     element.style.transition = 'opacity 100ms ease-in-out'
@@ -107,11 +202,13 @@ function createMatchElement (match) {
   return element
 }
 
-// Match rendering function
+// Match rendering function with optimized DOM operations
 function renderMatches (matches, timestamp) {
   const container = document.getElementById('matches-container')
   container.innerHTML = ''
 
+  // Create a document fragment for batched DOM operations
+  const fragment = document.createDocumentFragment()
   let currentDate = null
 
   matches.forEach(match => {
@@ -122,23 +219,144 @@ function renderMatches (matches, timestamp) {
     if (formattedDate !== currentDate) {
       const dateHeader = document.createElement('h2')
       dateHeader.className =
-        'text-base sm:text-2xl font-bold text-gray-500 dark:text-gray-400 mb-0 mt-8'
+        'text-base sm:text-2xl font-bold tracking-wide text-gray-500 dark:text-gray-400 mb-0 mt-8'
       dateHeader.textContent = formattedDate
-      container.appendChild(dateHeader)
+      fragment.appendChild(dateHeader)
       currentDate = formattedDate
     }
 
-    container.appendChild(createMatchElement(match))
+    fragment.appendChild(createMatchElement(match))
   })
 
   // Add timestamp if available
   if (timestamp) {
     const timestampElement = document.createElement('p')
     timestampElement.className =
-      'text-xs sm:text-sm text-gray-500 dark:text-gray-400 italic text-center mt-8'
+      'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-6 mb-2'
     timestampElement.textContent = `Last Update: ${timestamp}`
-    container.appendChild(timestampElement)
+    fragment.appendChild(timestampElement)
+
+    // Add version info below the timestamp with the same styling
+    const versionElement = document.createElement('p')
+    versionElement.className =
+      'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-2 mb-6'
+    versionElement.textContent = `Build Version: ${appVersion}`
+    fragment.appendChild(versionElement)
   }
+
+  // Append all elements at once
+  container.appendChild(fragment)
+}
+
+function preloadTeamLogos (leagues) {
+  if (!leagues || leagues.length === 0) return
+
+  // Get current league (first one or from localStorage)
+  const currentLeague =
+    localStorage.getItem('lastUsedLeague') || leagues[0].name
+  const currentLeagueData = leagues.find(l => l.name === currentLeague)
+
+  // Step 1: Create a prioritized logo queue system
+  const priorityLogos = new Set() // Current league logos (high priority)
+  const backgroundLogos = new Set() // Other leagues' logos (low priority)
+
+  // Categorize logos into priority groups
+  leagues.forEach(league => {
+    league.matches.forEach(match => {
+      const logoSet =
+        league.name === currentLeague ? priorityLogos : backgroundLogos
+
+      if (hasLogo(match.home_logo)) logoSet.add(match.home_logo)
+      if (hasLogo(match.away_logo)) logoSet.add(match.away_logo)
+    })
+  })
+
+  // Step 2: Preload current league logos immediately
+  preloadLogoSet(priorityLogos, true)
+
+  // Step 3: Load other leagues' logos only during browser idle time
+  if (backgroundLogos.size > 0) {
+    scheduleBackgroundLoading(Array.from(backgroundLogos))
+  }
+
+  console.log(
+    `Prioritized preloading: ${priorityLogos.size} immediate, ${backgroundLogos.size} deferred`
+  )
+}
+
+// Helper function to preload a set of logos
+function preloadLogoSet (logoSet, isHighPriority = false) {
+  // Convert to array for batch processing if needed
+  const logos = Array.from(logoSet)
+
+  // Simple check to avoid reloading already cached images
+  const cachedLogos = new Set(
+    Object.keys(
+      window.performance
+        .getEntriesByType('resource')
+        .filter(r => r.name.includes('/images/teams/'))
+        .map(r => r.name.split('/').pop())
+    )
+  )
+
+  // Process logos
+  logos.forEach(logoName => {
+    // Skip if we have evidence it's already cached
+    if (cachedLogos.has(logoName)) return
+
+    const img = new Image()
+
+    // Set loading priority based on group
+    if (!isHighPriority) {
+      img.loading = 'lazy' // Use native lazy loading for low priority
+      img.fetchPriority = 'low'
+    }
+
+    // Load the image
+    img.src = `/images/teams/${logoName}`
+  })
+}
+
+// Helper function to schedule background loading in batches
+function scheduleBackgroundLoading (logos) {
+  // Use requestIdleCallback if available, otherwise use a deferred timeout
+  const scheduleWhenIdle =
+    window.requestIdleCallback || (fn => setTimeout(fn, 1000)) // Fallback with 1 second delay
+
+  // Process in smaller batches to avoid locking up the browser
+  const BATCH_SIZE = 10
+  let currentIndex = 0
+
+  function loadNextBatch (deadline) {
+    // Check if we're done
+    if (currentIndex >= logos.length) return
+
+    // Calculate how many to process in this batch
+    const endIndex = Math.min(currentIndex + BATCH_SIZE, logos.length)
+    const timeRemaining =
+      deadline && typeof deadline.timeRemaining === 'function'
+        ? deadline.timeRemaining()
+        : 50 // Default time slice of 50ms
+
+    // Skip this cycle if we're low on time
+    if (timeRemaining < 10) {
+      scheduleWhenIdle(loadNextBatch)
+      return
+    }
+
+    // Process a batch
+    const batch = logos.slice(currentIndex, endIndex)
+    preloadLogoSet(new Set(batch), false)
+    currentIndex = endIndex
+
+    // Schedule next batch
+    if (currentIndex < logos.length) {
+      scheduleWhenIdle(loadNextBatch)
+    }
+  }
+
+  // Start the process
+  scheduleWhenIdle(loadNextBatch)
 }
 
 // League Data processing and rendering
@@ -168,7 +386,7 @@ async function loadLeagueData (leagueName) {
 
       localStorage.setItem('lastUsedLeague', leagueName)
     } else {
-      showError(`No data found for league: ${leagueName}`)
+      showError(`Currently no predictions available for this LLM / League.`)
     }
   } catch (error) {
     console.error(`Error loading ${leagueName} data:`, error)
@@ -213,9 +431,13 @@ async function fetchLeagueData () {
   if (data) {
     cachedLeagueData = data
     lastFetchTime = currentTime
+    // Store the last fetch time in local storage
     localStorage.setItem('lastFetchTime', currentTime.toString())
-    // Also cache the data itself
+    // Store the fetched data in local storage
     localStorage.setItem('cachedLeagueData', JSON.stringify(data))
+
+    // Preload the Team Data
+    preloadTeamLogos(data)
   }
   return data
 }
@@ -237,12 +459,17 @@ function setActiveTab (tabId) {
       'dark:hover:bg-dark',
       'hover:text-sky-700',
       'dark:hover:text-sky-400',
+      'border-transparent',
       // Active state classes
       'bg-white',
       'dark:bg-dark-card',
       'text-sky-700',
       'dark:text-sky-400',
-      'font-semibold'
+      'font-semibold',
+      'border-sky-500',
+      'dark:border-sky-400',
+      'shadow-md',
+      'tab-active'
     )
 
     // Then add appropriate classes for current state
@@ -252,7 +479,11 @@ function setActiveTab (tabId) {
         'dark:bg-dark-card',
         'text-sky-700',
         'dark:text-sky-400',
-        'font-semibold'
+        'font-semibold',
+        'border-sky-500',
+        'dark:border-sky-400',
+        'shadow-md',
+        'tab-active'
       )
     } else {
       tab.classList.add(
@@ -264,7 +495,8 @@ function setActiveTab (tabId) {
         'hover:bg-gray-50',
         'dark:hover:bg-dark',
         'hover:text-sky-700',
-        'dark:hover:text-sky-400'
+        'dark:hover:text-sky-400',
+        'border-transparent'
       )
     }
   })
@@ -276,7 +508,7 @@ function createTab (league, index, totalLeagues) {
   const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
   button.id = tabId
 
-  // Base classes that don't change
+  // Base classes for tabs
   const baseClasses = [
     'flex',
     'items-center',
@@ -290,15 +522,16 @@ function createTab (league, index, totalLeagues) {
     'focus:z-10',
     'min-w-[90px]',
     'sm:w-[180px]',
-    'transition',
-    'duration-200',
-    'ease-in-out',
-    'shadow-lg'
+    'transition-all',
+    'duration-300',
+    'relative',
+    'border-b-2',
+    'border-transparent'
   ]
 
   // Conditional rounding classes
-  if (index === 0) baseClasses.push('rounded-l-lg')
-  if (index === totalLeagues - 1) baseClasses.push('rounded-r-lg')
+  if (index === 0) baseClasses.push('rounded-l-md')
+  if (index === totalLeagues - 1) baseClasses.push('rounded-r-md')
 
   // Interactive state classes
   const stateClasses = [
@@ -310,7 +543,9 @@ function createTab (league, index, totalLeagues) {
     'hover:bg-gray-50',
     'dark:hover:bg-dark',
     'hover:text-sky-700',
-    'dark:hover:text-sky-400'
+    'dark:hover:text-sky-400',
+    'hover:shadow-md',
+    'hover:-translate-y-0.5'
   ]
 
   button.className = [...baseClasses, ...stateClasses].join(' ')
@@ -390,6 +625,9 @@ async function createTabs () {
 
 // Menu handling
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize the application
+  initializeApp()
+
   const menuButton = document.getElementById('menuButton')
   const dropdownMenu = document.getElementById('dropdownMenu')
 
@@ -397,45 +635,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (typeof currentLLM === 'undefined') {
     currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM
   }
-
-  // LLM provider configuration with PNG logos
-  const llmProviders = [
-    {
-      value: 'Mistral-Large',
-      label: 'Mistral Large',
-      logo: `/images/llm-logos/Mistral.png`
-    },
-    {
-      value: 'Google-Gemini-Flash',
-      label: 'Gemini Flash',
-      logo: `/images/llm-logos/Google.png`
-    },
-    {
-      value: 'Deepseek-Chat',
-      label: 'DeepSeek',
-      logo: `/images/llm-logos/DeepSeek.png`
-    },
-    {
-      value: 'Meta-Llama-70b',
-      label: 'Llama 70b',
-      logo: `/images/llm-logos/Meta.png`
-    },
-    {
-      value: 'Microsoft-Phi-Medium',
-      label: 'Phi Medium',
-      logo: `/images/llm-logos/Microsoft.png`
-    },
-    {
-      value: 'OpenAI-GPT-Mini',
-      label: 'ChatGPT Mini',
-      logo: `/images/llm-logos/OpenAI.png`
-    }
-    // {
-    //     value: 'Anthropic-Claude-Haiku',
-    //     label: 'Claude Haiku',
-    //     logo: `/images/llm-logos/Anthropic.png`
-    // },
-  ]
 
   // Make sure the container exists
   const providersContainer = document.getElementById('llm-providers')
@@ -448,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
   providersContainer.innerHTML = ''
 
   // Generate radio buttons for LLM providers
-  llmProviders.forEach(provider => {
+  LLM_PROVIDERS.forEach(provider => {
     const label = document.createElement('label')
     label.className =
       'flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card p-2 rounded-lg transition-colors'
@@ -478,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add the label text
     const span = document.createElement('span')
-    span.className = 'text-base text-gray-700 dark:text-gray-300'
+    span.className = 'text-sm sm:text-base text-gray-700 dark:text-gray-300'
     span.textContent = provider.label
 
     // Assemble all pieces
@@ -525,7 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add loaded class to body after all initialization is complete
   document.body.classList.add('loaded')
   // Verify initialization
-  console.log('Menu initialization complete, providers:', llmProviders.length)
+  console.log('Menu initialization complete, providers:', LLM_PROVIDERS.length)
 })
 
 // Navigation functions
@@ -539,9 +738,6 @@ const scrollToAbout = event => {
   document.getElementById('about').scrollIntoView({ behavior: 'smooth' })
 }
 
-// Initialize application and set up periodic refresh
-createTabs()
-
 // Set up periodic refresh only if we don't have valid cached data
 const refreshData = () => {
   const currentTime = Date.now()
@@ -554,17 +750,66 @@ const refreshData = () => {
   }
 }
 
-setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
-
-// Service Worker registration
+// Service Worker registration with update notification
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .then(registration =>
+      .then(registration => {
         console.log('ServiceWorker registration successful')
-      )
-      .catch(err => console.log('ServiceWorker registration failed:', err))
+
+        // Check for updates to the Service Worker
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing
+
+          newWorker.addEventListener('statechange', () => {
+            // When the service worker is activated
+            if (
+              newWorker.state === 'activated' &&
+              navigator.serviceWorker.controller
+            ) {
+              // Show update notification if not first install
+              const notification = document.createElement('div')
+              notification.className =
+                'fixed bottom-4 right-4 bg-white dark:bg-dark-card rounded-lg shadow-lg p-4 z-50 flex items-center'
+              notification.innerHTML = `
+                <div class="mr-3 text-sky-700 dark:text-sky-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm text-gray-800 dark:text-gray-200">App updated!</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Refresh to apply changes</p>
+                </div>
+                <button id="update-btn" class="ml-4 px-3 py-1 bg-sky-700 text-white text-sm rounded hover:bg-sky-800 transition-colors">
+                  Refresh
+                </button>
+              `
+
+              document.body.appendChild(notification)
+              document
+                .getElementById('update-btn')
+                .addEventListener('click', () => {
+                  window.location.reload()
+                })
+            }
+          })
+        })
+      })
+      .catch(err => {
+        console.error('ServiceWorker registration failed:', err)
+        // Continue without service worker functionality
+      })
+  })
+
+  // Handle page refresh when service worker is updated
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true
+      window.location.reload() // Refresh the page to get the new version
+    }
   })
 }
 

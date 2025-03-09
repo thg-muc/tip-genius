@@ -20,54 +20,13 @@
     <link rel="manifest" href="manifest.json">
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'media',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            DEFAULT: '#1a1a1a',
-                            card: '#2d2d2d'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <!-- Core styles -->
-    <style>
-        /* Smooth scrolling behavior for the entire page */
-        html { 
-            scroll-behavior: smooth; 
-        }
-        /* Light mode styles */
-        body { 
-            /* Gradient background for light theme */
-            background-image: linear-gradient(to bottom right, #f0f4f8, #d9e2ec);
-            /* Initial state for fade-in animation */
-            opacity: 0;
-            /* Smooth fade-in transition */
-            transition: opacity 0.4s ease-in;
-        }
-        /* Dark mode gradient */
-        @media (prefers-color-scheme: dark) {
-            body { 
-                background-image: linear-gradient(to bottom right, #1a1a1a, #2d2d2d); 
-            }
-        }
-        /* Animation class for content fade-in */
-        body.loaded {
-            opacity: 1;
-        }
-    </style>
+    <!-- Tailwind CSS -->
+    <link rel="stylesheet" href="/css/tailwind.css">
 </head>
 
 <body class="font-sans flex flex-col min-h-screen">
     <!-- Sticky header with navigation -->
-    <header class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10">
+    <header class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10 mb-3 sm:mb-6">
         <div class="container mx-auto px-4 py-2 sm:py-3">
             <div class="flex items-center justify-between">
                 <!-- Logo and site title -->
@@ -106,28 +65,32 @@
         </div>
     </header>
     
-    <main class="container mx-auto px-4 py-4 sm:py-8 flex-grow">
+    <main class="container mx-auto px-4 py-1 flex-grow">
         <!-- Page title and description -->
         <div class="text-center mb-4 sm:mb-8">
-            <h1 class="text-2xl sm:text-4xl font-bold text-gray-800 dark:text-gray-200 mb-2">The Tip Genius</h1>
+            <h1 class="text-2xl sm:text-4xl font-bold tracking-wide text-gray-800 dark:text-gray-200 mb-2">The Tip Genius</h1>
             <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-xl italic">Making you look like a soccer expert, one AI tip at a time...</p>
         </div>
         
         <!-- Dynamic content containers -->
-        <div id="league-tabs" class="flex justify-center mb-4"></div>
+        <div class="flex justify-center mb-4">
+            <div class="inline-flex shadow-md rounded-md overflow-hidden">
+                <div id="league-tabs" class="flex"></div>
+            </div>
+        </div>
+        <!-- Error message container -->
+        <div id="error-message" class="hidden bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8 max-w-2xl mx-auto" role="alert">
+            <span class="block sm:inline text-sm sm:text-base"></span>
+        </div>
         <div id="matches-container" class="space-y-2 sm:space-y-3"></div>
 
-        <!-- Error message container -->
-        <div id="error-message" class="hidden bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded relative my-4" role="alert">
-            <span class="block sm:inline"></span>
-        </div>
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 pt-3 sm:pt-4 pb-4">
             <!-- About section -->
             <div id="about" class="mb-5 sm:mb-6 text-center">
-                <h2 class="text-sm sm:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-2">About: The Tip Genius ⚽️</h2>
+                <h2 class="text-sm sm:text-lg font-semibold tracking-wide text-gray-800 dark:text-gray-200 mb-2">About: The Tip Genius ⚽️</h2>
                 <p class="text-xs sm:text-base text-gray-500 dark:text-gray-400">
                     This tool uses advanced LLMs and external data sources to make predictions. AI is far from perfect, so use with caution!
                 </p>

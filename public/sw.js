@@ -1,7 +1,10 @@
-// Cache version management
-const VERSION = '2.0.0'
-const CACHE_NAME = `tip-genius-static-${VERSION}`
-const DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
+// Service Worker for Tip Genius PWA
+// Handles caching strategies and offline functionality
+
+// Dynamic version management
+let VERSION = '2501010000' // Default fallback version (YYMMDDhhmm format)
+let CACHE_NAME
+let DYNAMIC_CACHE
 
 // Assets to cache
 const STATIC_ASSETS = [
@@ -11,6 +14,7 @@ const STATIC_ASSETS = [
   '/manifest.json',
   '/js/main.js',
   '/sw.js',
+  '/version.json',
 
   // Image directories (will be matched by pattern)
   '/images/icon-', // Will match all icon sizes
@@ -25,7 +29,8 @@ const STATIC_ASSETS = [
 const IMAGE_PATTERNS = [
   new RegExp('^/images/icon-.*\\.png$'),
   new RegExp('^/images/leagues/.*\\.png$'),
-  new RegExp('^/images/llm-logos/.*\\.png$')
+  new RegExp('^/images/llm-logos/.*\\.png$'),
+  new RegExp('^/images/teams/.*\\.png$')
 ]
 
 // Function to clean up old caches
@@ -54,25 +59,48 @@ async function handleOfflineFallback (request) {
   throw new Error('Network and cache unavailable')
 }
 
-// Install event - cache static assets
+// Install event - cache static assets and fetch version
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then(cache => {
-        console.log('Caching static assets')
+    (async () => {
+      try {
+        // Fetch version.json first to get the current version
+        const response = await fetch('/version.json?v=' + Date.now())
+        if (response.ok) {
+          const data = await response.json()
+          VERSION = data.version
+          console.log('Service worker using version:', VERSION)
+        }
+      } catch (error) {
+        console.warn('Could not load version, using fallback version:', VERSION)
+      }
+
+      // Set cache names using the determined version
+      CACHE_NAME = `tip-genius-static-${VERSION}`
+      DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
+
+      try {
+        console.log('Caching static assets with version:', VERSION)
+        const cache = await caches.open(CACHE_NAME)
         return cache.addAll(STATIC_ASSETS)
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Error caching static assets:', error)
-      })
+      }
+
+      // Force the waiting service worker to become the active service worker
+      self.skipWaiting()
+    })()
   )
-  // Force the waiting service worker to become the active service worker
-  self.skipWaiting()
 })
 
 // Activate event - cleanup old caches and claim clients
 self.addEventListener('activate', event => {
+  // Ensure cache names are set if activate happens without install
+  if (!CACHE_NAME || !DYNAMIC_CACHE) {
+    CACHE_NAME = `tip-genius-static-${VERSION}`
+    DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
+  }
+
   event.waitUntil(
     Promise.all([
       deleteOldCaches(),
@@ -84,29 +112,61 @@ self.addEventListener('activate', event => {
 
 // Fetch event - handle requests
 self.addEventListener('fetch', event => {
+  // Ensure cache names are set
+  if (!CACHE_NAME || !DYNAMIC_CACHE) {
+    CACHE_NAME = `tip-genius-static-${VERSION}`
+    DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
+  }
+
   const { request } = event
   const url = new URL(request.url)
 
-  // Handle API requests differently (network-first strategy with offline support)
-  if (request.url.includes('/api/predictions')) {
+  // Special handling for team logos - use cache-first strategy
+  if (url.pathname.startsWith('/images/teams/')) {
     event.respondWith(
-      fetch(request)
-        .then(response => handleApiResponse(request, response))
-        .catch(async () => {
-          const cachedResponse = await caches.match(request)
-          if (cachedResponse) {
-            // Send message to client about using cached data
-            const clients = await self.clients.matchAll()
-            clients.forEach(client => {
-              client.postMessage({
-                type: 'USING_CACHED_DATA',
-                timestamp: new Date().toISOString()
-              })
-            })
-            return cachedResponse
+      (async () => {
+        // Check cache first
+        const cachedResponse = await caches.match(request)
+        if (cachedResponse) {
+          return cachedResponse
+        }
+
+        // If not in cache, fetch from network and cache for long term
+        try {
+          const networkResponse = await fetch(request)
+          if (networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME)
+            cache.put(request, networkResponse.clone())
           }
-          return handleOfflineFallback(request)
-        })
+          return networkResponse
+        } catch (error) {
+          console.error('Error fetching team logo:', error)
+          return new Response('', { status: 404 })
+        }
+      })()
+    )
+    return
+  }
+
+  // Special handling for version.json - network-first to ensure we get the latest
+  if (url.pathname === '/version.json') {
+    event.respondWith(
+      (async () => {
+        try {
+          // Always try network first for version.json
+          const networkResponse = await fetch(request)
+          if (networkResponse.ok) {
+            const cache = await caches.open(CACHE_NAME)
+            await cache.put(request, networkResponse.clone())
+            return networkResponse
+          }
+        } catch (error) {
+          console.warn('Failed to fetch version.json from network')
+        }
+
+        // Fall back to cached version if network fails
+        return caches.match(request)
+      })()
     )
     return
   }

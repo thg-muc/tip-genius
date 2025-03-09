@@ -6,6 +6,10 @@ AI-powered soccer match predictions with a modern, responsive web interface.
 
 Tip Genius combines the power of Large Language Models (LLMs) with real-world odds data to generate informed soccer match predictions. The project features a clean, responsive web interface that displays predictions for various soccer leagues including the Premier League, Bundesliga, La Liga and UEFA Champions League.
 
+![Tip Genius iOS PWA](/.github/assets/screenshot_ios_pwa.png)
+
+`Mobile Progressive Web App running on iOS (showing dark mode / predictions / LLM picker)`
+
 ## LLM Integration
 
 Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The project uses a lightweight approach with direct API calls instead of individual LLM libraries, minimizing dependencies while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
@@ -25,6 +29,7 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - 🎯 Match predictions using advanced LLMs
 - 🌐 Clean, responsive web interface with dark mode support
 - 📊 Real-time odds data integration
+- 🎮 Team logo integration with fuzzy name matching
 - ⚡️ Fast, serverless architecture using Vercel
 - 📱 Mobile-friendly design with PWA support
 - 🎨 Modern UI with Tailwind CSS
@@ -39,11 +44,13 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - Vanilla JavaScript
 - Tailwind CSS for styling
 - Service Workers for Progressive Web App (PWA) functionality
+- Smart image caching and preloading system
 
 ### Backend
 
 - Python 3.11+ for prediction generation
 - Lightweight LLM integration via direct API calls (no heavy LLM libraries required)
+- Fuzzy team name matching for logo association
 - GitHub Actions for automation
 
 ### Infrastructure
@@ -58,13 +65,32 @@ The project intentionally maintains minimal dependencies:
 
 - `polars`: Fast, parallel data processing
 - `PyYAML`: Configuration management
-- `requests`: HTTP client for API calls
+- `requests`: HTTP client for API calls (instead of heavier LLM libraries)
+- `python-slugify`: Consistent string normalization
 
 This lightweight approach ensures:
 
 - Easier updates and maintenance
 - Faster deployment
 - Better performance
+
+## Vercel Setup
+
+Tip Genius is designed to run completely on Vercel's free tier:
+
+1. **Project Configuration**:
+   - Create a new project in Vercel and link to your GitHub repository
+   - Set up a Vercel KV store (Redis) for data persistence
+   - Configure all environment variables in project settings
+
+2. **CI/CD Pipeline**:
+   - Automatic deployments triggered by GitHub push events
+   - Preview deployments for pull requests
+   - GitHub Actions handle prediction generation while Vercel manages deployment
+
+3. **Monitoring**:
+   - Access request logs and performance metrics in Vercel dashboard
+   - Web Analytics available in free tier
 
 ## Local Development
 
@@ -137,30 +163,11 @@ This lightweight approach ensures:
 
 2. Open <http://localhost:3000> in your browser
 
-## Deployment
-
-The project is designed to be deployed on Vercel's infrastructure. It uses:
-
-- Vercel Hosting for the frontend
-- Vercel Serverless Functions for the API
-- Vercel KV (Redis) for data storage
-
-Automatic deployment is configured when changes are pushed to the main branch. Manual deployments can be triggered using:
-
-```bash
-vercel deploy --prod
-```
-
-### Required Vercel Configuration
-
-1. Create a new project in Vercel
-2. Set up a Vercel KV store
-3. Configure all environment variables in Vercel project settings
-4. Link your repository for automatic deployments
-
-## License
+## License & Credits
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+- Team logos originally sourced from [football-logos](https://github.com/luukhopman/football-logos) (thanks for your great work 👍🏻)
 
 ## Links
 

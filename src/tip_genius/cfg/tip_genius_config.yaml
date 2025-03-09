@@ -31,3 +31,6 @@ named_teams_options:
 additional_info_options:
   - true
   # - false
+
+# Folder where Team Logos are stored
+team_logos_folder: "public/images/teams"
