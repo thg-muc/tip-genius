@@ -147,11 +147,22 @@ const hasLogo = logo =>
 // UI match element creation
 function createMatchElement (match) {
   const matchDate = formatDate(match.commence_time_str)
-  const element = document.createElement('div')
-  element.className =
-    'bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl opacity-0'
 
-  element.innerHTML = `
+  // Create the card container with flip functionality
+  const container = document.createElement('div')
+  container.className = 'card-container cursor-pointer opacity-0'
+
+  // Create the inner container that will flip
+  const cardInner = document.createElement('div')
+  cardInner.className = 'card-inner'
+
+  // Create the front of the card (using existing design)
+  const cardFront = document.createElement('div')
+  cardFront.className =
+    'card-front bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl'
+
+  // Keep the exact same front content structure
+  cardFront.innerHTML = `
    <div class="flex flex-col">
        <div class="flex items-center justify-between mb-1">
            <div class="flex items-center text-xs sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
@@ -159,7 +170,7 @@ function createMatchElement (match) {
                    ${match.home_team}
                    ${
                      hasLogo(match.home_logo)
-                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2 transition-transform duration-200 hover:scale-110" loading="lazy">`
+                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2" loading="lazy">`
                        : '<span class="text-xl sm:text-3xl ml-1 sm:ml-2">⚽️</span>'
                    }
                </div>
@@ -167,7 +178,7 @@ function createMatchElement (match) {
                <div class="flex items-center">
                    ${
                      hasLogo(match.away_logo)
-                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2 transition-transform duration-200 hover:scale-110" loading="lazy">`
+                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2" loading="lazy">`
                        : '<span class="text-xl sm:text-3xl mr-1 sm:mr-2">⚽️</span>'
                    }
                    ${match.away_team}
@@ -185,21 +196,50 @@ function createMatchElement (match) {
                <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
                    Prediction
                </span>
-               <span class="font-mono font-extrabold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
+               <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
                    ${match.prediction_home}-${match.prediction_away}
                </span>
            </div>
        </div>
    </div>
-   `
+  `
+
+  // Create the back of the card (with reasoning)
+  const cardBack = document.createElement('div')
+  cardBack.className =
+    'card-back bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200'
+
+  // Minimalist design for the back with monospace font and scrollability
+  cardBack.innerHTML = `
+   <div class="flex flex-col h-full">
+       <div class="overflow-y-auto pr-1 -mr-1">
+           <p class="font-mono text-[0.65rem] sm:text-base text-gray-700 dark:text-gray-300 py-1">
+               ${
+                 match.reasoning ||
+                 'No detailed reasoning available for this prediction.'
+               }
+           </p>
+       </div>
+   </div>
+  `
+
+  // Assemble the card structure
+  cardInner.appendChild(cardFront)
+  cardInner.appendChild(cardBack)
+  container.appendChild(cardInner)
+
+  // Add click handler to flip the card
+  container.addEventListener('click', () => {
+    container.classList.toggle('flipped')
+  })
 
   // Smooth fade-in transition
   requestAnimationFrame(() => {
-    element.style.opacity = '1'
-    element.style.transition = 'opacity 100ms ease-in-out'
+    container.style.opacity = '1'
+    container.style.transition = 'opacity 100ms ease-in-out'
   })
 
-  return element
+  return container
 }
 
 // Match rendering function with optimized DOM operations
