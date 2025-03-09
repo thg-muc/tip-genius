@@ -594,6 +594,7 @@ class TipGenius:
                                     "prediction_home",
                                     "prediction_away",
                                     "outlook",
+                                    "reasoning",
                                 ]
                             )
                             .to_dicts()
