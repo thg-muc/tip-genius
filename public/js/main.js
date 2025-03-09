@@ -219,7 +219,7 @@ function renderMatches (matches, timestamp) {
     if (formattedDate !== currentDate) {
       const dateHeader = document.createElement('h2')
       dateHeader.className =
-        'text-base sm:text-2xl font-bold text-gray-500 dark:text-gray-400 mb-0 mt-8'
+        'text-base sm:text-2xl font-bold tracking-wide text-gray-500 dark:text-gray-400 mb-0 mt-8'
       dateHeader.textContent = formattedDate
       fragment.appendChild(dateHeader)
       currentDate = formattedDate
