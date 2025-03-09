@@ -26,7 +26,7 @@
 
 <body class="font-sans flex flex-col min-h-screen">
     <!-- Sticky header with navigation -->
-    <header class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10">
+    <header class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10 mb-3 sm:mb-6">
         <div class="container mx-auto px-4 py-2 sm:py-3">
             <div class="flex items-center justify-between">
                 <!-- Logo and site title -->
@@ -73,7 +73,11 @@
         </div>
         
         <!-- Dynamic content containers -->
-        <div id="league-tabs" class="flex justify-center mb-4"></div>
+        <div class="flex justify-center mb-4">
+            <div class="inline-flex shadow-md rounded-lg overflow-hidden">
+                <div id="league-tabs" class="flex"></div>
+            </div>
+        </div>
         <!-- Error message container -->
         <div id="error-message" class="hidden bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8 max-w-2xl mx-auto" role="alert">
             <span class="block sm:inline text-sm sm:text-base"></span>
