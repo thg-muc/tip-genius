@@ -1,10 +1,13 @@
 name: Update Version
 
 on:
-  # Run before other workflows that deploy content
+  # Manual trigger for testing
   workflow_dispatch:
+  # Only run on pushes to non-main branches
   push:
-    branches: ["*"]
+    branches:
+      - '**'        # Include all branches
+      - '!main'     # Exclude main branch
 
 permissions:
   contents: write
