@@ -11,3 +11,10 @@ dev*
 TODO.txt
 .env.local
 .env*.local
+
+# Node.js
+node_modules/
+package-lock.json
+
+# Tailwind CSS build output
+public/css/tailwind.css
