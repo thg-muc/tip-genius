@@ -185,7 +185,7 @@ function createMatchElement (match) {
                <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
                    Prediction
                </span>
-               <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
+               <span class="font-mono font-extrabold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
                    ${match.prediction_home}-${match.prediction_away}
                </span>
            </div>
