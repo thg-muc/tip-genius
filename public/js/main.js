@@ -530,8 +530,8 @@ function createTab (league, index, totalLeagues) {
   ]
 
   // Conditional rounding classes
-  if (index === 0) baseClasses.push('rounded-l-lg')
-  if (index === totalLeagues - 1) baseClasses.push('rounded-r-lg')
+  if (index === 0) baseClasses.push('rounded-l-md')
+  if (index === totalLeagues - 1) baseClasses.push('rounded-r-md')
 
   // Interactive state classes
   const stateClasses = [
