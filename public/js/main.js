@@ -159,7 +159,7 @@ function createMatchElement (match) {
                    ${match.home_team}
                    ${
                      hasLogo(match.home_logo)
-                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2" loading="lazy">`
+                       ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2 transition-transform duration-200 hover:scale-110" loading="lazy">`
                        : '<span class="text-xl sm:text-3xl ml-1 sm:ml-2">⚽️</span>'
                    }
                </div>
@@ -167,7 +167,7 @@ function createMatchElement (match) {
                <div class="flex items-center">
                    ${
                      hasLogo(match.away_logo)
-                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2" loading="lazy">`
+                       ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2 transition-transform duration-200 hover:scale-110" loading="lazy">`
                        : '<span class="text-xl sm:text-3xl mr-1 sm:mr-2">⚽️</span>'
                    }
                    ${match.away_team}
