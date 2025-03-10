@@ -603,7 +603,8 @@ function createTab (league, index, totalLeagues) {
     'duration-300',
     'relative',
     'border-b-2',
-    'border-transparent'
+    'border-transparent',
+    'tracking-wide'
   ]
 
   // Conditional rounding classes
