@@ -10,6 +10,7 @@
 import json
 import logging
 import os
+import sys
 import time
 from ast import literal_eval
 from collections import defaultdict
@@ -416,16 +417,22 @@ class TipGenius:
         )
         self.prediction_data[key][sport] = matches
 
-    def export_results(self) -> None:
+    def export_results(self) -> bool:
         """
         Export the summary of predictions to JSONL files and optionally to Vercel KV.
+
+        Returns
+        -------
+        bool
+            True if all export operations were successful, False otherwise
         """
         if not self.storage_manager:
             logger.warning(
                 "No storage manager configured. Skipping export of predictions."
             )
-            return
+            return False
 
+        all_successful = True
         for key, sport_data in self.prediction_data.items():
             base_key = f"Match_Predictions_{key}"
             if self.debug:
@@ -438,12 +445,18 @@ class TipGenius:
             else:
                 full_export_path = None
 
-            # Export predictions
-            self.storage_manager.store_predictions(
+            # Export predictions and track success
+            success = self.storage_manager.store_predictions(
                 sport_data, base_key, full_export_path
             )
+            all_successful = all_successful and success
 
-        logger.info("All predictions exported successfully.")
+        if all_successful:
+            logger.info("All predictions exported successfully.")
+        else:
+            logger.warning("Some predictions could not be exported successfully.")
+
+        return all_successful
 
     def execute_workflow(self, config: Dict[str, Any]) -> None:
         """
@@ -624,9 +637,17 @@ class TipGenius:
             # Export results even if some combinations failed
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
-                    self.export_results()
+                    export_success = self.export_results()
+                    if not export_success and is_cloud_environment():
+                        # Only exit with failure in cloud environments
+                        logger.error(
+                            "Critical error during export. Exiting with status code 1."
+                        )
+                        sys.exit(1)
                 except Exception as e:  # pylint: disable=broad-except
                     logger.error("Failed to export results: %s", str(e))
+                    if is_cloud_environment():
+                        sys.exit(1)
 
             # Log summary of failures
             if failed_combinations:
@@ -644,11 +665,15 @@ class TipGenius:
             # Try to save any collected data even if workflow fails
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
-                    self.export_results()
+                    export_success = self.export_results()
+                    if not export_success and is_cloud_environment():
+                        sys.exit(1)
                 except Exception as export_error:  # pylint: disable=broad-except
                     logger.error(
                         "Failed to export results after error: %s", str(export_error)
                     )
+                    if is_cloud_environment():
+                        sys.exit(1)
             raise  # Re-raise the exception after attempting to save data
 
 
