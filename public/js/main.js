@@ -101,8 +101,45 @@ async function initializeApp () {
   // Initialize the application tabs
   await createTabs()
 
+  // Update the active LLM logo in the header
+  updateActiveLlmLogo()
+
   // Set up periodic refresh for data
   setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
+}
+
+// Function to update the active LLM logo in the header
+function updateActiveLlmLogo () {
+  const activeLlmLogo = document.getElementById('activeLlmLogo')
+  if (!activeLlmLogo) return
+
+  // Clear existing content
+  activeLlmLogo.innerHTML = ''
+
+  // Find the current LLM provider config
+  const provider =
+    LLM_PROVIDERS.find(p => p.value === currentLLM) || LLM_PROVIDERS[0]
+
+  // Create the image element
+  const img = document.createElement('img')
+  img.src = provider.logo
+  img.alt = `${provider.label} logo`
+  img.className = 'w-6 h-6 object-contain'
+  img.title = provider.label
+
+  // Add error handling
+  img.onerror = () => {
+    console.warn(`Failed to load logo for ${provider.label}`)
+    // Fallback to text if image fails to load
+    const fallback = document.createElement('div')
+    fallback.className =
+      'w-6 h-6 flex items-center justify-center bg-gray-200 dark:bg-gray-700 rounded-full text-xs font-bold text-gray-800 dark:text-gray-200'
+    fallback.textContent = provider.label.charAt(0)
+    activeLlmLogo.appendChild(fallback)
+  }
+
+  // Add the image to the container
+  activeLlmLogo.appendChild(img)
 }
 
 // Error handling functions
@@ -566,7 +603,8 @@ function createTab (league, index, totalLeagues) {
     'duration-300',
     'relative',
     'border-b-2',
-    'border-transparent'
+    'border-transparent',
+    'tracking-wide'
   ]
 
   // Conditional rounding classes
@@ -749,6 +787,10 @@ document.addEventListener('DOMContentLoaded', () => {
     radio.addEventListener('change', async event => {
       currentLLM = event.target.value
       localStorage.setItem('lastUsedLLM', currentLLM)
+
+      // Update the active LLM logo in the header
+      updateActiveLlmLogo()
+
       cachedLeagueData = null
       lastFetchTime = 0
       if (currentLeague) {
