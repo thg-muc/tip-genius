@@ -106,7 +106,7 @@ class StorageManager:
         prediction_data: Dict[str, List[Dict[str, Any]]],
         base_key: str,
         full_export_path: Optional[str] = None,
-    ) -> None:
+    ) -> bool:
         """
         Write predictions to Vercel KV storage.
 
@@ -118,9 +118,15 @@ class StorageManager:
             Base key name for the output
         full_export_path : str, optional
             Full path to the export directory. Required if export_to_file is True
+
+        Returns
+        -------
+        bool
+            True if all operations were successful, False if any failed
         """
         # Generate timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        all_successful = True
 
         # Generate filenames
         timestamped_filename = f"{timestamp}_{base_key}.jsonl"
@@ -130,32 +136,40 @@ class StorageManager:
             if full_export_path:
                 # Create directory if it doesn't exist
                 os.makedirs(full_export_path, exist_ok=True)
-                self._store_to_file(
+                file_result1 = self._store_to_file(
                     prediction_data=prediction_data,
                     file_path=os.path.join(full_export_path, timestamped_filename),
                 )
-                self._store_to_file(
+                file_result2 = self._store_to_file(
                     prediction_data=prediction_data,
                     file_path=os.path.join(full_export_path, non_timestamped_filename),
                 )
+                all_successful = all_successful and file_result1 and file_result2
             else:
                 logger.warning(
                     "Full export path not provided, predictions not stored locally."
                 )
+                all_successful = False
         # Store in KV if enabled
         if self.write_to_kv:
             if self.kv_initialized:
                 # Store both timestamped and non-timestamped versions
-                self._store_to_kv(prediction_data, f"{timestamp}_{base_key}")
-                self._store_to_kv(prediction_data, base_key)
+                kv_result1 = self._store_to_kv(
+                    prediction_data, f"{timestamp}_{base_key}"
+                )
+                kv_result2 = self._store_to_kv(prediction_data, base_key)
+                all_successful = all_successful and kv_result1 and kv_result2
             else:
                 logger.warning("Vercel KV not configured, predictions not stored.")
+                all_successful = False
+
+        return all_successful
 
     def _store_to_file(
         self,
         prediction_data: Dict[str, List[Dict[str, Any]]],
         file_path: str,
-    ) -> None:
+    ) -> bool:
         """
         Store predictions to a JSONL file.
 
@@ -165,6 +179,11 @@ class StorageManager:
             The prediction data to store
         file_path : str
             Full path to the export file
+
+        Returns
+        -------
+        bool
+            True if storage was successful, False otherwise
         """
         try:
             with open(file_path, "w", encoding="utf-8") as f:
@@ -177,16 +196,18 @@ class StorageManager:
                     )
                     f.write("\n")
             logger.debug("Successfully exported predictions to: %s", file_path)
+            return True
         except IOError as e:
             logger.error(
                 "Failed to write predictions to file %s: %s", file_path, str(e)
             )
+            return False
 
     def _store_to_kv(
         self,
         prediction_data: Dict[str, List[Dict[str, Any]]],
         key_name: str,
-    ) -> None:
+    ) -> bool:
         """
         Store predictions in Vercel KV.
 
@@ -196,11 +217,19 @@ class StorageManager:
             The prediction data to store
         key_name : str
             The key name to use in KV storage
+
+        Returns
+        -------
+        bool
+            True if storage was successful, False otherwise
         """
         if not self.kv_initialized or not self.kv_url or not self.kv_token:
-            return
+            return False
 
-        headers = {"Authorization": f"Bearer {self.kv_token}"}
+        headers = {
+            "Authorization": f"Bearer {self.kv_token}",
+            "Content-Type": "application/json",
+        }
 
         try:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -210,10 +239,11 @@ class StorageManager:
                 for sport, matches in prediction_data.items()
             ]
 
-            # Store in KV using the provided key name
+            # Store in KV using the provided key - use request body instead of URL path
             response = requests.post(
-                f"{self.kv_url}/set/{key_name}/{json.dumps(kv_data)}",
+                f"{self.kv_url}/set/{key_name}",
                 headers=headers,
+                json=kv_data,  # Use json parameter instead of including in URL
                 timeout=10,
             )
 
@@ -222,6 +252,7 @@ class StorageManager:
                     "Successfully stored predictions in Vercel KV with key: %s",
                     key_name,
                 )
+                return True
             else:
                 logger.error(
                     "Failed to write predictions in Vercel KV: HTTP %d, Response: %s",
@@ -229,6 +260,8 @@ class StorageManager:
                     # Truncate the response text to avoid excessive logging
                     response.text[:200],
                 )
+                return False
 
         except Exception as e:  # pylint: disable=broad-except
             logger.error("Failed to write predictions to KV: %s", str(e))
+            return False
