@@ -279,15 +279,60 @@ function createMatchElement (match) {
   return container
 }
 
-// Match rendering function with optimized DOM operations
+// Match rendering function
 function renderMatches (matches, timestamp) {
   const container = document.getElementById('matches-container')
   container.innerHTML = ''
 
-  // Create a document fragment for batched DOM operations
-  const fragment = document.createDocumentFragment()
-  let currentDate = null
+  // First, preload all team logos that will be immediately visible
+  const firstMatchLogos = []
+  if (matches.length > 0) {
+    if (hasLogo(matches[0].home_logo))
+      firstMatchLogos.push(`/images/teams/${matches[0].home_logo}`)
+    if (hasLogo(matches[0].away_logo))
+      firstMatchLogos.push(`/images/teams/${matches[0].away_logo}`)
+  }
 
+  // Helper to show first elements once preloading is complete
+  const showFirstElements = () => {
+    // Show the first 2 elements (typically date header + first match)
+    const elementsToShow = Math.min(2, elements.length)
+    for (let i = 0; i < elementsToShow; i++) {
+      elements[i].style.transition = 'none'
+      elements[i].style.opacity = '1'
+    }
+
+    // Staggered fade-in for remaining elements with consistent timing
+    for (let i = elementsToShow; i < elements.length; i++) {
+      const element = elements[i]
+      void element.offsetWidth
+      element.style.transition = 'opacity 300ms ease-in-out'
+      setTimeout(() => {
+        element.style.opacity = '1'
+      }, 80 * (i - elementsToShow))
+    }
+  }
+
+  // If first match has logos, preload them before rendering
+  let preloadPromise = Promise.resolve()
+  if (firstMatchLogos.length > 0) {
+    preloadPromise = Promise.all(
+      firstMatchLogos.map(url => {
+        return new Promise(resolve => {
+          const img = new Image()
+          img.onload = resolve
+          img.onerror = resolve
+          img.src = url
+        })
+      })
+    )
+  }
+
+  // Track elements for staggered fade-in
+  let currentDate = null
+  const elements = []
+
+  // Process date headers and matches
   matches.forEach(match => {
     const matchDate = formatDate(match.commence_time_str)
     const formattedDate = formatDateForDisplay(matchDate)
@@ -298,31 +343,106 @@ function renderMatches (matches, timestamp) {
       dateHeader.className =
         'text-base sm:text-2xl font-bold tracking-wide text-gray-500 dark:text-gray-400 mb-0 mt-8'
       dateHeader.textContent = formattedDate
-      fragment.appendChild(dateHeader)
+      dateHeader.style.opacity = '0'
+      container.appendChild(dateHeader)
+      elements.push(dateHeader)
       currentDate = formattedDate
     }
 
-    fragment.appendChild(createMatchElement(match))
+    // Create match element (hidden initially)
+    const matchElement = document.createElement('div')
+    matchElement.className = 'card-container cursor-pointer'
+    matchElement.style.opacity = '0'
+
+    // Add the inner HTML for the match card
+    matchElement.innerHTML = `
+      <div class="card-inner">
+        <div class="card-front bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl">
+          <div class="flex flex-col">
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center text-xs sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
+                <div class="flex items-center">
+                  ${match.home_team}
+                  ${
+                    hasLogo(match.home_logo)
+                      ? `<img src="/images/teams/${match.home_logo}" alt="${match.home_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain ml-1 sm:ml-2" loading="lazy">`
+                      : '<span class="text-xl sm:text-3xl ml-1 sm:ml-2">⚽️</span>'
+                  }
+                </div>
+                <span class="mx-1 sm:mx-4">–</span>
+                <div class="flex items-center">
+                  ${
+                    hasLogo(match.away_logo)
+                      ? `<img src="/images/teams/${match.away_logo}" alt="${match.away_team}" class="w-5 h-5 sm:w-8 sm:h-8 object-contain mr-1 sm:mr-2" loading="lazy">`
+                      : '<span class="text-xl sm:text-3xl mr-1 sm:mr-2">⚽️</span>'
+                  }
+                  ${match.away_team}
+                </div>
+              </div>
+              <div class="font-mono text-sm sm:text-2xl text-gray-500 dark:text-gray-400 ml-2 sm:ml-4">
+                ${formatTimeForDisplay(matchDate)}
+              </div>
+            </div>
+            <div class="flex items-end justify-between mt-1">
+              <p class="text-xs sm:text-lg text-gray-500 dark:text-gray-400 italic flex-grow pr-2 sm:pr-8">
+                "${match.outlook}"
+              </p>
+              <div class="flex flex-col items-end justify-end ml-3">
+                <span class="text-gray-500 dark:text-gray-400 text-[0.55rem] sm:text-base mb-0.5">
+                  Prediction
+                </span>
+                <span class="font-mono font-bold text-xl sm:text-4xl text-sky-700 dark:text-sky-400">
+                  ${match.prediction_home}-${match.prediction_away}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-back bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200">
+          <div class="flex flex-col h-full">
+            <div class="overflow-y-auto pr-1 -mr-1">
+              <p class="font-mono text-[0.65rem] sm:text-base text-gray-700 dark:text-gray-300 py-1">
+                ${
+                  match.reasoning ||
+                  'No detailed reasoning available for this prediction.'
+                }
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+
+    // Add click handler to flip the card
+    matchElement.addEventListener('click', () => {
+      matchElement.classList.toggle('flipped')
+    })
+
+    container.appendChild(matchElement)
+    elements.push(matchElement)
   })
 
-  // Add timestamp if available
+  // Add timestamp and version info
   if (timestamp) {
     const timestampElement = document.createElement('p')
     timestampElement.className =
       'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-6 mb-2'
     timestampElement.textContent = `Last Update: ${timestamp}`
-    fragment.appendChild(timestampElement)
+    timestampElement.style.opacity = '0'
+    container.appendChild(timestampElement)
+    elements.push(timestampElement)
 
-    // Add version info below the timestamp with the same styling
     const versionElement = document.createElement('p')
     versionElement.className =
       'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-2 mb-6'
     versionElement.textContent = `Build Version: ${appVersion}`
-    fragment.appendChild(versionElement)
+    versionElement.style.opacity = '0'
+    container.appendChild(versionElement)
+    elements.push(versionElement)
   }
 
-  // Append all elements at once
-  container.appendChild(fragment)
+  // Once preloading is complete, show elements with staggering
+  preloadPromise.then(showFirstElements)
 }
 
 function preloadTeamLogos (leagues) {
