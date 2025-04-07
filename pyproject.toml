@@ -10,12 +10,3 @@ addopts = "-W ignore::DeprecationWarning"
 pythonpath = [
   ".", "src", "tests",
 ]
-
-[tool.pylint.'MESSAGES CONTROL']
-max-line-length = 88
-disable = [
-    "import-error",
-    "no-name-in-module",
-    "no-member",
-    "invalid-name"
-]
