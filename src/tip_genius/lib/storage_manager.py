@@ -1,14 +1,15 @@
-"""This module handles storage operations for both file system and Vercel KV."""
-
+"""Module to handle storage operations for both file system and Vercel KV."""
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2024
 # * License: MIT license
 
+from __future__ import annotations
+
 import json
 import logging
 import os
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any
 
 import requests
 import yaml
@@ -21,8 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class StorageManager:
-    """
-    Handles storage operations for match predictions data.
+    """Handles storage operations for match predictions data.
 
     This class provides functionality to store prediction data both in the local
     file system and in Vercel KV storage.
@@ -42,6 +42,7 @@ class StorageManager:
     ----------
     kv_initialized : bool
         Indicates whether KV storage is properly configured and available
+
     """
 
     def __init__(
@@ -50,22 +51,21 @@ class StorageManager:
         debug: bool = False,
         write_to_kv: bool = False,
         export_to_file: bool = False,
-    ):
-
+    ) -> None:
+        """Initialize the StorageManager with the given parameters."""
         self.match_predictions_folder = match_predictions_folder
         self.debug = debug
         self.write_to_kv = write_to_kv
         self.export_to_file = export_to_file
         self.kv_initialized = False
-        self.kv_url: Optional[str] = None
-        self.kv_token: Optional[str] = None
+        self.kv_url: str | None = None
+        self.kv_token: str | None = None
 
         # Initialize environment configuration
         self.kv_initialized = self._initialize_kv_config()
 
     def _initialize_kv_config(self) -> bool:
-        """
-        Initialize Vercel KV configuration from config file and environment variables.
+        """Initialize Vercel KV configuration from config file and env variables.
 
         The method will first try to load configuration from .env.local file,
         then fall back to system environment variables if needed.
@@ -76,11 +76,12 @@ class StorageManager:
         -------
         bool
             True if KV configuration is successful, False otherwise
+
         """
         try:
             # Load KV config
             config_path = os.path.join("cfg", "vercel_config.yaml")
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)["tip_genius"]
 
             # Get environment variables from .env.local or system environment
@@ -91,10 +92,9 @@ class StorageManager:
                 self.kv_initialized = True
                 logger.info("Vercel KV storage configured successfully")
                 return True
-            else:
-                logger.warning(
-                    "Vercel KV storage not configured: missing environment variables"
-                )
+            logger.warning(
+                "Vercel KV storage not configured: missing environment variables",
+            )
 
         except (FileNotFoundError, KeyError, yaml.YAMLError) as e:
             logger.warning(("Vercel KV storage failed to initialize: %s", str(e)))
@@ -103,16 +103,15 @@ class StorageManager:
 
     def store_predictions(
         self,
-        prediction_data: Dict[str, List[Dict[str, Any]]],
+        prediction_data: dict[str, list[dict[str, Any]]],
         base_key: str,
-        full_export_path: Optional[str] = None,
+        full_export_path: str | None = None,
     ) -> bool:
-        """
-        Write predictions to Vercel KV storage.
+        """Write predictions to Vercel KV storage.
 
         Parameters
         ----------
-        prediction_data : Dict[str, Dict[str, List[Dict[str, Any]]]]
+        prediction_data : dict[str, dict[str, list[dict[str, Any]]]]
             The prediction data to store
         base_key : str
             Base key name for the output
@@ -123,9 +122,10 @@ class StorageManager:
         -------
         bool
             True if all operations were successful, False if any failed
+
         """
         # Generate timestamp
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
         all_successful = True
 
         # Generate filenames
@@ -147,7 +147,7 @@ class StorageManager:
                 all_successful = all_successful and file_result1 and file_result2
             else:
                 logger.warning(
-                    "Full export path not provided, predictions not stored locally."
+                    "Full export path not provided, predictions not stored locally.",
                 )
                 all_successful = False
         # Store in KV if enabled
@@ -155,7 +155,8 @@ class StorageManager:
             if self.kv_initialized:
                 # Store both timestamped and non-timestamped versions
                 kv_result1 = self._store_to_kv(
-                    prediction_data, f"{timestamp}_{base_key}"
+                    prediction_data,
+                    f"{timestamp}_{base_key}",
                 )
                 kv_result2 = self._store_to_kv(prediction_data, base_key)
                 all_successful = all_successful and kv_result1 and kv_result2
@@ -167,15 +168,14 @@ class StorageManager:
 
     def _store_to_file(
         self,
-        prediction_data: Dict[str, List[Dict[str, Any]]],
+        prediction_data: dict[str, list[dict[str, Any]]],
         file_path: str,
     ) -> bool:
-        """
-        Store predictions to a JSONL file.
+        """Store predictions to a JSONL file.
 
         Parameters
         ----------
-        prediction_data : Dict[str, Dict[str, List[Dict[str, Any]]]]
+        prediction_data : dict[str, dict[str, list[dict[str, Any]]]]
             The prediction data to store
         file_path : str
             Full path to the export file
@@ -184,36 +184,42 @@ class StorageManager:
         -------
         bool
             True if storage was successful, False otherwise
+
         """
         try:
             with open(file_path, "w", encoding="utf-8") as f:
                 for sport, matches in prediction_data.items():
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    timestamp = datetime.now(tz=timezone.utc).strftime(
+                        "%Y-%m-%d %H:%M:%S",
+                    )
                     json.dump(
                         {"name": sport, "timestamp": timestamp, "matches": matches},
                         f,
                         ensure_ascii=False,
                     )
                     f.write("\n")
-            logger.debug("Successfully exported predictions to: %s", file_path)
-            return True
-        except IOError as e:
-            logger.error(
-                "Failed to write predictions to file %s: %s", file_path, str(e)
+
+        except OSError:
+            logger.exception(
+                "Failed to write predictions to file %s",
+                file_path,
             )
             return False
 
+        else:
+            logger.debug("Successfully exported predictions to: %s", file_path)
+            return True
+
     def _store_to_kv(
         self,
-        prediction_data: Dict[str, List[Dict[str, Any]]],
+        prediction_data: dict[str, list[dict[str, Any]]],
         key_name: str,
     ) -> bool:
-        """
-        Store predictions in Vercel KV.
+        """Store predictions in Vercel KV.
 
         Parameters
         ----------
-        prediction_data : Dict[str, Dict[str, List[Dict[str, Any]]]]
+        prediction_data : dict[str, dict[str, list[dict[str, Any]]]]
             The prediction data to store
         key_name : str
             The key name to use in KV storage
@@ -222,6 +228,7 @@ class StorageManager:
         -------
         bool
             True if storage was successful, False otherwise
+
         """
         if not self.kv_initialized or not self.kv_url or not self.kv_token:
             return False
@@ -232,7 +239,7 @@ class StorageManager:
         }
 
         try:
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             # Convert data to KV format (list of league data)
             kv_data = [
                 {"name": sport, "timestamp": timestamp, "matches": matches}
@@ -253,15 +260,16 @@ class StorageManager:
                     key_name,
                 )
                 return True
-            else:
-                logger.error(
-                    "Failed to write predictions in Vercel KV: HTTP %d, Response: %s",
-                    response.status_code,
-                    # Truncate the response text to avoid excessive logging
-                    response.text[:200],
-                )
-                return False
+            logger.exception(
+                "Failed to write predictions in Vercel KV: HTTP %d, Response: %s",
+                response.status_code,
+                # Truncate the response text to avoid excessive logging
+                response.text[:200],
+            )
 
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error("Failed to write predictions to KV: %s", str(e))
+        except Exception:
+            logger.exception("Failed to write predictions to KV: %s")
+            return False
+
+        else:
             return False

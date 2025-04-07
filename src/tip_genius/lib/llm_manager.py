@@ -1,4 +1,4 @@
-"""This module contains LLM-related functions."""
+"""Module for LLM-related functions."""
 
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2024
@@ -10,11 +10,10 @@
 import logging
 import os
 import time
-from typing import Any, Dict, List
+from typing import Any
 
 import requests
 import yaml
-
 from lib.llm_prompts import Prompt
 
 LLM_CONFIG_FILE = os.path.join("cfg", "llm_config.yaml")
@@ -27,8 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class LLMManager:
-    """
-    Class for interacting with various LLM providers to retrieve predictions.
+    """Class for interacting with various LLM providers to retrieve predictions.
 
     Parameters
     ----------
@@ -57,7 +55,7 @@ class LLMManager:
     kwargs : dict
         Additional keyword arguments for the LLM.
     full_response_list : list
-        List to store full responses from the LLM.
+        A list to store full responses from the LLM.
 
     Raises
     ------
@@ -73,54 +71,63 @@ class LLMManager:
     >>> from llm_manager import LLMManager
     >>> llm = LLMManager(provider="mistral", prediction_type="Default")
     >>> llm.get_prediction("Liverpool FC : 2.1, Manchester United : 2.0, draw: 1.9")
+
     """
 
-    def __init__(self, provider: str, prediction_type: str = "Default"):
+    def __init__(self, provider: str, prediction_type: str = "Default") -> None:
         """Initialize the LLMManager."""
         self.provider = provider.lower()
         self.prediction_type = prediction_type
-        self.full_response_list: List[Any] = []
+        self.full_response_list: list[Any] = []
 
         logger.debug("Initializing LLMManager with provider: %s", self.provider)
 
         # Load Config
+        class ConfigError(Exception):
+            """Exception raised for config-related errors."""
+
+            def __init__(self, message: str) -> None:
+                super().__init__(message)
+
         try:
-            with open(LLM_CONFIG_FILE, "r", encoding="utf-8") as f:
+            with open(LLM_CONFIG_FILE, encoding="utf-8") as f:
                 self.config = yaml.safe_load(f)[self.provider]
         except FileNotFoundError as exc:
-            logger.error("Config file not found: %s", LLM_CONFIG_FILE)
-            raise FileNotFoundError(
-                f"Config file not found: {LLM_CONFIG_FILE}"
-            ) from exc
+            logger.exception("Config file not found: %s", LLM_CONFIG_FILE)
+            error_message = f"Config file not found: {LLM_CONFIG_FILE}"
+            raise ConfigError(error_message) from exc
         except KeyError as exc:
-            logger.error("Key not found in config: %s", exc)
-            raise KeyError(f"Key not found in config: {exc}") from exc
+            error_message = f"Key not found in config: {exc}"
+            logger.exception(error_message)
+            raise ConfigError(error_message) from exc
 
         # Get API key from environment variables
         try:
             self.api_key = os.environ[self.config["api_key_env_name"]]
         except KeyError as exc:
-            logger.error("Key not found in environment: %s", exc)
-            raise KeyError(f"Key not found in environment: {exc}") from exc
+            error_message = f"Key not found in environment: {exc}"
+            logger.exception(error_message)
+            raise KeyError(error_message) from exc
 
         # Get other parameters
         self.system_prompt = Prompt.get(self.prediction_type)
         self.base_url = self.config["base_url"]
         self.operation = self.config["operation"]
         self.model = self.config["model"]
-        self.kwargs: Dict[str, Any] = self.config.get("kwargs", {})
+        self.kwargs: dict[str, Any] = self.config.get("kwargs", {})
         self.rate_limit: float = self.config.get(
-            "api_rate_limit", 0
+            "api_rate_limit",
+            0,
         )  # 0 or negative value means no rate limit
 
     def wait_for_rate_limit(self, request_duration: float) -> None:
-        """
-        Calculate and wait for the appropriate time to respect rate limits.
+        """Calculate and wait for the appropriate time to respect rate limits.
 
         Parameters
         ----------
         request_duration : float
             The duration of the last request in seconds.
+
         """
         # Calculate minimum time between requests (in s) with a small safety buffer
         min_interval = (60.0 / self.rate_limit) * 1.1
@@ -136,8 +143,7 @@ class LLMManager:
             time.sleep(sleep_duration)
 
     def get_prediction(self, user_prompt: str, timeout: int = 60, **kwargs) -> str:
-        """
-        Get the prediction from the LLM.
+        """Get the prediction from the LLM.
 
         Parameters
         ----------
@@ -157,6 +163,7 @@ class LLMManager:
         ------
         requests.RequestException
             If there's an error in getting the prediction from the LLM.
+
         """
         logger.debug("Getting prediction for prompt: %.50s...", user_prompt)
 
@@ -235,14 +242,14 @@ class LLMManager:
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
 
-            logger.debug("Received prediction: %.50s...", prediction)
-
             # Observe a rate limit if specified
             if self.rate_limit > 0:  # Check for rate limit
                 self.wait_for_rate_limit(request_duration=time.time() - start_time)
 
-            return prediction
-
-        except requests.RequestException as e:
-            logger.error("Failed to get prediction: %s", str(e))
+        except requests.RequestException:
+            logger.exception("Failed to get prediction: %s")
             raise
+
+        else:
+            logger.debug("Received prediction: %.50s...", prediction)
+            return prediction

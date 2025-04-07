@@ -3,15 +3,12 @@
 # * Author(s): Thomas Glanzer
 # * Creation : Jan 2025
 # * License: MIT license
-
 # %% --------------------------------------------
 # * Libraries
-
 import logging
 from difflib import get_close_matches
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Optional
 
 from slugify import slugify
 
@@ -23,8 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class TeamLogoMatcher:
-    """
-    A class for matching team names with their logo files using difflib.
+    """A class for matching team names with their logo files using difflib.
 
     This class provides functionality to match team names from various sources
     (like API responses) with logo files using Python's standard library difflib.
@@ -42,23 +38,24 @@ class TeamLogoMatcher:
         Pathlib Path object pointing to the logo directory
     match_cutoff : float
         Threshold for considering a match valid
-    logo_files : List[str]
+    logo_files : list[str]
         Cached list of available logo filenames (without extension)
+
     """
 
     def __init__(self, logo_directory: str | Path, match_cutoff: float = 0.6) -> None:
         """Initialize the TeamLogoMatcher with a directory path and cutoff."""
         self.logo_directory = Path(logo_directory)
         self.match_cutoff = match_cutoff
-        self.logo_files: List[str] = []
+        self.logo_files: list[str] = []
         self._loadlogo_files()
         logger.info(
-            "TeamLogoMatcher initialized with %d logo files", len(self.logo_files)
+            "TeamLogoMatcher initialized with %d logo files",
+            len(self.logo_files),
         )
 
     def _loadlogo_files(self) -> None:
-        """
-        Load and cache the list of logo files from the directory.
+        """Load and cache the list of logo files from the directory.
 
         This method reads all PNG files from the logo directory and stores their
         names without extensions for matching.
@@ -67,6 +64,7 @@ class TeamLogoMatcher:
         ------
         FileNotFoundError
             If the logo directory doesn't exist
+
         """
         try:
             self.logo_files = [f.stem for f in self.logo_directory.glob("*.png")]
@@ -74,16 +72,16 @@ class TeamLogoMatcher:
 
             if not self.logo_files:
                 logger.warning(
-                    "No PNG files found in logo directory: %s", self.logo_directory
+                    "No PNG files found in logo directory: %s",
+                    self.logo_directory,
                 )
 
         except FileNotFoundError:
-            logger.error("Logo directory not found: %s", self.logo_directory)
+            logger.exception("Logo directory not found: %s", self.logo_directory)
             raise
 
     def preprocess_name(self, name: str) -> str:
-        """
-        Preprocess a team name for better matching.
+        """Preprocess a team name for better matching.
 
         Parameters
         ----------
@@ -94,13 +92,13 @@ class TeamLogoMatcher:
         -------
         str
             Preprocessed team name using slugify for consistent processing
+
         """
         return slugify(name, separator="_")
 
     @lru_cache(maxsize=1024)
-    def find_logo(self, team_name: str) -> Optional[str]:
-        """
-        Find the most likely matching logo file for a team name.
+    def find_logo(self, team_name: str) -> str | None:
+        """Find the most likely matching logo file for a team name.
 
         Parameters
         ----------
@@ -111,6 +109,7 @@ class TeamLogoMatcher:
         -------
         str or None
             Name of the matching logo file or None if no match was found
+
         """
         if not team_name or not self.logo_files:
             logger.debug(
@@ -126,7 +125,10 @@ class TeamLogoMatcher:
         # Find best match using processed names
         processed_name = self.preprocess_name(team_name)
         matches = get_close_matches(
-            processed_name, list(name_mapping.keys()), n=5, cutoff=self.match_cutoff
+            processed_name,
+            list(name_mapping.keys()),
+            n=5,
+            cutoff=self.match_cutoff,
         )
 
         if not matches:

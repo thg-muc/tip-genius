@@ -1,4 +1,4 @@
-"""This module implements the Tip Genius workflow as a class."""
+"""Module to implement the Tip Genius workflow as a class."""
 
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2024
@@ -14,14 +14,13 @@ import sys
 import time
 from ast import literal_eval
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import product
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import polars as pl
 import yaml
-
 from lib.api_data import BaseAPI, OddsAPI
 from lib.llm_manager import LLMManager
 from lib.storage_manager import StorageManager
@@ -35,8 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def is_cloud_environment() -> bool:
-    """
-    Check if the code is running in a cloud/CI environment.
+    """Check if the code is running in a cloud/CI environment.
 
     The function checks for common environment variables used by different
     cloud providers and CI/CD platforms to determine the execution context.
@@ -46,6 +44,7 @@ def is_cloud_environment() -> bool:
     bool
         True if running in a cloud environment (AWS, GitHub Actions, Vercel, etc.),
         False if running locally.
+
     """
     # List of environment variables that indicate cloud/CI environments
     cloud_indicators = [
@@ -68,8 +67,7 @@ def is_cloud_environment() -> bool:
 
 
 class TipGenius:
-    """
-    A class to execute the Tip Genius workflow for sports predictions.
+    """A class to execute the Tip Genius workflow for sports predictions.
 
     Parameters
     ----------
@@ -97,10 +95,11 @@ class TipGenius:
         The folder path for storing LLM data.
     match_predictions_folder : str, default 'data/match_predictions'
         The folder path for storing prediction JSON and JSONL files.
-    prediction_data : Dict[str, Dict[str, List[Dict[str, Any]]]]
+    prediction_data : dict[str, dict[str, list[dict[str, Any]]]]
         Nested dictionary to store prediction data for summary export.
     storage_manager : StorageManager
         An instance of the StorageManager class for handling storage operations.
+
     """
 
     # Set project root
@@ -117,14 +116,13 @@ class TipGenius:
     llm_data_folder = os.path.join("data", "llm_data")
     match_predictions_folder = os.path.join("data", "match_predictions")
 
-    prediction_data: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(dict)
+    prediction_data: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(dict)
 
     def __init__(
         self,
         api_pipeline: BaseAPI,
-    ):
+    ) -> None:
         """Initialize the TipGenius class."""
-
         # Initialize parameters
         self.api_pipeline = api_pipeline
 
@@ -149,25 +147,25 @@ class TipGenius:
             logger.info("Debug mode is enabled...")
 
         logger.info(
-            "TipGenius initialized with API: %s", api_pipeline.__class__.__name__
+            "TipGenius initialized with API: %s",
+            api_pipeline.__class__.__name__,
         )
         logger.debug("Project root directory: %s", self.project_root)
 
     def store_llm_data(
         self,
-        df: pl.DataFrame,
+        data: pl.DataFrame,
         sport: str,
         llm_provider: str,
         prediction_type: str,
         named_teams: bool,
         additional_info: bool,
     ) -> None:
-        """
-        Store LLM prediction data in CSV format.
+        """Store LLM prediction data in CSV format.
 
         Parameters
         ----------
-        df : pl.DataFrame
+        data : pl.DataFrame
             The dataframe containing the LLM prediction results.
         sport : str
             The name of the sport/league.
@@ -179,6 +177,7 @@ class TipGenius:
             Whether named teams were used or anonymized.
         additional_info : bool
             Whether additional information was included.
+
         """
         try:
             # Construct the full export path using the configured LLM data folder
@@ -186,7 +185,7 @@ class TipGenius:
             os.makedirs(llm_export_path, exist_ok=True)
 
             # Generate current timestamp for unique filename
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
 
             # Construct filename with all relevant parameters
             filename = (
@@ -206,26 +205,25 @@ class TipGenius:
             csv_path = os.path.join(llm_export_path, f"{filename}.csv")
 
             # Write the dataframe to CSV using Polars' native write_csv method
-            df.write_csv(csv_path)
+            data.write_csv(csv_path)
 
             logger.debug("LLM data stored in CSV: %s", csv_path)
 
-        except Exception as e:
-            logger.error("Failed to store LLM data: %s", str(e))
+        except Exception:
+            logger.exception("Failed to store LLM data: %s")
             raise
 
     def store_api_data(
         self,
-        api_result: Dict[str, Any],
+        api_result: dict[str, Any],
         sport: str,
         api_name: str,
     ) -> None:
-        """
-        Store the raw API result data in a JSON file in the specified data folder.
+        """Store the raw API result data in a JSON file in the specified data folder.
 
         Parameters
         ----------
-        api_result : Dict[str, Any]
+        api_result : dict[str, Any]
             The raw data returned from the API.
         sport : str
             The name of the sport/league.
@@ -235,6 +233,7 @@ class TipGenius:
         Returns
         -------
         None
+
         """
         suffix = f"_{sport}_{api_name}".replace(" ", "")
         try:
@@ -243,7 +242,7 @@ class TipGenius:
             os.makedirs(api_export_path, exist_ok=True)
 
             # Generate a filename with a timestamp
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
             filename = f"{timestamp}{suffix}.json"
             file_path = os.path.join(api_export_path, filename)
 
@@ -253,18 +252,20 @@ class TipGenius:
 
             logger.debug("API result stored successfully at: %s", file_path)
 
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error("A problem occurred while storing API result: %s", exc)
+        except Exception:
+            logger.exception("A problem occurred while storing API result: %s")
 
     def predict_results(
-        self, df: pl.DataFrame, llm_provider: str, prediction_type: str
+        self,
+        data: pl.DataFrame,
+        llm_provider: str,
+        prediction_type: str,
     ) -> pl.DataFrame:
-        """
-        Process the dataframe using the given LLM provider and prediction type.
+        """Process the dataframe using the given LLM provider and prediction type.
 
         Parameters
         ----------
-        df : pl.DataFrame
+        data : pl.DataFrame
             The dataframe to process.
         llm_provider : str
             The LLM provider to use.
@@ -275,17 +276,22 @@ class TipGenius:
         -------
         pl.DataFrame
             The processed dataframe with predictions.
+
         """
         try:
             llm = LLMManager(provider=llm_provider, prediction_type=prediction_type)
-        except Exception as e:  # pylint: disable=broad-except
-            logger.error(
-                "Failed to initialize LLM provider %s: %s", llm_provider, str(e)
+        except Exception:
+            logger.exception(
+                "Failed to initialize LLM provider %s",
+                llm_provider,
             )
-            return df  # Return unmodified dataframe if LLM initialization fails
+            return data  # Return unmodified dataframe if LLM initialization fails
 
         def is_prediction_consistent(
-            p_home: int, p_away: int, o_home: float, o_away: float
+            p_home: int,
+            p_away: int,
+            o_home: float,
+            o_away: float,
         ) -> bool:
             return not (
                 (p_home > p_away and o_home >= o_away)
@@ -300,8 +306,8 @@ class TipGenius:
                 and isinstance(pred["prediction"]["away"], int)
             )
 
-        for i in range(df.shape[0]):
-            if any(df[i, f"odds_{key}"] == 0 for key in ["home", "away", "draw"]):
+        for i in range(data.shape[0]):
+            if any(data[i, f"odds_{key}"] == 0 for key in ["home", "away", "draw"]):
                 logger.debug("Odds are invalid for row %d, skipping...", i + 1)
                 continue
 
@@ -319,18 +325,18 @@ class TipGenius:
 
                         response = literal_eval(
                             llm.get_prediction(
-                                user_prompt=df[i, "odds_summary"],
+                                user_prompt=data[i, "odds_summary"],
                                 temperature=llm.kwargs.get("temperature", 0.0)
                                 + 0.2 * attempt,
-                            )
+                            ),
                         )
                         last_response = response
 
                         if is_prediction_consistent(
                             response["prediction"]["home"],
                             response["prediction"]["away"],
-                            df[i, "odds_home"],
-                            df[i, "odds_away"],
+                            data[i, "odds_home"],
+                            data[i, "odds_away"],
                         ):
                             break
                         logger.debug(
@@ -338,7 +344,7 @@ class TipGenius:
                             i + 1,
                             attempt + 1,
                         )
-                    except Exception as e:  # pylint: disable=broad-except
+                    except Exception as e:
                         logger.warning(
                             "LLM prediction attempt %d failed for row %d: %s",
                             attempt + 1,
@@ -349,7 +355,8 @@ class TipGenius:
 
                 if not last_response:
                     logger.warning(
-                        "No valid LLM response for row %d, skipping...", i + 1
+                        "No valid LLM response for row %d, skipping...",
+                        i + 1,
                     )
                     continue
 
@@ -362,17 +369,17 @@ class TipGenius:
                     )
 
                 # Update DataFrame with prediction results
-                df[i, "reasoning"] = last_response["reasoning"]
-                df[i, "prediction_home"] = last_response["prediction"]["home"]
-                df[i, "prediction_away"] = last_response["prediction"]["away"]
-                df[i, "outlook"] = last_response["outlook"]
-                df[i, "validity"] = validate_prediction(last_response)
+                data[i, "reasoning"] = last_response["reasoning"]
+                data[i, "prediction_home"] = last_response["prediction"]["home"]
+                data[i, "prediction_away"] = last_response["prediction"]["away"]
+                data[i, "outlook"] = last_response["outlook"]
+                data[i, "validity"] = validate_prediction(last_response)
 
-            except Exception as e:  # pylint: disable=broad-except
+            except Exception as e:
                 logger.warning("Failed to process row %d: %s", i + 1, str(e))
                 continue  # Skip this row but continue processing others
 
-        return df
+        return data
 
     def save_results(
         self,
@@ -381,10 +388,9 @@ class TipGenius:
         prediction_type: str,
         named_teams: bool,
         additional_info: bool,
-        matches: List[Dict[str, Any]],
+        matches: list[dict[str, Any]],
     ) -> None:
-        """
-        Save predictions in the nested dictionary structure and (optionally) add logos.
+        """Save predictions in the nested dict structure and (optionally) add logos.
 
         Parameters
         ----------
@@ -398,8 +404,9 @@ class TipGenius:
             Whether named teams were used or anonymized.
         additional_info : bool
             Whether additional information was included.
-        matches : List[Dict[str, Any]]
+        matches : list[dict[str, Any]]
             The list of match predictions to store.
+
         """
         # Add logo matching for each match
         for match in matches:
@@ -418,17 +425,17 @@ class TipGenius:
         self.prediction_data[key][sport] = matches
 
     def export_results(self) -> bool:
-        """
-        Export the summary of predictions to JSONL files and optionally to Vercel KV.
+        """Export the summary of predictions to JSONL files and optionally to Vercel KV.
 
         Returns
         -------
         bool
             True if all export operations were successful, False otherwise
+
         """
         if not self.storage_manager:
             logger.warning(
-                "No storage manager configured. Skipping export of predictions."
+                "No storage manager configured. Skipping export of predictions.",
             )
             return False
 
@@ -440,14 +447,17 @@ class TipGenius:
 
             if self.export_to_file:
                 full_export_path = os.path.join(
-                    self.project_root, self.match_predictions_folder
+                    self.project_root,
+                    self.match_predictions_folder,
                 )
             else:
                 full_export_path = None
 
             # Export predictions and track success
             success = self.storage_manager.store_predictions(
-                sport_data, base_key, full_export_path
+                sport_data,
+                base_key,
+                full_export_path,
             )
             all_successful = all_successful and success
 
@@ -458,15 +468,16 @@ class TipGenius:
 
         return all_successful
 
-    def execute_workflow(self, config: Dict[str, Any]) -> None:
-        """
-        Execute the Tip Genius workflow for a given configuration.
-        Continues execution in case individual combinations fail.
+    def execute_workflow(self, config: dict[str, Any]) -> None:
+        """Execute the Tip Genius workflow for a given configuration.
+
+        The workflow continues execution in case individual combinations fail.
 
         Parameters
         ----------
-        config : Dict[str, Any]
+        config : dict[str, Any]
             The configuration dictionary with workflow parameters.
+
         """
         try:
             # Initialize storage manager
@@ -485,8 +496,8 @@ class TipGenius:
                     try:
                         self.logo_matcher = TeamLogoMatcher(logo_directory=full_path)
                         logger.debug("TeamLogoMatcher successfully initialized.")
-                    except Exception as e:  # pylint: disable=broad-except
-                        logger.warning("Failed to initialize logo matcher: %s", str(e))
+                    except Exception:
+                        logger.warning("Failed to initialize logo matcher: %s")
                 else:
                     logger.warning(
                         "Not performing Logo matching, logo dir does not exist: %s",
@@ -504,7 +515,7 @@ class TipGenius:
                 return
             if not llm_provider_options:
                 logger.warning(
-                    "No LLM providers defined in the configuration, aborting."
+                    "No LLM providers defined in the configuration, aborting.",
                 )
                 return
 
@@ -517,7 +528,8 @@ class TipGenius:
             )
 
             logger.info(
-                "Starting workflow with %d total combinations", nr_total_combinations
+                "Starting workflow with %d total combinations",
+                nr_total_combinations,
             )
             processed_count = 0
             failed_combinations = []
@@ -534,8 +546,8 @@ class TipGenius:
                             sport=sport,
                             api_name=self.api_pipeline.api_name,
                         )
-                except Exception as e:  # pylint: disable=broad-except
-                    logger.error("Failed to fetch odds for sport %s: %s", sport, str(e))
+                except Exception:
+                    logger.exception("Failed to fetch odds for sport %s", sport)
                     continue  # Skip this sport but continue with others
 
                 combinations = product(
@@ -566,28 +578,28 @@ class TipGenius:
                         if not api_result:
                             logger.warning("No valid API data, skipping combination...")
                             failed_combinations.append(
-                                (sport, llm_provider, "No valid API data")
+                                (sport, llm_provider, "No valid API data"),
                             )
                             continue
 
-                        df = self.api_pipeline.process_api_data(
+                        data = self.api_pipeline.process_api_data(
                             api_result=api_result,
                             named_teams=named_teams,
                             additional_info=additional_info,
                         )
 
                         if self.debug and self.debug_limit > 0:
-                            df = df.limit(self.debug_limit)
+                            data = data.limit(self.debug_limit)
 
-                        df_processed = self.predict_results(
-                            df=df,
+                        data_processed = self.predict_results(
+                            data=data,
                             llm_provider=llm_provider,
                             prediction_type=prediction_type,
                         )
 
                         if self.store_llm_results:
                             self.store_llm_data(
-                                df=df_processed,
+                                data=data_processed,
                                 sport=sport,
                                 llm_provider=llm_provider,
                                 prediction_type=prediction_type,
@@ -596,9 +608,8 @@ class TipGenius:
                             )
 
                         # Keep valid predictions only
-                        # pylint: disable=singleton-comparison
                         valid_matches = (
-                            df_processed.filter(pl.col("validity") == True)
+                            data_processed.filter(pl.col("validity") == True)  # noqa # likely false positive
                             .select(
                                 [
                                     "commence_time_str",
@@ -608,7 +619,7 @@ class TipGenius:
                                     "prediction_away",
                                     "outlook",
                                     "reasoning",
-                                ]
+                                ],
                             )
                             .to_dicts()
                         )
@@ -624,12 +635,11 @@ class TipGenius:
                                 matches=valid_matches,
                             )
 
-                    except Exception as e:  # pylint: disable=broad-except
-                        logger.error(
-                            "Failed to process combination: %s, %s, %s",
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to process combination: %s, %s",
                             sport,
                             llm_provider,
-                            str(e),
                         )
                         failed_combinations.append((sport, llm_provider, str(e)))
                         continue  # Skip this combination but continue with others
@@ -640,12 +650,12 @@ class TipGenius:
                     export_success = self.export_results()
                     if not export_success and is_cloud_environment():
                         # Only exit with failure in cloud environments
-                        logger.error(
-                            "Critical error during export. Exiting with status code 1."
+                        logger.exception(
+                            "Critical error during export. Exiting with status code 1.",
                         )
                         sys.exit(1)
-                except Exception as e:  # pylint: disable=broad-except
-                    logger.error("Failed to export results: %s", str(e))
+                except Exception:
+                    logger.exception("Failed to export results: %s")
                     if is_cloud_environment():
                         sys.exit(1)
 
@@ -660,18 +670,16 @@ class TipGenius:
             else:
                 logger.info("All workflows completed successfully.")
 
-        except Exception as e:
-            logger.error("Critical workflow error: %s", str(e))
+        except Exception:
+            logger.exception("Critical workflow error: %s")
             # Try to save any collected data even if workflow fails
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
                     export_success = self.export_results()
                     if not export_success and is_cloud_environment():
                         sys.exit(1)
-                except Exception as export_error:  # pylint: disable=broad-except
-                    logger.error(
-                        "Failed to export results after error: %s", str(export_error)
-                    )
+                except Exception:
+                    logger.exception("Failed to export results after error: %s")
                     if is_cloud_environment():
                         sys.exit(1)
             raise  # Re-raise the exception after attempting to save data
@@ -681,7 +689,6 @@ class TipGenius:
 # * Default Workflow
 
 if __name__ == "__main__":
-
     # Check if running in cloud environment
     in_cloud = is_cloud_environment()
 
@@ -710,7 +717,7 @@ if __name__ == "__main__":
 
     # Load Config
     config_path = os.path.join("cfg", "tip_genius_config.yaml")
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         tip_genius_config = yaml.safe_load(f)
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)

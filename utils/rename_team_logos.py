@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 def purify_image_filename(filename: str) -> str:
-    """
-    Convert a filename to a URL-friendly format.
+    """Convert a filename to a URL-friendly format.
 
     Parameters
     ----------
@@ -40,6 +39,7 @@ def purify_image_filename(filename: str) -> str:
         - Accents removed
         - Special characters removed
         - Lowercase conversion
+
     """
     name, ext = Path(filename).stem, Path(filename).suffix
     purified_name = slugify(name, separator="_", lowercase=True)
@@ -47,13 +47,13 @@ def purify_image_filename(filename: str) -> str:
 
 
 def purify_image_directory(directory: str | Path = ".") -> None:
-    """
-    Purify all image filenames in a directory to make them URL-friendly.
+    """Purify all image filenames in a directory to make them URL-friendly.
 
     Parameters
     ----------
     directory : str or Path, optional
         Directory containing PNG files to process, by default "."
+
     """
     try:
         directory = Path(directory)
@@ -67,10 +67,10 @@ def purify_image_directory(directory: str | Path = ".") -> None:
                 try:
                     filepath.rename(directory / new_filename)
                     logger.info('Renamed: "%s" -> "%s"', original_name, new_filename)
-                except OSError as e:
-                    logger.error('Failed to rename "%s": %s', original_name, str(e))
-    except Exception as e:  # pylint: disable=broad-except
-        logger.error("Error processing directory: %s", str(e))
+                except OSError:
+                    logger.exception('Failed to rename "%s"', original_name)
+    except Exception:
+        logger.exception("Error processing directory")
 
 
 if __name__ == "__main__":
