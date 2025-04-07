@@ -1,4 +1,4 @@
-"""This module contains LLM prompts for LLM predictions."""
+"""Module which contains LLM prompts for LLM predictions."""
 
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2024
@@ -59,8 +59,7 @@ class Prompt:
 
     @classmethod
     def get(cls, prompt_type: str = "Default") -> str:
-        """
-        Get the system prompt for the specified type.
+        """Get the system prompt for the specified type.
 
         Parameters
         ----------
@@ -76,6 +75,7 @@ class Prompt:
         ------
         ValueError
             If an invalid prompt type is provided.
+
         """
         scoring_prompts = {
             "Default": cls.DEFAULT_SCORING_PROMPT,
@@ -84,6 +84,7 @@ class Prompt:
 
         scoring_prompt = scoring_prompts.get(prompt_type)
         if scoring_prompt is None:
-            raise ValueError(f"Invalid prompt type: {prompt_type}")
+            error_message = f"Invalid prompt type: {prompt_type}"
+            raise ValueError(error_message)
 
         return cls.PREDICTION_PROMPT.format(scoring_rules=scoring_prompt)

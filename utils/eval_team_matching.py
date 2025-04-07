@@ -20,8 +20,7 @@ import polars as pl
 src_path = str(Path(__file__).parents[1] / "src")
 sys.path.insert(0, src_path)
 
-# pylint: disable=wrong-import-position
-from tip_genius.lib.team_matching import TeamLogoMatcher
+from tip_genius.lib.team_matching import TeamLogoMatcher  # noqa
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,33 +31,34 @@ logger = logging.getLogger(__name__)
 
 def load_team_names(llm_data_folder: Path) -> pl.DataFrame:
     """Load and combine team names from LLM data files."""
-    dfs = []
+    data_list = []
     for csv_file in llm_data_folder.glob("*.csv"):
-        df = pl.read_csv(csv_file).select(["home_team", "away_team"])
-        dfs.append(df)
-    return pl.concat(dfs)
+        data = pl.read_csv(csv_file).select(["home_team", "away_team"])
+        data_list.append(data)
+    return pl.concat(data_list)
 
 
-def eval_logo_matching():
+def eval_logo_matching() -> None:
     """Evaluate logo matching and generate statistics."""
     project_root = Path(__file__).parents[1]
     llm_data_folder = project_root / "data" / "llm_data_test"
     logo_folder = project_root / "public" / "images" / "teams"
 
     # Load team names
-    df = load_team_names(llm_data_folder)
+    data = load_team_names(llm_data_folder)
 
     # Get unique team names
     team_names = pl.concat(
         [
-            df.select("home_team"),
-            df.select("away_team").rename({"away_team": "home_team"}),
-        ]
+            data.select("home_team"),
+            data.select("away_team").rename({"away_team": "home_team"}),
+        ],
     ).unique()
 
     # Initialize matcher
     matcher = TeamLogoMatcher(
-        logo_folder, match_cutoff=0.0
+        logo_directory=logo_folder,
+        match_cutoff=0.0,
     )  # Set cutoff to 0 to get all similarities
 
     # Match statistics
