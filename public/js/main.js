@@ -10,7 +10,7 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'Google-Gemini-Flash',
-    label: 'Gemini Flash 2',
+    label: 'Gemini 2.5 Flash',
     logo: `/images/llm-logos/Google.png`
   },
   {
