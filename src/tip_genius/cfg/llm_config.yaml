@@ -29,8 +29,8 @@ google-gemini-flash:
   api_rate_limit: 8 # requests per minute for free tier
   api_key_env_name: GOOGLE_API_KEY
   base_url: https://generativelanguage.googleapis.com/v1beta
-  operation: generateContent # other Option: streamGenerateContent for stream
-  model: gemini-2.0-flash-exp # gemini-1.5-flash-latest
+  operation: generateContent # alternative: streamGenerateContent for stream
+  model: gemini-2.5-flash-preview-05-20
   kwargs:
     temperature: 0.0
     maxOutputTokens: 8192
