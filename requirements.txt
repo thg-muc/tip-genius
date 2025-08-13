@@ -1,4 +1,0 @@
-polars==1.24.0
-python-slugify==8.0.4
-PyYAML==6.0.2
-requests==2.32.3

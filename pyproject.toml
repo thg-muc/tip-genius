@@ -1,19 +1,96 @@
 [project]
-name = "Tip-Genius"
+name = "tip-genius"
 version = "1.0.0"
 description = "AI-powered soccer match predictions with a modern, responsive web interface."
 readme = "README.md"
 requires-python = ">= 3.12, < 3.13"
 
-[tool.isort]
-profile = "black"
-line_length = 88
-known_first_party = [
-    "tip_genius", 
-    "lib" 
+dependencies = [
+    "polars>=1.30.0",
+    "python-dotenv>=1.0.0",
+    "python-slugify>=8.0.4",
+    "PyYAML>=6.0.2",
+    "requests>=2.32.3",
 ]
-[tool.pytest.ini_options]
-addopts = "-W ignore::DeprecationWarning"
-pythonpath = [
-  ".", "src", "tests",
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.3.0",
+    "ruff>=0.8.0",
+    "pyright>=1.1.390",
+]
+
+[tool.ruff]
+line-length = 88
+exclude = [
+    ".git",
+    ".gitignore",
+    "__pycache__",
+    "*.egg-info",
+    ".nox",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    ".vscode",
+    ".idea",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "FA",
+    "PT",
+    "TD",
+    "BLE",
+    "COM",
+    "CPY",
+    "ERA",
+    "FIX",
+    "INP",
+    "PGH",
+    "PLR",
+    "RET",
+    "T20",
+    "TRY",
+    "C408",
+    "D104",
+    "D107",
+    "S101",
+    "S311",
+    "PD901",
+    "ANN002",
+    "ANN003",
+    "ANN401",
+    "RUF012",
+    "RUF100",
+    "ISC001"
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.flake8-errmsg]
+max-string-length = 88
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pyright]
+typeCheckingMode = "standard"
+pythonVersion = "3.12"
+include = ["src", "utils"]
+extraPaths = ["src"]
+exclude = [
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/.venv",
+    "**/venv"
 ]
