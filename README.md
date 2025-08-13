@@ -96,10 +96,8 @@ The project uses modern Python and frontend development tools for code quality a
   - Python linting and formatting (ruff)
   - Type checking (pyright)
   - Frontend formatting (prettier)
+  - Conventional commit message validation
   - File quality checks (trailing whitespace, YAML syntax)
-- **Commit Message Validation**:
-  - **Team-wide**: Conventional commit format enforcement (shared via `.pre-commit-config.yaml`)
-  - **Personal**: Optional local keyword filtering (not shared with team)
 
 ### Development Commands
 
@@ -117,13 +115,9 @@ uv run pyright src/
 # Format frontend files
 npx prettier --write "public/**/*.{js,css,json}"
 
-# Install pre-commit hooks (team-wide validation)
+# Install pre-commit hooks
 uv run pre-commit install
 uv run pre-commit install --hook-type commit-msg
-
-# Optional: Set up personal keyword validation (local only)
-# The personal validation script is already included in .git/hooks/commit-msg-local
-# It runs automatically after team validation if present
 ```
 
 ## Vercel Setup
