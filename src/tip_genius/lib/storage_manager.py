@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -48,6 +49,7 @@ class StorageManager:
     def __init__(
         self,
         match_predictions_folder: str,
+        *,
         debug: bool = False,
         write_to_kv: bool = False,
         export_to_file: bool = False,
@@ -80,8 +82,8 @@ class StorageManager:
         """
         try:
             # Load KV config
-            config_path = os.path.join("cfg", "vercel_config.yaml")
-            with open(config_path, encoding="utf-8") as f:
+            config_path = Path("cfg") / "vercel_config.yaml"
+            with config_path.open(encoding="utf-8") as f:
                 config = yaml.safe_load(f)["tip_genius"]
 
             # Get environment variables from .env.local or system environment
@@ -125,7 +127,7 @@ class StorageManager:
 
         """
         # Generate timestamp
-        timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+        timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d_%H-%M-%S")
         all_successful = True
 
         # Generate filenames
@@ -135,14 +137,15 @@ class StorageManager:
         if self.export_to_file:
             if full_export_path:
                 # Create directory if it doesn't exist
-                os.makedirs(full_export_path, exist_ok=True)
+                export_path = Path(full_export_path)
+                export_path.mkdir(parents=True, exist_ok=True)
                 file_result1 = self._store_to_file(
                     prediction_data=prediction_data,
-                    file_path=os.path.join(full_export_path, timestamped_filename),
+                    file_path=export_path / timestamped_filename,
                 )
                 file_result2 = self._store_to_file(
                     prediction_data=prediction_data,
-                    file_path=os.path.join(full_export_path, non_timestamped_filename),
+                    file_path=export_path / non_timestamped_filename,
                 )
                 all_successful = all_successful and file_result1 and file_result2
             else:
@@ -169,7 +172,7 @@ class StorageManager:
     def _store_to_file(
         self,
         prediction_data: dict[str, list[dict[str, Any]]],
-        file_path: str,
+        file_path: str | Path,
     ) -> bool:
         """Store predictions to a JSONL file.
 
@@ -187,9 +190,10 @@ class StorageManager:
 
         """
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
+            file_path = Path(file_path)
+            with file_path.open("w", encoding="utf-8") as f:
                 for sport, matches in prediction_data.items():
-                    timestamp = datetime.now(tz=timezone.utc).strftime(
+                    timestamp = datetime.now(tz=UTC).strftime(
                         "%Y-%m-%d %H:%M:%S",
                     )
                     json.dump(
@@ -239,7 +243,7 @@ class StorageManager:
         }
 
         try:
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S")
             # Convert data to KV format (list of league data)
             kv_data = [
                 {"name": sport, "timestamp": timestamp, "matches": matches}

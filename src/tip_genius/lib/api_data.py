@@ -10,6 +10,7 @@
 import logging
 import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 import polars as pl
@@ -19,7 +20,7 @@ import yaml
 # %% --------------------------------------------
 # * Config
 
-ODDS_CONFIG_FILE = os.path.join("cfg", "api_config.yaml")
+ODDS_CONFIG_FILE = Path("cfg") / "api_config.yaml"
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -41,11 +42,11 @@ class BaseAPI(ABC):
     def __init__(self, api_name: str) -> None:
         """Initialize the BaseAPI class."""
         self.api_name = api_name
-        self.api_result_folder = os.path.join("data", "api_result")
+        self.api_result_folder = Path("data") / "api_result"
 
         # Load Config
         try:
-            with open(ODDS_CONFIG_FILE, encoding="utf-8") as f:
+            with ODDS_CONFIG_FILE.open(encoding="utf-8") as f:
                 self.config = yaml.safe_load(f)[self.api_name]
         except FileNotFoundError as exc:
             logger.exception("Config file not found: %s", ODDS_CONFIG_FILE)
@@ -79,6 +80,7 @@ class BaseAPI(ABC):
     def process_api_data(
         self,
         api_result: dict[str, Any],
+        *,
         named_teams: bool,
         additional_info: bool,
     ) -> pl.DataFrame:
@@ -176,6 +178,7 @@ class OddsAPI(BaseAPI):
     def process_api_data(
         self,
         api_result: dict[str, Any],
+        *,
         named_teams: bool,
         additional_info: bool,
         target_timezone: str = "Europe/Berlin",

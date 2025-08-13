@@ -14,7 +14,7 @@ import sys
 import time
 from ast import literal_eval
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from itertools import product
 from pathlib import Path
 from typing import Any
@@ -103,7 +103,7 @@ class TipGenius:
     """
 
     # Set project root
-    project_root = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+    project_root = Path(__file__).parent.parent.parent
 
     # Initialize all attributes with default values
     export_to_kv = False
@@ -112,9 +112,9 @@ class TipGenius:
     store_llm_results = False
     llm_attempts = 4
 
-    api_data_folder = os.path.join("data", "api_result")
-    llm_data_folder = os.path.join("data", "llm_data")
-    match_predictions_folder = os.path.join("data", "match_predictions")
+    api_data_folder = Path("data") / "api_result"
+    llm_data_folder = Path("data") / "llm_data"
+    match_predictions_folder = Path("data") / "match_predictions"
 
     prediction_data: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(dict)
 
@@ -128,7 +128,7 @@ class TipGenius:
 
         # Read debug settings from environment
         self.debug = os.environ.get("DEBUG_MODE", "FALSE").upper() == "TRUE"
-        self.debug_limit = int(os.environ.get("DEBUG_PROCESSING_LIMIT", 0))
+        self.debug_limit = int(os.environ.get("DEBUG_PROCESSING_LIMIT", "0"))
 
         # Initialize class attributes
         self.storage_manager = None
@@ -158,6 +158,7 @@ class TipGenius:
         sport: str,
         llm_provider: str,
         prediction_type: str,
+        *,
         named_teams: bool,
         additional_info: bool,
     ) -> None:
@@ -181,11 +182,11 @@ class TipGenius:
         """
         try:
             # Construct the full export path using the configured LLM data folder
-            llm_export_path = os.path.join(self.project_root, self.llm_data_folder)
-            os.makedirs(llm_export_path, exist_ok=True)
+            llm_export_path = self.project_root / self.llm_data_folder
+            llm_export_path.mkdir(parents=True, exist_ok=True)
 
             # Generate current timestamp for unique filename
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+            timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d_%H-%M-%S")
 
             # Construct filename with all relevant parameters
             filename = (
@@ -202,7 +203,7 @@ class TipGenius:
             filename = filename.replace(" ", "")
 
             # Construct the full file path with .csv extension
-            csv_path = os.path.join(llm_export_path, f"{filename}.csv")
+            csv_path = llm_export_path / f"{filename}.csv"
 
             # Write the dataframe to CSV using Polars' native write_csv method
             data.write_csv(csv_path)
@@ -238,16 +239,16 @@ class TipGenius:
         suffix = f"_{sport}_{api_name}".replace(" ", "")
         try:
             # Construct the api_export_path using the configured data folder
-            api_export_path = os.path.join(self.project_root, self.api_data_folder)
-            os.makedirs(api_export_path, exist_ok=True)
+            api_export_path = self.project_root / self.api_data_folder
+            api_export_path.mkdir(parents=True, exist_ok=True)
 
             # Generate a filename with a timestamp
-            timestamp = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+            timestamp = datetime.now(tz=UTC).strftime("%Y-%m-%d_%H-%M-%S")
             filename = f"{timestamp}{suffix}.json"
-            file_path = os.path.join(api_export_path, filename)
+            file_path = api_export_path / filename
 
             # Write the raw API data to the JSON file
-            with open(file_path, "w", encoding="utf-8") as json_file:
+            with file_path.open("w", encoding="utf-8") as json_file:
                 json.dump(api_result, json_file, ensure_ascii=False, indent=4)
 
             logger.debug("API result stored successfully at: %s", file_path)
@@ -362,7 +363,8 @@ class TipGenius:
 
                 if attempt == self.llm_attempts - 1:
                     logger.warning(
-                        "Using inconsistent prediction for row %d after %d failed attempts: %s",
+                        "Using inconsistent prediction for row %d after %d failed "
+                        "attempts: %s",
                         i + 1,
                         self.llm_attempts,
                         last_response,
@@ -386,6 +388,7 @@ class TipGenius:
         sport: str,
         llm_provider: str,
         prediction_type: str,
+        *,
         named_teams: bool,
         additional_info: bool,
         matches: list[dict[str, Any]],
@@ -446,9 +449,8 @@ class TipGenius:
                 base_key += "_debug"
 
             if self.export_to_file:
-                full_export_path = os.path.join(
-                    self.project_root,
-                    self.match_predictions_folder,
+                full_export_path = str(
+                    self.project_root / self.match_predictions_folder
                 )
             else:
                 full_export_path = None
@@ -468,7 +470,7 @@ class TipGenius:
 
         return all_successful
 
-    def execute_workflow(self, config: dict[str, Any]) -> None:
+    def execute_workflow(self, config: dict[str, Any]) -> None:  # noqa: C901
         """Execute the Tip Genius workflow for a given configuration.
 
         The workflow continues execution in case individual combinations fail.
@@ -482,7 +484,7 @@ class TipGenius:
         try:
             # Initialize storage manager
             self.storage_manager = StorageManager(
-                match_predictions_folder=self.match_predictions_folder,
+                match_predictions_folder=str(self.match_predictions_folder),
                 debug=self.debug,
                 write_to_kv=self.export_to_kv,
                 export_to_file=self.export_to_file,
@@ -491,8 +493,8 @@ class TipGenius:
 
             # Initialize logo matcher if folder is configured and exists
             if team_logos_path := config.get("team_logos_folder"):
-                full_path = os.path.join(self.project_root, team_logos_path)
-                if os.path.exists(full_path):
+                full_path = self.project_root / team_logos_path
+                if full_path.exists():
                     try:
                         self.logo_matcher = TeamLogoMatcher(logo_directory=full_path)
                         logger.debug("TeamLogoMatcher successfully initialized.")
@@ -566,7 +568,8 @@ class TipGenius:
                     processed_count += 1
                     try:
                         logger.info(
-                            "Processing combination %d/%d: %s, %s, Named Teams: %s, Additional Info: %s",
+                            "Processing combination %d/%d: %s, %s, Named Teams: %s, "
+                            "Additional Info: %s",
                             processed_count,
                             nr_total_combinations,
                             llm_provider,
@@ -609,7 +612,7 @@ class TipGenius:
 
                         # Keep valid predictions only
                         valid_matches = (
-                            data_processed.filter(pl.col("validity") == True)  # noqa # likely false positive
+                            data_processed.filter(pl.col("validity"))
                             .select(
                                 [
                                     "commence_time_str",
@@ -716,8 +719,8 @@ if __name__ == "__main__":
         setattr(tip_genius, option, value)
 
     # Load Config
-    config_path = os.path.join("cfg", "tip_genius_config.yaml")
-    with open(config_path, encoding="utf-8") as f:
+    config_path = Path("cfg") / "tip_genius_config.yaml"
+    with config_path.open(encoding="utf-8") as f:
         tip_genius_config = yaml.safe_load(f)
     # Execute Workflow
     tip_genius.execute_workflow(tip_genius_config)

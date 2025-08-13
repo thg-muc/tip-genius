@@ -7,7 +7,7 @@
 # * Libraries
 import logging
 from difflib import get_close_matches
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from slugify import slugify
@@ -96,7 +96,7 @@ class TeamLogoMatcher:
         """
         return slugify(name, separator="_")
 
-    @lru_cache(maxsize=1024)
+    @cache  # noqa: B019
     def find_logo(self, team_name: str) -> str | None:
         """Find the most likely matching logo file for a team name.
 
