@@ -23,6 +23,13 @@
     "url": "https://github.com/thg-muc/tip-genius/issues"
   },
   "homepage": "https://github.com/thg-muc/tip-genius#readme",
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "trailingComma": "es5",
+    "tabWidth": 2,
+    "printWidth": 88
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",

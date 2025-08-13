@@ -6,43 +6,37 @@ const CONFIG = {
     'http://localhost:3000',
     'http://localhost:5000',
     'http://localhost:8000',
-    'https://tip-genius.vercel.app'
+    'https://tip-genius.vercel.app',
   ],
-  CACHE_DURATION: 300 // Cache in seconds
+  CACHE_DURATION: 300, // Cache in seconds
 }
 
 // Validate required environment variables
 const REQUIRED_ENV_VARS = [
   'KV_REST_API_URL',
   'KV_REST_API_READ_ONLY_TOKEN',
-  'KV_DEFAULT_KEY'
+  'KV_DEFAULT_KEY',
 ]
 
-export default async function handler (req, res) {
+export default async function handler(req, res) {
   // Set basic headers
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('Cache-Control', `public, s-maxage=${CONFIG.CACHE_DURATION}`)
 
   // CORS handling
   const origin = req.headers.origin
-  if (
-    origin &&
-    CONFIG.ALLOWED_ORIGINS.some(allowed => origin.includes(allowed))
-  ) {
+  if (origin && CONFIG.ALLOWED_ORIGINS.some((allowed) => origin.includes(allowed))) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Access-Control-Allow-Methods', 'GET')
   }
 
   // Quick returns for non-GET requests
   if (req.method === 'OPTIONS') return res.status(200).end()
-  if (req.method !== 'GET')
-    return res.status(405).json({ error: 'Method not allowed' })
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   try {
     // Check for required environment variables
-    const missingVars = REQUIRED_ENV_VARS.filter(
-      varName => !process.env[varName]
-    )
+    const missingVars = REQUIRED_ENV_VARS.filter((varName) => !process.env[varName])
     if (missingVars.length > 0) {
       console.error('Missing required environment variables:', missingVars)
       return res.status(500).json({
@@ -50,7 +44,7 @@ export default async function handler (req, res) {
         details:
           process.env.NODE_ENV === 'development'
             ? `Missing environment variables: ${missingVars.join(', ')}`
-            : 'Server configuration error'
+            : 'Server configuration error',
       })
     }
 
@@ -61,8 +55,8 @@ export default async function handler (req, res) {
       }`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.KV_REST_API_READ_ONLY_TOKEN}`
-        }
+          Authorization: `Bearer ${process.env.KV_REST_API_READ_ONLY_TOKEN}`,
+        },
       }
     )
 
@@ -73,7 +67,7 @@ export default async function handler (req, res) {
           response.status === 404
             ? 'No predictions found'
             : 'Failed to fetch predictions',
-        details: await response.text()
+        details: await response.text(),
       })
     }
 
@@ -85,9 +79,7 @@ export default async function handler (req, res) {
     return res.status(500).json({
       error: 'Internal server error',
       details:
-        process.env.NODE_ENV === 'development'
-          ? error.message
-          : 'Unexpected error'
+        process.env.NODE_ENV === 'development' ? error.message : 'Unexpected error',
     })
   }
 }

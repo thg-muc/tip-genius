@@ -48,7 +48,7 @@ So far, the following LLM families have been successfully tested with Tip Genius
 
 ### Backend
 
-- Python 3.11+ for prediction generation
+- Python 3.12+ for prediction generation
 - Lightweight LLM integration via direct API calls (no heavy LLM libraries required)
 - Fuzzy team name matching for logo association
 - GitHub Actions for automation
@@ -74,6 +74,52 @@ This lightweight approach ensures:
 - Faster deployment
 - Better performance
 
+## Development Tools
+
+The project uses modern Python and frontend development tools for code quality and consistency:
+
+### Python Development
+
+- **uv**: Ultra-fast Python package manager replacing pip/conda
+- **ruff**: Fast Python linter and formatter (replaces black, isort, pylint)
+- **pyright**: Static type checker with standard strictness mode
+- **pre-commit**: Git hooks for automated quality checks
+
+### Frontend Development
+
+- **prettier**: Code formatter for JavaScript, CSS, JSON, and YAML files
+- **Tailwind CSS**: Utility-first CSS framework for styling
+
+### Quality Assurance
+
+- **Pre-commit hooks**: Automated checks for:
+  - Python linting and formatting (ruff)
+  - Type checking (pyright)
+  - Frontend formatting (prettier)
+  - Conventional commit message validation
+  - File quality checks (trailing whitespace, YAML syntax)
+
+### Development Commands
+
+```bash
+# Install dependencies
+uv install
+
+# Run Python linting and formatting
+uv run ruff check --fix src/
+uv run ruff format src/
+
+# Run type checking
+uv run pyright src/
+
+# Format frontend files
+npx prettier --write "public/**/*.{js,css,json}"
+
+# Install pre-commit hooks
+uv run pre-commit install
+uv run pre-commit install --hook-type commit-msg
+```
+
 ## Vercel Setup
 
 Tip Genius is designed to run completely on Vercel's free tier:
@@ -96,7 +142,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- Python 3.12 or higher
 - Vercel CLI
 - Node.js and npm (latest LTS version)
 - Vercel account and KV store setup
@@ -105,61 +151,58 @@ Tip Genius is designed to run completely on Vercel's free tier:
 
 1. Clone the repository:
 
-    ```bash
-    git clone https://github.com/thg-muc/tip-genius.git
-    cd tip-genius
-    ```
+   ```bash
+   git clone https://github.com/thg-muc/tip-genius.git
+   cd tip-genius
+   ```
 
-2. Set up Python environment (using conda):
+2. Set up Python environment using uv:
 
-    ```bash
-    conda env create -f conda.yaml
-    conda activate tip-genius
-    ```
+   ```bash
+   # Install uv (fast Python package manager)
+   curl -LsSf https://astral.sh/uv/install.sh | sh
 
-3. Install dependencies:
+   # Install project dependencies
+   uv install
+   ```
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+3. Install Vercel CLI and login:
 
-4. Install Vercel CLI and login:
+   ```bash
+   npm i -g vercel
+   vercel login
+   ```
 
-    ```bash
-    npm i -g vercel
-    vercel login
-    ```
+4. Configure environment variables:
 
-5. Configure environment variables:
+   Create a `.env.local` file in the project root with the following variables:
 
-    Create a `.env.local` file in the project root with the following variables:
+   ```bash
+   # API Keys for Odds Data
+   ODDS_API_KEY=your_odds_api_key
 
-    ```bash
-    # API Keys for Odds Data
-    ODDS_API_KEY=your_odds_api_key
+   # API Keys for LLM Providers
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   DEEPINFRA_API_KEY=your_deepinfra_api_key
+   DEEPSEEK_API_KEY=your_deepseek_api_key
+   GOOGLE_API_KEY=your_google_api_key
+   MISTRAL_API_KEY=your_mistral_api_key
+   OPENAI_API_KEY=your_openai_api_key
 
-    # API Keys for LLM Providers
-    ANTHROPIC_API_KEY=your_anthropic_api_key
-    DEEPINFRA_API_KEY=your_deepinfra_api_key
-    DEEPSEEK_API_KEY=your_deepseek_api_key
-    GOOGLE_API_KEY=your_google_api_key
-    MISTRAL_API_KEY=your_mistral_api_key
-    OPENAI_API_KEY=your_openai_api_key
+   # Vercel KV (Redis) Configuration
+   KV_REST_API_TOKEN=your_vercel_kv_token
+   KV_REST_API_URL=your_vercel_kv_url
+   ```
 
-    # Vercel KV (Redis) Configuration
-    KV_REST_API_TOKEN=your_vercel_kv_token
-    KV_REST_API_URL=your_vercel_kv_url
-    ```
-
-    For deployment, these variables should be added to Github Secrets and Vercel Environment Variables.
+   For deployment, these variables should be added to Github Secrets and Vercel Environment Variables.
 
 ### Running Locally
 
 1. Start the development server:
 
-    ```bash
-    vercel dev
-    ```
+   ```bash
+   vercel dev
+   ```
 
 2. Open <http://localhost:3000> in your browser
 
