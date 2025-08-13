@@ -39,15 +39,6 @@ repos:
           - style
           - test
 
-  # Local personal validation (not shared with team)
-  - repo: local
-    hooks:
-      - id: personal-commit-validation
-        name: personal keyword validation
-        entry: .git/hooks/commit-msg-local
-        language: script
-        stages: [commit-msg]
-
   # Standard pre-commit hooks for file quality
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
