@@ -203,7 +203,7 @@ class LLMManager:
                 "system_instruction": {"parts": {"text": self.system_prompt}},
             }
 
-        # Other providers (OpenAI compatible: Mistral, etc.)
+        # Other providers (OpenAI and compatible: Mistral, etc.)
         else:
             url = f"{self.base_url}/{self.operation}"
             headers["authorization"] = f"Bearer {self.api_key}"
