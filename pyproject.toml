@@ -1,3 +1,10 @@
+[project]
+name = "Tip-Genius"
+version = "1.0.0"
+description = "AI-powered soccer match predictions with a modern, responsive web interface."
+readme = "README.md"
+requires-python = ">= 3.12, < 3.13"
+
 [tool.isort]
 profile = "black"
 line_length = 88
