@@ -6,8 +6,8 @@ on:
   # Only run on pushes to non-main branches
   push:
     branches:
-      - '**'        # Include all branches
-      - '!main'     # Exclude main branch
+      - '**' # Include all branches
+      - '!main' # Exclude main branch
 
 permissions:
   contents: write
@@ -17,14 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Generate new version
         run: |
           VERSION=$(date '+%y%m%d%H%M')
           BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "{ \"version\": \"$VERSION\", \"buildDate\": \"$BUILD_DATE\" }" > public/version.json
           echo "Generated version: $VERSION"
-          
+
       - name: Commit version update
         run: |
           git config --local user.email "action@github.com"

@@ -13,49 +13,63 @@ jobs:
   update-predictions:
     runs-on: ubuntu-latest
     environment: PRODUCTION
-    
+
     steps:
-    # Check out the repository code
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # Check out the repository code
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # Set up Python environment with caching for faster execution
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'  # Enable pip caching for faster dependency installation
+      # Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-    # Install project dependencies from requirements.txt
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      # Install uv for fast dependency management
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
 
-    # Run the main prediction script with required environment variables
-    - name: Run prediction update
-      env:
-        # API keys for odds data
-        ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-        # API keys for LLM providers
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
-        DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
-        # Vercel KV storage credentials
-        KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
-        KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
-        # Debug Configuration 
-        DEBUG_MODE: ${{ vars.DEBUG_MODE }}
-        DEBUG_PROCESS_LIMIT: ${{ vars.DEBUG_PROCESS_LIMIT }}
-      working-directory: src/tip_genius
-      run: python -m tip_genius
+      # Install project dependencies using uv
+      - name: Install dependencies
+        run: uv install
 
-    # Handle and report any errors that occur during execution
-    - name: Handle errors
-      if: failure()
-      run: |
-        echo "Prediction update failed. Check the logs for details."
-        exit 1
+      # Run quality checks before deployment
+      - name: Run ruff linting
+        run: uv run ruff check src/
+
+      - name: Run ruff formatting check
+        run: uv run ruff format --check src/
+
+      - name: Run pyright type checking
+        run: uv run pyright src/
+
+      - name: Check frontend code formatting
+        run: npx prettier --check "public/**/*.{js,css,json}"
+
+      # Run the main prediction script with required environment variables
+      - name: Run prediction update
+        env:
+          # API keys for odds data
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          # API keys for LLM providers
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          # Vercel KV storage credentials
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          # Debug Configuration
+          DEBUG_MODE: ${{ vars.DEBUG_MODE }}
+          DEBUG_PROCESS_LIMIT: ${{ vars.DEBUG_PROCESS_LIMIT }}
+        working-directory: src/tip_genius
+        run: python -m tip_genius
+
+      # Handle and report any errors that occur during execution
+      - name: Handle errors
+        if: failure()
+        run: |
+          echo "Prediction update failed. Check the logs for details."
+          exit 1
