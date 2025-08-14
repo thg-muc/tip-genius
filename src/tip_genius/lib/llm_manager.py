@@ -10,13 +10,14 @@
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
 import yaml
 from lib.llm_prompts import Prompt
 
-LLM_CONFIG_FILE = os.path.join("cfg", "llm_config.yaml")
+LLM_CONFIG_FILE = Path("cfg") / "llm_config.yaml"
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ class LLMManager:
                 super().__init__(message)
 
         try:
-            with open(LLM_CONFIG_FILE, encoding="utf-8") as f:
+            with LLM_CONFIG_FILE.open(encoding="utf-8") as f:
                 self.config = yaml.safe_load(f)[self.provider]
         except FileNotFoundError as exc:
             logger.exception("Config file not found: %s", LLM_CONFIG_FILE)
@@ -203,7 +204,7 @@ class LLMManager:
                 "system_instruction": {"parts": {"text": self.system_prompt}},
             }
 
-        # Other providers (OpenAI compatible: Mistral, etc.)
+        # Other providers (OpenAI and compatible: Mistral, etc.)
         else:
             url = f"{self.base_url}/{self.operation}"
             headers["authorization"] = f"Bearer {self.api_key}"

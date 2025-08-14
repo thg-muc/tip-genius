@@ -3,30 +3,30 @@
 @tailwind utilities;
 
 /* Light mode styles */
-body { 
-    /* Gradient background for light theme */
-    background-image: linear-gradient(to bottom right, #f0f4f8, #d9e2ec);
-    /* Initial state for fade-in animation */
-    opacity: 0;
-    /* Smooth fade-in transition */
-    transition: opacity 0.4s ease-in;
+body {
+  /* Gradient background for light theme */
+  background-image: linear-gradient(to bottom right, #f0f4f8, #d9e2ec);
+  /* Initial state for fade-in animation */
+  opacity: 0;
+  /* Smooth fade-in transition */
+  transition: opacity 0.4s ease-in;
 }
 
 /* Dark mode gradient */
 @media (prefers-color-scheme: dark) {
-    body { 
-        background-image: linear-gradient(to bottom right, #1a1a1a, #2d2d2d); 
-    }
+  body {
+    background-image: linear-gradient(to bottom right, #1a1a1a, #2d2d2d);
+  }
 }
 
 /* Animation class for content fade-in */
 body.loaded {
-    opacity: 1;
+  opacity: 1;
 }
 
 /* Smooth scrolling behavior for the entire page */
-html { 
-    scroll-behavior: smooth; 
+html {
+  scroll-behavior: smooth;
 }
 
 /* Card flip styles */
@@ -56,7 +56,8 @@ html {
   transform: rotateY(180deg);
 }
 
-.card-front, .card-back {
+.card-front,
+.card-back {
   width: 100%;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
@@ -74,11 +75,12 @@ html {
 
 /* Fix for Safari and iOS */
 @supports (-webkit-touch-callout: none) {
-  .card-front, .card-back {
+  .card-front,
+  .card-back {
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
   }
-  
+
   .card-front {
     z-index: 2;
     /* When flipped, hide the front */
@@ -86,7 +88,7 @@ html {
       z-index: 0;
     }
   }
-  
+
   .card-back {
     z-index: 1;
     transform: rotateY(180deg);

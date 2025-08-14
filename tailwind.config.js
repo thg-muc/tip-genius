@@ -6,11 +6,11 @@ module.exports = {
       colors: {
         dark: {
           DEFAULT: '#1a1a1a',
-          card: '#2d2d2d'
-        }
-      }
-    }
+          card: '#2d2d2d',
+        },
+      },
+    },
   },
   darkMode: 'media',
-  plugins: []
+  plugins: [],
 }

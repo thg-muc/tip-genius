@@ -22,7 +22,7 @@ const STATIC_ASSETS = [
   '/images/llm-logos/',
 
   // External dependencies
-  'https://cdn.tailwindcss.com'
+  'https://cdn.tailwindcss.com',
 ]
 
 // Cache patterns for image directories
@@ -30,26 +30,26 @@ const IMAGE_PATTERNS = [
   new RegExp('^/images/icon-.*\\.png$'),
   new RegExp('^/images/leagues/.*\\.png$'),
   new RegExp('^/images/llm-logos/.*\\.png$'),
-  new RegExp('^/images/teams/.*\\.png$')
+  new RegExp('^/images/teams/.*\\.png$'),
 ]
 
 // Function to clean up old caches
 const deleteOldCaches = async () => {
   const cacheKeepList = [CACHE_NAME, DYNAMIC_CACHE]
   const keyList = await caches.keys()
-  const cachesToDelete = keyList.filter(key => !cacheKeepList.includes(key))
-  return Promise.all(cachesToDelete.map(key => caches.delete(key)))
+  const cachesToDelete = keyList.filter((key) => !cacheKeepList.includes(key))
+  return Promise.all(cachesToDelete.map((key) => caches.delete(key)))
 }
 
 // Helper function to handle API responses
-async function handleApiResponse (request, response) {
+async function handleApiResponse(request, response) {
   const cache = await caches.open(DYNAMIC_CACHE)
   await cache.put(request, response.clone())
   return response
 }
 
 // Helper function to handle offline fallback
-async function handleOfflineFallback (request) {
+async function handleOfflineFallback(request) {
   // If it's a page navigation, return index.html
   if (request.mode === 'navigate') {
     const cache = await caches.open(CACHE_NAME)
@@ -60,7 +60,7 @@ async function handleOfflineFallback (request) {
 }
 
 // Install event - cache static assets and fetch version
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       try {
@@ -94,7 +94,7 @@ self.addEventListener('install', event => {
 })
 
 // Activate event - cleanup old caches and claim clients
-self.addEventListener('activate', event => {
+self.addEventListener('activate', (event) => {
   // Ensure cache names are set if activate happens without install
   if (!CACHE_NAME || !DYNAMIC_CACHE) {
     CACHE_NAME = `tip-genius-static-${VERSION}`
@@ -105,13 +105,13 @@ self.addEventListener('activate', event => {
     Promise.all([
       deleteOldCaches(),
       // Force new service worker to take control immediately
-      self.clients.claim()
+      self.clients.claim(),
     ])
   )
 })
 
 // Fetch event - handle requests
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   // Ensure cache names are set
   if (!CACHE_NAME || !DYNAMIC_CACHE) {
     CACHE_NAME = `tip-genius-static-${VERSION}`
@@ -176,7 +176,7 @@ self.addEventListener('fetch', event => {
     (async () => {
       try {
         // Check if request matches any image pattern
-        const isImageRequest = IMAGE_PATTERNS.some(pattern =>
+        const isImageRequest = IMAGE_PATTERNS.some((pattern) =>
           pattern.test(url.pathname)
         )
 
@@ -184,7 +184,7 @@ self.addEventListener('fetch', event => {
         const cachedResponse = await caches.match(request)
 
         // Start fetch in background for cache update
-        const networkResponsePromise = fetch(request).then(async response => {
+        const networkResponsePromise = fetch(request).then(async (response) => {
           // Cache the new version if it's a successful response
           if (
             response.status === 200 &&

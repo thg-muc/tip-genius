@@ -6,33 +6,33 @@ const LLM_PROVIDERS = [
   {
     value: 'Mistral-Large',
     label: 'Mistral Large 2',
-    logo: `/images/llm-logos/Mistral.png`
+    logo: `/images/llm-logos/Mistral.png`,
   },
   {
     value: 'Google-Gemini-Flash',
     label: 'Gemini 2.5 Flash',
-    logo: `/images/llm-logos/Google.png`
+    logo: `/images/llm-logos/Google.png`,
   },
   {
     value: 'OpenAI-GPT-Mini',
     label: 'GPT-4o Mini',
-    logo: `/images/llm-logos/OpenAI.png`
+    logo: `/images/llm-logos/OpenAI.png`,
   },
   {
     value: 'Deepseek-Chat',
     label: 'DeepSeek V3',
-    logo: `/images/llm-logos/DeepSeek.png`
+    logo: `/images/llm-logos/DeepSeek.png`,
   },
   {
     value: 'Meta-Llama-70b',
     label: 'Llama 3 70b',
-    logo: `/images/llm-logos/Meta.png`
+    logo: `/images/llm-logos/Meta.png`,
   },
   {
     value: 'Microsoft-Phi-Medium',
     label: 'Phi 4 Medium',
-    logo: `/images/llm-logos/Microsoft.png`
-  }
+    logo: `/images/llm-logos/Microsoft.png`,
+  },
   // {
   //     value: 'Anthropic-Claude-Haiku',
   //     label: 'Claude Haiku',
@@ -56,7 +56,7 @@ let cachedLeagueData = null
 let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM_PROVIDER
 
 // Initialize the application
-async function initializeApp () {
+async function initializeApp() {
   try {
     // Fetch the version information first
     const response = await fetch('/version.json?v=' + Date.now())
@@ -75,20 +75,17 @@ async function initializeApp () {
       'http://localhost:3000',
       'http://localhost:5000',
       'http://localhost:8000',
-      'https://tip-genius.vercel.app'
+      'https://tip-genius.vercel.app',
     ],
     CACHE_DURATION: 3600, // Cache in seconds (1 hour)
     DYNAMIC_CACHE: `tip-genius-dynamic-${appVersion}`,
     DEFAULT_LLM: DEFAULT_LLM_PROVIDER,
-    API_URL: '/api/predictions'
+    API_URL: '/api/predictions',
   }
 
   // Try to restore cached data if it's still valid
   const storedData = localStorage.getItem('cachedLeagueData')
-  if (
-    storedData &&
-    Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000
-  ) {
+  if (storedData && Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000) {
     try {
       cachedLeagueData = JSON.parse(storedData)
     } catch (e) {
@@ -109,7 +106,7 @@ async function initializeApp () {
 }
 
 // Function to update the active LLM logo in the header
-function updateActiveLlmLogo () {
+function updateActiveLlmLogo() {
   const activeLlmLogo = document.getElementById('activeLlmLogo')
   if (!activeLlmLogo) return
 
@@ -117,8 +114,7 @@ function updateActiveLlmLogo () {
   activeLlmLogo.innerHTML = ''
 
   // Find the current LLM provider config
-  const provider =
-    LLM_PROVIDERS.find(p => p.value === currentLLM) || LLM_PROVIDERS[0]
+  const provider = LLM_PROVIDERS.find((p) => p.value === currentLLM) || LLM_PROVIDERS[0]
 
   // Create the image element
   const img = document.createElement('img')
@@ -143,46 +139,44 @@ function updateActiveLlmLogo () {
 }
 
 // Error handling functions
-const showError = msg => {
+const showError = (msg) => {
   const err = document.getElementById('error-message')
   err.querySelector('span').textContent = msg
   err.classList.remove('hidden')
 }
 
-const hideError = () =>
-  document.getElementById('error-message').classList.add('hidden')
+const hideError = () => document.getElementById('error-message').classList.add('hidden')
 
 // API response parser
-const parseApiResponse = data =>
+const parseApiResponse = (data) =>
   data.result ? JSON.parse(data.result) : Array.isArray(data) ? data : null
 
 // Date utility functions
-const formatDate = dateString => {
+const formatDate = (dateString) => {
   const [date, time] = dateString.split(' ')
   const [day, month, year] = date.split('.')
   return new Date(`${year}-${month}-${day}T${time}`)
 }
 
-const formatDateForDisplay = date =>
+const formatDateForDisplay = (date) =>
   date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
-    day: 'numeric'
+    day: 'numeric',
   })
 
-const formatTimeForDisplay = date =>
+const formatTimeForDisplay = (date) =>
   date.toLocaleTimeString('en-US', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false
+    hour12: false,
   })
 
 // Check if logo is available
-const hasLogo = logo =>
-  logo && logo !== 'null' && logo !== 'None' && logo !== ''
+const hasLogo = (logo) => logo && logo !== 'null' && logo !== 'None' && logo !== ''
 
 // UI match element creation
-function createMatchElement (match) {
+function createMatchElement(match) {
   const matchDate = formatDate(match.commence_time_str)
 
   // Create the card container with flip functionality
@@ -280,7 +274,7 @@ function createMatchElement (match) {
 }
 
 // Match rendering function
-function renderMatches (matches, timestamp) {
+function renderMatches(matches, timestamp) {
   const container = document.getElementById('matches-container')
   container.innerHTML = ''
 
@@ -307,9 +301,12 @@ function renderMatches (matches, timestamp) {
       const element = elements[i]
       void element.offsetWidth
       element.style.transition = 'opacity 300ms ease-in-out'
-      setTimeout(() => {
-        element.style.opacity = '1'
-      }, 80 * (i - elementsToShow))
+      setTimeout(
+        () => {
+          element.style.opacity = '1'
+        },
+        80 * (i - elementsToShow)
+      )
     }
   }
 
@@ -317,8 +314,8 @@ function renderMatches (matches, timestamp) {
   let preloadPromise = Promise.resolve()
   if (firstMatchLogos.length > 0) {
     preloadPromise = Promise.all(
-      firstMatchLogos.map(url => {
-        return new Promise(resolve => {
+      firstMatchLogos.map((url) => {
+        return new Promise((resolve) => {
           const img = new Image()
           img.onload = resolve
           img.onerror = resolve
@@ -333,7 +330,7 @@ function renderMatches (matches, timestamp) {
   const elements = []
 
   // Process date headers and matches
-  matches.forEach(match => {
+  matches.forEach((match) => {
     const matchDate = formatDate(match.commence_time_str)
     const formattedDate = formatDateForDisplay(matchDate)
 
@@ -445,23 +442,21 @@ function renderMatches (matches, timestamp) {
   preloadPromise.then(showFirstElements)
 }
 
-function preloadTeamLogos (leagues) {
+function preloadTeamLogos(leagues) {
   if (!leagues || leagues.length === 0) return
 
   // Get current league (first one or from localStorage)
-  const currentLeague =
-    localStorage.getItem('lastUsedLeague') || leagues[0].name
-  const currentLeagueData = leagues.find(l => l.name === currentLeague)
+  const currentLeague = localStorage.getItem('lastUsedLeague') || leagues[0].name
+  const currentLeagueData = leagues.find((l) => l.name === currentLeague)
 
   // Step 1: Create a prioritized logo queue system
   const priorityLogos = new Set() // Current league logos (high priority)
   const backgroundLogos = new Set() // Other leagues' logos (low priority)
 
   // Categorize logos into priority groups
-  leagues.forEach(league => {
-    league.matches.forEach(match => {
-      const logoSet =
-        league.name === currentLeague ? priorityLogos : backgroundLogos
+  leagues.forEach((league) => {
+    league.matches.forEach((match) => {
+      const logoSet = league.name === currentLeague ? priorityLogos : backgroundLogos
 
       if (hasLogo(match.home_logo)) logoSet.add(match.home_logo)
       if (hasLogo(match.away_logo)) logoSet.add(match.away_logo)
@@ -482,7 +477,7 @@ function preloadTeamLogos (leagues) {
 }
 
 // Helper function to preload a set of logos
-function preloadLogoSet (logoSet, isHighPriority = false) {
+function preloadLogoSet(logoSet, isHighPriority = false) {
   // Convert to array for batch processing if needed
   const logos = Array.from(logoSet)
 
@@ -491,13 +486,13 @@ function preloadLogoSet (logoSet, isHighPriority = false) {
     Object.keys(
       window.performance
         .getEntriesByType('resource')
-        .filter(r => r.name.includes('/images/teams/'))
-        .map(r => r.name.split('/').pop())
+        .filter((r) => r.name.includes('/images/teams/'))
+        .map((r) => r.name.split('/').pop())
     )
   )
 
   // Process logos
-  logos.forEach(logoName => {
+  logos.forEach((logoName) => {
     // Skip if we have evidence it's already cached
     if (cachedLogos.has(logoName)) return
 
@@ -515,16 +510,15 @@ function preloadLogoSet (logoSet, isHighPriority = false) {
 }
 
 // Helper function to schedule background loading in batches
-function scheduleBackgroundLoading (logos) {
+function scheduleBackgroundLoading(logos) {
   // Use requestIdleCallback if available, otherwise use a deferred timeout
-  const scheduleWhenIdle =
-    window.requestIdleCallback || (fn => setTimeout(fn, 1000)) // Fallback with 1 second delay
+  const scheduleWhenIdle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1000)) // Fallback with 1 second delay
 
   // Process in smaller batches to avoid locking up the browser
   const BATCH_SIZE = 10
   let currentIndex = 0
 
-  function loadNextBatch (deadline) {
+  function loadNextBatch(deadline) {
     // Check if we're done
     if (currentIndex >= logos.length) return
 
@@ -557,7 +551,7 @@ function scheduleBackgroundLoading (logos) {
 }
 
 // League Data processing and rendering
-async function loadLeagueData (leagueName) {
+async function loadLeagueData(leagueName) {
   console.log('Loading data for league:', leagueName)
   hideError()
   const container = document.getElementById('matches-container')
@@ -565,12 +559,11 @@ async function loadLeagueData (leagueName) {
 
   try {
     const leagues = cachedLeagueData || (await fetchLeagueData())
-    const leagueData = leagues.find(l => l.name === leagueName)
+    const leagueData = leagues.find((l) => l.name === leagueName)
 
     if (leagueData) {
       const sortedMatches = [...leagueData.matches].sort(
-        (a, b) =>
-          formatDate(a.commence_time_str) - formatDate(b.commence_time_str)
+        (a, b) => formatDate(a.commence_time_str) - formatDate(b.commence_time_str)
       )
 
       renderMatches(sortedMatches, leagueData.timestamp)
@@ -592,7 +585,7 @@ async function loadLeagueData (leagueName) {
 }
 
 // API data fetching (with caching)
-async function fetchLeagueData () {
+async function fetchLeagueData() {
   console.log('Fetching data using LLM Provider:', currentLLM)
   const currentTime = Date.now()
   const timeDiff = currentTime - lastFetchTime
@@ -640,8 +633,8 @@ async function fetchLeagueData () {
 }
 
 // Tab creation and handling
-function setActiveTab (tabId) {
-  document.querySelectorAll('button[id^="tab-"]').forEach(tab => {
+function setActiveTab(tabId) {
+  document.querySelectorAll('button[id^="tab-"]').forEach((tab) => {
     const isActive = tab.id === tabId
 
     // First, remove all state-related classes
@@ -700,7 +693,7 @@ function setActiveTab (tabId) {
 }
 
 // Create Tab helper function
-function createTab (league, index, totalLeagues) {
+function createTab(league, index, totalLeagues) {
   const button = document.createElement('button')
   const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
   button.id = tabId
@@ -724,7 +717,7 @@ function createTab (league, index, totalLeagues) {
     'relative',
     'border-b-2',
     'border-transparent',
-    'tracking-wide'
+    'tracking-wide',
   ]
 
   // Conditional rounding classes
@@ -743,7 +736,7 @@ function createTab (league, index, totalLeagues) {
     'hover:text-sky-700',
     'dark:hover:text-sky-400',
     'hover:shadow-md',
-    'hover:-translate-y-0.5'
+    'hover:-translate-y-0.5',
   ]
 
   button.className = [...baseClasses, ...stateClasses].join(' ')
@@ -751,7 +744,7 @@ function createTab (league, index, totalLeagues) {
 }
 
 // Create Tabs function
-async function createTabs () {
+async function createTabs() {
   const tabContainer = document.getElementById('league-tabs')
 
   try {
@@ -767,7 +760,7 @@ async function createTabs () {
       const img = document.createElement('img')
       const logoFilename = league.name
         .split(' - ')
-        .map(part => part.replace(/\s+/g, ''))
+        .map((part) => part.replace(/\s+/g, ''))
         .join('-')
       img.src = `/images/leagues/${logoFilename}.png`
       img.alt = `${league.name} logo`
@@ -805,14 +798,12 @@ async function createTabs () {
     })
 
     // Initialize with default or stored league
-    if (!currentLeague || !leagues.some(l => l.name === currentLeague)) {
+    if (!currentLeague || !leagues.some((l) => l.name === currentLeague)) {
       currentLeague = leagues[0].name
     }
 
     // Make sure to set active tab before loading data
-    const activeTabId = `tab-${currentLeague
-      .replace(/\s+/g, '-')
-      .toLowerCase()}`
+    const activeTabId = `tab-${currentLeague.replace(/\s+/g, '-').toLowerCase()}`
     setActiveTab(activeTabId)
     loadLeagueData(currentLeague)
   } catch (error) {
@@ -845,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
   providersContainer.innerHTML = ''
 
   // Generate radio buttons for LLM providers
-  LLM_PROVIDERS.forEach(provider => {
+  LLM_PROVIDERS.forEach((provider) => {
     const label = document.createElement('label')
     label.className =
       'flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card p-2 rounded-lg transition-colors'
@@ -894,17 +885,14 @@ document.addEventListener('DOMContentLoaded', () => {
     dropdownMenu.classList.toggle('hidden')
   })
 
-  document.addEventListener('click', event => {
-    if (
-      !menuButton.contains(event.target) &&
-      !dropdownMenu.contains(event.target)
-    ) {
+  document.addEventListener('click', (event) => {
+    if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
       dropdownMenu.classList.add('hidden')
     }
   })
 
-  llmRadios.forEach(radio => {
-    radio.addEventListener('change', async event => {
+  llmRadios.forEach((radio) => {
+    radio.addEventListener('change', async (event) => {
       currentLLM = event.target.value
       localStorage.setItem('lastUsedLLM', currentLLM)
 
@@ -935,7 +923,7 @@ const scrollToTop = () => {
   return false
 }
 
-const scrollToAbout = event => {
+const scrollToAbout = (event) => {
   event.preventDefault()
   document.getElementById('about').scrollIntoView({ behavior: 'smooth' })
 }
@@ -957,7 +945,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/sw.js')
-      .then(registration => {
+      .then((registration) => {
         console.log('ServiceWorker registration successful')
 
         // Check for updates to the Service Worker
@@ -966,10 +954,7 @@ if ('serviceWorker' in navigator) {
 
           newWorker.addEventListener('statechange', () => {
             // When the service worker is activated
-            if (
-              newWorker.state === 'activated' &&
-              navigator.serviceWorker.controller
-            ) {
+            if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
               // Show update notification if not first install
               const notification = document.createElement('div')
               notification.className =
@@ -990,16 +975,14 @@ if ('serviceWorker' in navigator) {
               `
 
               document.body.appendChild(notification)
-              document
-                .getElementById('update-btn')
-                .addEventListener('click', () => {
-                  window.location.reload()
-                })
+              document.getElementById('update-btn').addEventListener('click', () => {
+                window.location.reload()
+              })
             }
           })
         })
       })
-      .catch(err => {
+      .catch((err) => {
         console.error('ServiceWorker registration failed:', err)
         // Continue without service worker functionality
       })
