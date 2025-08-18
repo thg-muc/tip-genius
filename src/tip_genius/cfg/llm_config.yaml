@@ -82,3 +82,18 @@ anthropic-claude-haiku:
     temperature: 0.0
     stream: false
     max_tokens: 8192
+
+openrouter-grok:
+  api_key_env_name: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  operation: chat/completions
+  model: x-ai/grok-3-mini
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 8192
+    response_format:
+      type: 'json_object'
+  optional_headers:
+    HTTP-Referer: 'https://tip-genius.vercel.app'
+    X-Title: 'Tip Genius'

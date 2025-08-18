@@ -116,6 +116,7 @@ class LLMManager:
         self.operation = self.config["operation"]
         self.model = self.config["model"]
         self.kwargs: dict[str, Any] = self.config.get("kwargs", {})
+        self.optional_headers: dict[str, str] = self.config.get("optional_headers", {})
         self.rate_limit: float = self.config.get(
             "api_rate_limit",
             0,
@@ -184,6 +185,9 @@ class LLMManager:
             headers["x-api-key"] = self.api_key
             headers["anthropic-version"] = "2023-06-01"
 
+            # Add optional headers if specified
+            headers.update(self.optional_headers)
+
             data = {
                 "model": self.model,
                 "system": self.system_prompt,
@@ -198,16 +202,22 @@ class LLMManager:
             url = f"{self.base_url}/models/{self.model}:{self.operation}"
             headers["x-goog-api-key"] = self.api_key
 
+            # Add optional headers if specified
+            headers.update(self.optional_headers)
+
             data = {
                 "contents": [{"parts": [{"text": user_prompt}]}],
                 "generationConfig": {**llm_kwargs},
                 "system_instruction": {"parts": {"text": self.system_prompt}},
             }
 
-        # Other providers (OpenAI and compatible: Mistral, etc.)
+        # OpenAI and compatible: Mistral, OpenRouter, etc.
         else:
             url = f"{self.base_url}/{self.operation}"
             headers["authorization"] = f"Bearer {self.api_key}"
+
+            # Add optional headers if specified (e.g., for OpenRouter)
+            headers.update(self.optional_headers)
 
             data = {
                 "model": self.model,
