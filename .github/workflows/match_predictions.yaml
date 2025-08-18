@@ -31,7 +31,7 @@ jobs:
 
       # Install project dependencies using uv
       - name: Install dependencies
-        run: uv install
+        run: uv sync --group dev
 
       # Run quality checks before deployment
       - name: Run ruff linting
