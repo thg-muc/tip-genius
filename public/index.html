@@ -9,8 +9,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Tip Genius">
     <!-- Theme color meta tags for light/dark mode -->
-    <meta name="theme-color" content="#f0f4f8" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
     <!-- SEO meta tags -->
     <meta name="description" content="Making you look like a soccer expert, one AI tip at a time...">
     <meta name="mobile-web-app-capable" content="yes">
@@ -24,9 +24,9 @@
     <link rel="stylesheet" href="/css/tailwind.css">
 </head>
 
-<body class="font-sans flex flex-col min-h-screen">
+<body class="font-sans flex flex-col min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 dark:from-slate-700 dark:to-blue-900">
     <!-- Sticky header with navigation -->
-    <header class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10 mb-3 sm:mb-6">
+    <header class="bg-white bg-opacity-80 dark:bg-slate-900 dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10 mb-3 sm:mb-6">
         <div class="container mx-auto px-4 py-2 sm:py-3">
             <div class="flex items-center justify-between">
                 <!-- Logo and site title -->
@@ -41,10 +41,10 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">
                             <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
                         </svg>
-                    </a>                    
+                    </a>
                     <!-- LLM Logo Button (replaces Hamburger button) -->
                     <div class="relative">
-                        <button id="menuButton" class="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-dark-card rounded-lg transition duration-200" aria-label="Select LLM provider">
+                        <button id="menuButton" class="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition duration-200" aria-label="Select LLM provider">
                             <!-- LLM Logo will be inserted here dynamically -->
                             <div id="activeLlmLogo" class="w-6 h-6 flex items-center justify-center">
                                 <!-- Fallback to a loading indicator until the logo is loaded -->
@@ -58,9 +58,9 @@
 
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                             </svg>
-                        </button>                        
+                        </button>
                         <!-- Dropdown menu -->
-                        <div id="dropdownMenu" class="hidden absolute right-0 mt-2 w-60 bg-white dark:bg-dark-card rounded-lg shadow-lg z-50">
+                        <div id="dropdownMenu" class="hidden absolute right-0 mt-2 w-60 bg-gray-50 dark:bg-gray-800 rounded-lg shadow-lg z-50">
                             <div class="p-6">
                                 <h3 class="text-base font-bold text-gray-800 dark:text-gray-200 mb-3">LLM Provider</h3>
                                 <div id="llm-providers" class="space-y-3">
@@ -73,14 +73,14 @@
             </div>
         </div>
     </header>
-    
+
     <main class="container mx-auto px-4 py-1 flex-grow">
         <!-- Page title and description -->
         <div class="text-center mb-4 sm:mb-8">
             <h1 class="text-2xl sm:text-4xl font-bold tracking-wide text-gray-800 dark:text-gray-200 mb-2">The Tip Genius</h1>
             <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-xl italic">Making you look like a soccer expert, one AI tip at a time...</p>
         </div>
-        
+
         <!-- Dynamic content containers -->
         <div class="flex justify-center mb-4">
             <div class="inline-flex shadow-md rounded-md overflow-hidden">
@@ -88,14 +88,14 @@
             </div>
         </div>
         <!-- Error message container -->
-        <div id="error-message" class="hidden bg-gray-100 dark:bg-dark-card border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8 max-w-2xl mx-auto" role="alert">
+        <div id="error-message" class="hidden bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8 max-w-2xl mx-auto" role="alert">
             <span class="block sm:inline text-sm sm:text-base"></span>
         </div>
         <div id="matches-container" class="space-y-2 sm:space-y-3"></div>
 
     </main>
 
-    <footer class="bg-white bg-opacity-80 dark:bg-dark-card dark:bg-opacity-80 backdrop-blur-md mt-2">
+    <footer class="bg-white bg-opacity-80 dark:bg-slate-900 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 pt-3 sm:pt-4 pb-4">
             <!-- About section -->
             <div id="about" class="mb-5 sm:mb-6 text-center">

@@ -195,7 +195,7 @@ function createMatchElement(match) {
   // Create the front of the card (using existing design)
   const cardFront = document.createElement('div')
   cardFront.className =
-    'card-front bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl'
+    'card-front bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl'
 
   // Keep the exact same front content structure
   cardFront.innerHTML = `
@@ -243,7 +243,7 @@ function createMatchElement(match) {
   // Create the back of the card (with reasoning)
   const cardBack = document.createElement('div')
   cardBack.className =
-    'card-back bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200'
+    'card-back bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200'
 
   // Minimalist design for the back with monospace font and scrollability
   cardBack.innerHTML = `
@@ -306,9 +306,12 @@ function renderMatches(matches, timestamp) {
       const element = elements[i]
       void element.offsetWidth
       element.style.transition = 'opacity 300ms ease-in-out'
-      setTimeout(() => {
-        element.style.opacity = '1'
-      }, 80 * (i - elementsToShow))
+      setTimeout(
+        () => {
+          element.style.opacity = '1'
+        },
+        80 * (i - elementsToShow)
+      )
     }
   }
 
@@ -356,7 +359,7 @@ function renderMatches(matches, timestamp) {
     // Add the inner HTML for the match card
     matchElement.innerHTML = `
       <div class="card-inner">
-        <div class="card-front bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl">
+        <div class="card-front bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl">
           <div class="flex flex-col">
             <div class="flex items-center justify-between mb-1">
               <div class="flex items-center text-xs sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
@@ -397,7 +400,7 @@ function renderMatches(matches, timestamp) {
             </div>
           </div>
         </div>
-        <div class="card-back bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200">
+        <div class="card-back bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200">
           <div class="flex flex-col h-full">
             <div class="overflow-y-auto pr-1 -mr-1">
               <p class="font-mono text-[0.65rem] sm:text-base text-gray-700 dark:text-gray-300 py-1">
@@ -643,18 +646,18 @@ function setActiveTab(tabId) {
     tab.classList.remove(
       // Inactive state classes
       'bg-gray-100',
-      'dark:bg-dark',
+      'dark:bg-slate-900',
       'text-gray-500',
       'dark:text-gray-400',
       'font-normal',
       'hover:bg-gray-50',
-      'dark:hover:bg-dark',
+      'dark:hover:bg-gray-800',
       'hover:text-sky-700',
       'dark:hover:text-sky-400',
       'border-transparent',
       // Active state classes
       'bg-white',
-      'dark:bg-dark-card',
+      'dark:bg-gray-800',
       'text-sky-700',
       'dark:text-sky-400',
       'font-semibold',
@@ -668,7 +671,7 @@ function setActiveTab(tabId) {
     if (isActive) {
       tab.classList.add(
         'bg-white',
-        'dark:bg-dark-card',
+        'dark:bg-gray-800',
         'text-sky-700',
         'dark:text-sky-400',
         'font-semibold',
@@ -680,12 +683,12 @@ function setActiveTab(tabId) {
     } else {
       tab.classList.add(
         'bg-gray-100',
-        'dark:bg-dark',
+        'dark:bg-slate-900',
         'text-gray-500',
         'dark:text-gray-400',
         'font-normal',
         'hover:bg-gray-50',
-        'dark:hover:bg-dark',
+        'dark:hover:bg-gray-800',
         'hover:text-sky-700',
         'dark:hover:text-sky-400',
         'border-transparent'
@@ -729,12 +732,12 @@ function createTab(league, index, totalLeagues) {
   // Interactive state classes
   const stateClasses = [
     'bg-gray-100',
-    'dark:bg-dark',
+    'dark:bg-slate-900',
     'text-gray-500',
     'dark:text-gray-400',
     'font-normal',
     'hover:bg-gray-50',
-    'dark:hover:bg-dark',
+    'dark:hover:bg-gray-800',
     'hover:text-sky-700',
     'dark:hover:text-sky-400',
     'hover:shadow-md',
@@ -841,7 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
   LLM_PROVIDERS.forEach((provider) => {
     const label = document.createElement('label')
     label.className =
-      'flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card p-2 rounded-lg transition-colors'
+      'flex items-center space-x-3 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-2 rounded-lg transition-colors'
 
     const input = document.createElement('input')
     input.type = 'radio'
@@ -960,7 +963,7 @@ if ('serviceWorker' in navigator) {
               // Show update notification if not first install
               const notification = document.createElement('div')
               notification.className =
-                'fixed bottom-4 right-4 bg-white dark:bg-dark-card rounded-lg shadow-lg p-4 z-50 flex items-center'
+                'fixed bottom-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 z-50 flex items-center'
               notification.innerHTML = `
                 <div class="mr-3 text-sky-700 dark:text-sky-400">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
