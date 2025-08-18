@@ -33,6 +33,11 @@ const LLM_PROVIDERS = [
     label: 'Phi 4 Medium',
     logo: `/images/llm-logos/Microsoft.png`,
   },
+  {
+    value: 'Openrouter-Grok',
+    label: 'Grok 3 Mini',
+    logo: `/images/llm-logos/xAI.png`,
+  },
   // {
   //     value: 'Anthropic-Claude-Haiku',
   //     label: 'Claude Haiku',
@@ -301,12 +306,9 @@ function renderMatches(matches, timestamp) {
       const element = elements[i]
       void element.offsetWidth
       element.style.transition = 'opacity 300ms ease-in-out'
-      setTimeout(
-        () => {
-          element.style.opacity = '1'
-        },
-        80 * (i - elementsToShow)
-      )
+      setTimeout(() => {
+        element.style.opacity = '1'
+      }, 80 * (i - elementsToShow))
     }
   }
 
