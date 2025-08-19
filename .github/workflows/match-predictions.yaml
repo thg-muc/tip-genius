@@ -64,7 +64,7 @@ jobs:
           # Debug Configuration
           DEBUG_MODE: ${{ vars.DEBUG_MODE }}
           DEBUG_PROCESS_LIMIT: ${{ vars.DEBUG_PROCESS_LIMIT }}
-        run: uv run python -m tip_genius
+        run: uv run python src/tip_genius/tip_genius.py
 
       # Handle and report any errors that occur during execution
       - name: Handle errors
