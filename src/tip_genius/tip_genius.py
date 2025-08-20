@@ -136,11 +136,7 @@ class TipGenius:
 
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
-        logging.basicConfig(
-            level=log_level,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+        self._setup_logging(log_level)
 
         # Log initialization
         if self.debug:
@@ -151,6 +147,59 @@ class TipGenius:
             api_pipeline.__class__.__name__,
         )
         logger.debug("Project root directory: %s", self.project_root)
+
+    def _setup_logging(self, log_level: int) -> None:
+        """Set up logging configuration with optional file output in debug mode."""
+        # Create custom formatter
+        formatter = logging.Formatter(
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+        # Get root logger and clear existing handlers
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+        root_logger.handlers.clear()
+
+        # Always add console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+
+        # Add file handler when debug mode is enabled
+        if self.debug:
+            # Check if file logging is enabled (defaults to True in debug mode)
+            enable_file_logging = (
+                os.environ.get("DEBUG_LOG_FILE", "TRUE").upper() == "TRUE"
+            )
+
+            if enable_file_logging:
+                # Create logs directory if it doesn't exist
+                log_dir = Path(os.environ.get("DEBUG_LOG_DIR", "logs"))
+                log_dir.mkdir(exist_ok=True)
+
+                # Generate timestamp-based filename
+                timestamp = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
+                log_filename = log_dir / f"tip_genius_{timestamp}.log"
+
+                # Create file handler with more detailed formatting
+                file_handler = logging.FileHandler(log_filename, encoding="utf-8")
+                file_handler.setLevel(logging.DEBUG)  # Always DEBUG level for file
+
+                # More detailed formatter for files
+                file_formatter = logging.Formatter(
+                    fmt=(
+                        "%(asctime)s - %(name)s:%(lineno)d - %(levelname)s - "
+                        "%(funcName)s - %(message)s"
+                    ),
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                )
+                file_handler.setFormatter(file_formatter)
+                root_logger.addHandler(file_handler)
+
+                # Log the file location
+                logger.info("Debug logging enabled - log file: %s", log_filename)
 
     def store_llm_data(
         self,

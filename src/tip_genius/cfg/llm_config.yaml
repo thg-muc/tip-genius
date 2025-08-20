@@ -7,7 +7,7 @@
 # 3. Add the API key to GitHub Secrets in the repository settings
 
 mistral-medium:
-  api_rate_limit: 20 # requests per minute for free tier
+  api_rate_limit: 8 # requests per minute for free tier
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
@@ -72,10 +72,8 @@ openai-gpt-mini:
   operation: chat/completions
   model: gpt-5-mini
   kwargs:
-    seed: 42
-    temperature: 0.0
     stream: false
-    max_tokens: 8192
+    max_completion_tokens: 8192
     response_format:
       type: 'json_object'
 
