@@ -15,6 +15,7 @@ llm_provider_options:
   - Meta-Llama-70b
   - Microsoft-Phi-Medium
   - OpenAI-GPT-Mini
+  - OpenRouter-Grok
   # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
 
 # LLM Prompt Option - Include Point Scoring System

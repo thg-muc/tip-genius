@@ -1,4 +1,10 @@
 # LLM Configuration File
+#
+# IMPORTANT: After adding a new LLM configuration here, you must also:
+# 1. Enable it in tip_genius_config.yaml under 'llm_provider_options'
+# 2. Add the API key to GitHub workflow (.github/workflows/match-predictions.yaml)
+#    Example: PROVIDER_API_KEY: ${{ secrets.PROVIDER_API_KEY }}
+# 3. Add the API key to GitHub Secrets in the repository settings
 
 mistral-large:
   api_rate_limit: 20 # requests per minute for free tier
