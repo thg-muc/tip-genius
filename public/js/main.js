@@ -712,12 +712,13 @@ function createTab(league, index, totalLeagues) {
     'px-2',
     'sm:px-4',
     'py-3',
-    'sm:py-2',
+    'sm:py-4',
     'text-[10px]',
     'sm:text-lg',
     'focus:z-10',
-    'min-w-[90px]',
-    'sm:w-[180px]',
+    'flex-1',
+    'sm:flex-none',
+    'sm:w-56',
     'transition-all',
     'duration-300',
     'relative',
@@ -872,7 +873,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add the label text
     const span = document.createElement('span')
-    span.className = 'text-sm sm:text-base text-gray-700 dark:text-gray-300'
+    span.className =
+      'text-sm sm:text-base text-gray-700 dark:text-gray-300 sm:whitespace-nowrap'
     span.textContent = provider.label
 
     // Assemble all pieces
