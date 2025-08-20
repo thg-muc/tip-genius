@@ -14,15 +14,15 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
 
 Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The project uses a lightweight approach with direct API calls instead of individual LLM libraries, minimizing dependencies while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
 
-So far, the following LLM families have been successfully tested with Tip Genius:
+So far, the following LLM models have been successfully tested with Tip Genius:
 
-- Mistral AI (Free API available)
-- Google Gemini (Free API available)
-- DeepSeek Chat
-- OpenAI ChatGPT
-- Meta Llama (via DeepInfra)
-- Microsoft Phi (via DeepInfra)
-- xAI Grok (via OpenRouter)
+- **Mistral Medium 3** (Free API available)
+- **Google Gemini 2.5 Flash** (Free API available)
+- **DeepSeek Chat**
+- **OpenAI GPT-5 Mini**
+- **Meta Llama 4 Maverick** (via DeepInfra)
+- **Microsoft Phi-4** (via DeepInfra)
+- **xAI Grok 3 Mini** (via OpenRouter)
 
 Issues with some LLMs:
 
@@ -201,6 +201,13 @@ Tip Genius is designed to run completely on Vercel's free tier:
    # Vercel KV (Redis) Configuration
    KV_REST_API_TOKEN=your_vercel_kv_token
    KV_REST_API_URL=your_vercel_kv_url
+   KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
+   KV_DEFAULT_KEY=Match_Predictions_Mistral-Medium_FourPointsScoring_named_with-info
+
+   # Debug Options (Optional)
+   DEBUG_MODE=TRUE
+   DEBUG_LOG_FILE=TRUE
+   DEBUG_LOG_DIR=logs
    ```
 
    For deployment, these variables should be added to Github Secrets and Vercel Environment Variables.
