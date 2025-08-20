@@ -717,14 +717,17 @@ function createTab(league, index, totalLeagues) {
     'sm:text-lg',
     'focus:z-10',
     'flex-1',
-    'sm:flex-none',
-    'sm:w-56',
+    'lg:flex-none',
+    'lg:w-56',
+    'sm:min-w-32',
+    'sm:max-w-64',
     'transition-all',
     'duration-300',
     'relative',
     'border-b-2',
     'border-transparent',
     'tracking-wide',
+    'font-mono',
   ]
 
   // Conditional rounding classes
