@@ -6,12 +6,12 @@
 #    Example: PROVIDER_API_KEY: ${{ secrets.PROVIDER_API_KEY }}
 # 3. Add the API key to GitHub Secrets in the repository settings
 
-mistral-large:
+mistral-medium:
   api_rate_limit: 20 # requests per minute for free tier
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
-  model: mistral-large-latest
+  model: mistral-medium-latest
   kwargs:
     temperature: 0.0
     stream: false
@@ -54,11 +54,11 @@ microsoft-phi-medium:
     response_format:
       type: 'json_object'
 
-meta-llama-70b:
+meta-llama-400b:
   api_key_env_name: DEEPINFRA_API_KEY
   base_url: https://api.deepinfra.com/v1
   operation: openai/chat/completions
-  model: meta-llama/Llama-3.3-70B-Instruct-Turbo
+  model: meta-llama/Llama-4-Maverick-17B-128E-Instruct-Turbo
   kwargs:
     temperature: 0.0
     stream: false
@@ -70,7 +70,7 @@ openai-gpt-mini:
   api_key_env_name: OPENAI_API_KEY
   base_url: https://api.openai.com/v1
   operation: chat/completions
-  model: gpt-4o-mini
+  model: gpt-5-mini
   kwargs:
     seed: 42
     temperature: 0.0

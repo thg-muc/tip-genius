@@ -4,8 +4,8 @@
 // LLM provider configuration with PNG logos
 const LLM_PROVIDERS = [
   {
-    value: 'Mistral-Large',
-    label: 'Mistral Large 2',
+    value: 'Mistral-Medium',
+    label: 'Mistral Medium 3',
     logo: `/images/llm-logos/Mistral.png`,
   },
   {
@@ -15,7 +15,7 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'OpenAI-GPT-Mini',
-    label: 'GPT-4o Mini',
+    label: 'GPT-5 Mini',
     logo: `/images/llm-logos/OpenAI.png`,
   },
   {
@@ -24,8 +24,8 @@ const LLM_PROVIDERS = [
     logo: `/images/llm-logos/DeepSeek.png`,
   },
   {
-    value: 'Meta-Llama-70b',
-    label: 'Llama 3 70b',
+    value: 'Meta-Llama-400b',
+    label: 'Llama 4 Maverick',
     logo: `/images/llm-logos/Meta.png`,
   },
   {
