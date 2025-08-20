@@ -1,4 +1,4 @@
-# ⚽️ Tip Genius
+# ⚽️ Tip Genius V3.0.0
 
 AI-powered soccer match predictions with a modern, responsive web interface.
 
@@ -22,7 +22,11 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - OpenAI ChatGPT
 - Meta Llama (via DeepInfra)
 - Microsoft Phi (via DeepInfra)
-- Anthropic Claude (Claude 3.5 does not have a native JSON mode, so it sometimes struggles to generate valid predictions)
+- xAI Grok (via OpenRouter)
+
+Issues with some LLMs:
+
+- Anthropic Claude (does not have a native JSON mode yet, sometimes struggles to generate valid prediction output)
 
 ## Features
 
@@ -35,6 +39,7 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - 🎨 Modern UI with Tailwind CSS
 - 🔄 Automated prediction updates via GitHub Actions
 - 💾 Efficient data storage using Vercel KV (Redis)
+- 🔢 Build-time version generation for deployment tracking
 
 ## Tech Stack
 
@@ -103,7 +108,10 @@ The project uses modern Python and frontend development tools for code quality a
 
 ```bash
 # Install dependencies
-uv install
+uv sync
+
+# Install development dependencies
+uv sync --group dev
 
 # Run Python linting and formatting
 uv run ruff check --fix src/
@@ -163,7 +171,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
    curl -LsSf https://astral.sh/uv/install.sh | sh
 
    # Install project dependencies
-   uv install
+   uv sync
    ```
 
 3. Install Vercel CLI and login:
@@ -188,6 +196,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
    GOOGLE_API_KEY=your_google_api_key
    MISTRAL_API_KEY=your_mistral_api_key
    OPENAI_API_KEY=your_openai_api_key
+   OPENROUTER_API_KEY=your_openrouter_api_key
 
    # Vercel KV (Redis) Configuration
    KV_REST_API_TOKEN=your_vercel_kv_token
