@@ -845,7 +845,7 @@ document.addEventListener('DOMContentLoaded', () => {
   LLM_PROVIDERS.forEach((provider) => {
     const label = document.createElement('label')
     label.className =
-      'flex items-center space-x-3 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700 p-2 rounded-lg transition-colors'
+      'flex items-center space-x-3 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors'
 
     const input = document.createElement('input')
     input.type = 'radio'
