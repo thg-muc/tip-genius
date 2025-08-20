@@ -305,7 +305,7 @@ function renderMatches(matches, timestamp) {
     for (let i = elementsToShow; i < elements.length; i++) {
       const element = elements[i]
       void element.offsetWidth
-      element.style.transition = 'opacity 300ms ease-in-out'
+      element.style.transition = 'opacity 280ms ease-in-out'
       setTimeout(
         () => {
           element.style.opacity = '1'
