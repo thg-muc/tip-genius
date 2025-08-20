@@ -72,7 +72,6 @@ ignore = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
-ignore-var-parameters = true
 
 [tool.ruff.lint.mccabe]
 max-complexity = 15

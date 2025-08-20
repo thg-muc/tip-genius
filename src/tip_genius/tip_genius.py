@@ -612,7 +612,7 @@ class TipGenius:
 
                         # Keep valid predictions only
                         valid_matches = (
-                            data_processed.filter(pl.col("validity"))
+                            data_processed.filter(pl.col("validity").cast(pl.Boolean))
                             .select(
                                 [
                                     "commence_time_str",
