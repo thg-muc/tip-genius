@@ -373,11 +373,21 @@ class TipGenius:
                             elapsed = time.time() - start_time
                             llm.wait_for_rate_limit(elapsed)
 
+                        # Calculate temperature for retry attempts
+                        # Only increase temp for models starting at 0.0
+                        # Models with fixed temp (GPT-5) should not be modified
+                        base_temperature = llm.kwargs.get("temperature", 0.0)
+                        if base_temperature == 0.0:
+                            # Model supports temperature variation, increase on retries
+                            temperature = base_temperature + 0.2 * attempt
+                        else:
+                            # Model has fixed temperature, don't modify it
+                            temperature = base_temperature
+
                         response = literal_eval(
                             llm.get_prediction(
                                 user_prompt=data[i, "odds_summary"],
-                                temperature=llm.kwargs.get("temperature", 0.0)
-                                + 0.2 * attempt,
+                                temperature=temperature,
                             ),
                         )
                         last_response = response
