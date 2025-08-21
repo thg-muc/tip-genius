@@ -4,11 +4,6 @@
 // LLM provider configuration with PNG logos
 const LLM_PROVIDERS = [
   {
-    value: 'Mistral-Medium',
-    label: 'Mistral Medium 3',
-    logo: `/images/llm-logos/Mistral.png`,
-  },
-  {
     value: 'Google-Gemini-Flash',
     label: 'Gemini 2.5 Flash',
     logo: `/images/llm-logos/Google.png`,
@@ -17,6 +12,11 @@ const LLM_PROVIDERS = [
     value: 'OpenAI-GPT-Mini',
     label: 'GPT-5 Mini',
     logo: `/images/llm-logos/OpenAI.png`,
+  },
+  {
+    value: 'Mistral-Medium',
+    label: 'Mistral Medium 3',
+    logo: `/images/llm-logos/Mistral.png`,
   },
   {
     value: 'Deepseek-Chat',
