@@ -229,7 +229,9 @@ Tip Genius is designed to run completely on Vercel's free tier:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License with Commons Clause**. Free for personal, educational, and research use. Commercial use requires permission.
+
+See the [LICENSE](LICENSE) file for complete terms.
 
 ## Links
 
