@@ -134,13 +134,14 @@ class TipGenius:
         self.storage_manager = None
         self.logo_matcher = None
 
+        # Initialize warning/error tracking for GitHub Actions visibility
+        self.warnings = []
+        self.errors = []
+        self.failed_combinations = []
+
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
-        logging.basicConfig(
-            level=log_level,
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+        self._setup_logging(log_level)
 
         # Log initialization
         if self.debug:
@@ -151,6 +152,138 @@ class TipGenius:
             api_pipeline.__class__.__name__,
         )
         logger.debug("Project root directory: %s", self.project_root)
+
+    def add_warning(self, message: str, context: str | None = None) -> None:
+        """Add a warning to the tracking system."""
+        warning_entry = {
+            "message": message,
+            "context": context,
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+        }
+        self.warnings.append(warning_entry)
+
+    def add_error(self, message: str, context: str | None = None) -> None:
+        """Add an error to the tracking system."""
+        error_entry = {
+            "message": message,
+            "context": context,
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+        }
+        self.errors.append(error_entry)
+
+    def add_failed_combination(self, sport: str, provider: str, error_msg: str) -> None:
+        """Add a failed sport/provider combination to tracking."""
+        failed_entry = {
+            "sport": sport,
+            "provider": provider,
+            "error": error_msg,
+            "timestamp": datetime.now(tz=UTC).isoformat(),
+        }
+        self.failed_combinations.append(failed_entry)
+
+    def _log_workflow_summary(self) -> None:
+        """Log a summary of warnings, errors, and failed combinations."""
+        total_warnings = len(self.warnings)
+        total_errors = len(self.errors)
+        total_failed_combinations = len(self.failed_combinations)
+
+        if total_warnings > 0 or total_errors > 0 or total_failed_combinations > 0:
+            logger.warning(
+                "Workflow completed with issues: %d warnings, %d errors, %d failed"
+                " combinations",
+                total_warnings,
+                total_errors,
+                total_failed_combinations,
+            )
+
+            # Log failed combinations
+            if self.failed_combinations:
+                logger.warning("Failed combinations:")
+                for failed in self.failed_combinations:
+                    logger.warning(
+                        "- %s / %s: %s",
+                        failed["sport"],
+                        failed["provider"],
+                        failed["error"],
+                    )
+        else:
+            logger.info("All workflows completed successfully.")
+
+        # Output GitHub Actions annotations if running in cloud environment
+        if is_cloud_environment():
+            self._output_github_annotations()
+
+    def _output_github_annotations(self) -> None:
+        """Output GitHub Actions workflow annotations for warnings and errors."""
+        # Output warnings as GitHub Actions warnings
+        for warning in self.warnings:
+            context = f" [{warning['context']}]" if warning["context"] else ""
+            print(f"::warning::{warning['message']}{context}")
+
+        # Output errors as GitHub Actions errors
+        for error in self.errors:
+            context = f" [{error['context']}]" if error["context"] else ""
+            print(f"::error::{error['message']}{context}")
+
+        # Output failed combinations as notices
+        for failed in self.failed_combinations:
+            print(
+                f"::notice::Failed combination "
+                f"{failed['sport']}/{failed['provider']}: {failed['error']}"
+            )
+
+    def _setup_logging(self, log_level: int) -> None:
+        """Set up logging configuration with optional file output in debug mode."""
+        # Create custom formatter
+        formatter = logging.Formatter(
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+
+        # Get root logger and clear existing handlers
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+        root_logger.handlers.clear()
+
+        # Always add console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+
+        # Add file handler when debug mode is enabled
+        if self.debug:
+            # Check if file logging is enabled (defaults to True in debug mode)
+            enable_file_logging = (
+                os.environ.get("DEBUG_LOG_FILE", "TRUE").upper() == "TRUE"
+            )
+
+            if enable_file_logging:
+                # Create logs directory if it doesn't exist
+                log_dir = Path(os.environ.get("DEBUG_LOG_DIR", "logs"))
+                log_dir.mkdir(exist_ok=True)
+
+                # Generate timestamp-based filename
+                timestamp = datetime.now(UTC).strftime("%Y-%m-%d_%H-%M-%S")
+                log_filename = log_dir / f"tip_genius_{timestamp}.log"
+
+                # Create file handler with more detailed formatting
+                file_handler = logging.FileHandler(log_filename, encoding="utf-8")
+                file_handler.setLevel(logging.DEBUG)  # Always DEBUG level for file
+
+                # More detailed formatter for files
+                file_formatter = logging.Formatter(
+                    fmt=(
+                        "%(asctime)s - %(name)s:%(lineno)d - %(levelname)s - "
+                        "%(funcName)s - %(message)s"
+                    ),
+                    datefmt="%Y-%m-%d %H:%M:%S",
+                )
+                file_handler.setFormatter(file_formatter)
+                root_logger.addHandler(file_handler)
+
+                # Log the file location
+                logger.info("Debug logging enabled - log file: %s", log_filename)
 
     def store_llm_data(
         self,
@@ -324,11 +457,21 @@ class TipGenius:
                             elapsed = time.time() - start_time
                             llm.wait_for_rate_limit(elapsed)
 
+                        # Calculate temperature for retry attempts
+                        # Only increase temp for models starting at 0.0
+                        # Models with fixed temp (GPT-5) should not be modified
+                        base_temperature = llm.kwargs.get("temperature", 0.0)
+                        if base_temperature == 0.0:
+                            # Model supports temperature variation, increase on retries
+                            temperature = base_temperature + 0.2 * attempt
+                        else:
+                            # Model has fixed temperature, don't modify it
+                            temperature = base_temperature
+
                         response = literal_eval(
                             llm.get_prediction(
                                 user_prompt=data[i, "odds_summary"],
-                                temperature=llm.kwargs.get("temperature", 0.0)
-                                + 0.2 * attempt,
+                                temperature=temperature,
                             ),
                         )
                         last_response = response
@@ -355,19 +498,19 @@ class TipGenius:
                         continue  # Try next attempt even if this one fails
 
                 if not last_response:
-                    logger.warning(
-                        "No valid LLM response for row %d, skipping...",
-                        i + 1,
-                    )
+                    warning_msg = f"No valid LLM response for row {i + 1}, skipping..."
+                    logger.warning(warning_msg)
+                    self.add_warning(warning_msg, f"LLM processing for {llm_provider}")
                     continue
 
                 if attempt == self.llm_attempts - 1:
-                    logger.warning(
-                        "Using inconsistent prediction for row %d after %d failed "
-                        "attempts: %s",
-                        i + 1,
-                        self.llm_attempts,
-                        last_response,
+                    warning_msg = (
+                        f"Using inconsistent prediction for row {i + 1} after "
+                        f"{self.llm_attempts} failed attempts: {last_response}"
+                    )
+                    logger.warning(warning_msg)
+                    self.add_warning(
+                        warning_msg, f"LLM consistency check for {llm_provider}"
                     )
 
                 # Update DataFrame with prediction results
@@ -378,7 +521,9 @@ class TipGenius:
                 data[i, "validity"] = validate_prediction(last_response)
 
             except Exception as e:
-                logger.warning("Failed to process row %d: %s", i + 1, str(e))
+                warning_msg = f"Failed to process row {i + 1}: {e!s}"
+                logger.warning(warning_msg)
+                self.add_warning(warning_msg, f"Row processing for {llm_provider}")
                 continue  # Skip this row but continue processing others
 
         return data
@@ -534,7 +679,6 @@ class TipGenius:
                 nr_total_combinations,
             )
             processed_count = 0
-            failed_combinations = []
 
             for sport in sports_list:
                 logger.info("Retrieving odds for sport: %s", sport)
@@ -579,10 +723,9 @@ class TipGenius:
                         )
 
                         if not api_result:
+                            error_msg = "No valid API data"
                             logger.warning("No valid API data, skipping combination...")
-                            failed_combinations.append(
-                                (sport, llm_provider, "No valid API data"),
-                            )
+                            self.add_failed_combination(sport, llm_provider, error_msg)
                             continue
 
                         data = self.api_pipeline.process_api_data(
@@ -612,7 +755,7 @@ class TipGenius:
 
                         # Keep valid predictions only
                         valid_matches = (
-                            data_processed.filter(pl.col("validity"))
+                            data_processed.filter(pl.col("validity").cast(pl.Boolean))
                             .select(
                                 [
                                     "commence_time_str",
@@ -639,12 +782,12 @@ class TipGenius:
                             )
 
                     except Exception as e:
-                        logger.exception(
-                            "Failed to process combination: %s, %s",
-                            sport,
-                            llm_provider,
+                        error_msg = (
+                            f"Failed to process combination: {sport}, {llm_provider}"
                         )
-                        failed_combinations.append((sport, llm_provider, str(e)))
+                        logger.exception(error_msg)
+                        self.add_error(error_msg, "Workflow processing")
+                        self.add_failed_combination(sport, llm_provider, str(e))
                         continue  # Skip this combination but continue with others
 
             # Export results even if some combinations failed
@@ -662,16 +805,8 @@ class TipGenius:
                     if is_cloud_environment():
                         sys.exit(1)
 
-            # Log summary of failures
-            if failed_combinations:
-                logger.warning(
-                    "Workflow completed with %d failed combinations:",
-                    len(failed_combinations),
-                )
-                for sport, provider, error in failed_combinations:
-                    logger.warning("- %s / %s: %s", sport, provider, error)
-            else:
-                logger.info("All workflows completed successfully.")
+            # Log summary of failures using tracking system
+            self._log_workflow_summary()
 
         except Exception:
             logger.exception("Critical workflow error: %s")

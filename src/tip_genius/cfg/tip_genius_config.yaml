@@ -9,13 +9,14 @@ sports_list:
 
 # List of LLM Providers to use for Tips generation
 llm_provider_options:
-  - Mistral-Large
   - Google-Gemini-Flash
   - Deepseek-Chat
-  - Meta-Llama-70b
+  - Mistral-Medium
+  - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenAI-GPT-Mini
-  # - Anthropic-Claude-Haiku # No Json Mode: sometimes issues JSON response
+  - OpenRouter-Grok
+  # - Anthropic-Claude-Haiku # No Json Mode: sometimes has issues with JSON output
 
 # LLM Prompt Option - Include Point Scoring System
 prediction_type_options:

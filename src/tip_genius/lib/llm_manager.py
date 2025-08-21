@@ -116,6 +116,7 @@ class LLMManager:
         self.operation = self.config["operation"]
         self.model = self.config["model"]
         self.kwargs: dict[str, Any] = self.config.get("kwargs", {})
+        self.optional_headers: dict[str, str] = self.config.get("optional_headers", {})
         self.rate_limit: float = self.config.get(
             "api_rate_limit",
             0,
@@ -184,6 +185,9 @@ class LLMManager:
             headers["x-api-key"] = self.api_key
             headers["anthropic-version"] = "2023-06-01"
 
+            # Add optional headers if specified
+            headers.update(self.optional_headers)
+
             data = {
                 "model": self.model,
                 "system": self.system_prompt,
@@ -198,16 +202,22 @@ class LLMManager:
             url = f"{self.base_url}/models/{self.model}:{self.operation}"
             headers["x-goog-api-key"] = self.api_key
 
+            # Add optional headers if specified
+            headers.update(self.optional_headers)
+
             data = {
                 "contents": [{"parts": [{"text": user_prompt}]}],
                 "generationConfig": {**llm_kwargs},
                 "system_instruction": {"parts": {"text": self.system_prompt}},
             }
 
-        # Other providers (OpenAI and compatible: Mistral, etc.)
+        # OpenAI and compatible: Mistral, OpenRouter, etc.
         else:
             url = f"{self.base_url}/{self.operation}"
             headers["authorization"] = f"Bearer {self.api_key}"
+
+            # Add optional headers if specified (e.g., for OpenRouter)
+            headers.update(self.optional_headers)
 
             data = {
                 "model": self.model,
@@ -218,6 +228,36 @@ class LLMManager:
                 **llm_kwargs,
             }
 
+        # Pre-request debug logging
+        logger.debug(
+            "Making LLM request: provider=%s, model=%s, url=%s, timeout=%s",
+            self.provider,
+            self.model,
+            url,
+            timeout,
+        )
+
+        # Log sanitized request payload structure (avoid logging sensitive data)
+        sanitized_data = {
+            "model": data.get("model"),
+            "message_count": len(data.get("messages", []))
+            if "messages" in data
+            else len(data.get("contents", [])),
+            "temperature": data.get("temperature")
+            or data.get("generationConfig", {}).get("temperature"),
+            "max_tokens": (
+                data.get("max_tokens")
+                or data.get("max_completion_tokens")
+                or data.get("generationConfig", {}).get("maxOutputTokens")
+            ),
+            "stream": data.get("stream"),
+            "response_format": bool(
+                data.get("response_format")
+                or data.get("generationConfig", {}).get("response_mime_type")
+            ),
+        }
+        logger.debug("Request payload structure: %s", sanitized_data)
+
         try:
             # Send the prompt to the LLM to receive the full response
             response = requests.post(
@@ -226,6 +266,26 @@ class LLMManager:
                 json=data,
                 timeout=timeout,
             )
+
+            # Log response timing
+            elapsed_time = time.time() - start_time
+            logger.debug("LLM request completed in %.2f seconds", elapsed_time)
+
+            # Log rate limit information if available
+            rate_limit_headers = {
+                "remaining": response.headers.get("x-ratelimit-remaining")
+                or response.headers.get("x-ratelimit-requests-remaining"),
+                "limit": response.headers.get("x-ratelimit-limit")
+                or response.headers.get("x-ratelimit-requests-limit"),
+                "reset": response.headers.get("x-ratelimit-reset")
+                or response.headers.get("x-ratelimit-reset-requests"),
+            }
+            if any(rate_limit_headers.values()):
+                logger.debug(
+                    "Rate limit status: %s",
+                    {k: v for k, v in rate_limit_headers.items() if v},
+                )
+
             # Check the response and raise an exception if it's not successful
             response.raise_for_status()
 
@@ -247,8 +307,53 @@ class LLMManager:
             if self.rate_limit > 0:  # Check for rate limit
                 self.wait_for_rate_limit(request_duration=time.time() - start_time)
 
-        except requests.RequestException:
-            logger.exception("Failed to get prediction: %s")
+        except requests.HTTPError as e:
+            # Capture detailed error information from the API response
+            elapsed_time = time.time() - start_time
+            error_details = {
+                "provider": self.provider,
+                "model": self.model,
+                "status_code": e.response.status_code,
+                "url": str(e.response.url),
+                "elapsed_time": f"{elapsed_time:.2f}s",
+                "response_length": len(e.response.text) if e.response.text else 0,
+            }
+
+            # Try to parse JSON error response for more details
+            try:
+                error_json = e.response.json()
+                if "error" in error_json:
+                    error_info = error_json["error"]
+                    error_details.update(
+                        {
+                            "error_type": error_info.get("type"),
+                            "error_code": error_info.get("code"),
+                            "error_message": error_info.get("message"),
+                            "error_param": error_info.get("param"),
+                        }
+                    )
+                else:
+                    error_details["error_response"] = error_json
+            except (ValueError, TypeError):
+                # If response is not JSON, log the raw response text (truncated)
+                error_details["error_body"] = (
+                    e.response.text[:500] if e.response.text else "No response body"
+                )
+
+            logger.error("LLM API request failed: %s", error_details)
+            raise
+        except requests.RequestException as e:
+            # Handle other request exceptions (timeouts, connection errors, etc.)
+            elapsed_time = time.time() - start_time
+            error_details = {
+                "provider": self.provider,
+                "model": self.model,
+                "url": url,
+                "elapsed_time": f"{elapsed_time:.2f}s",
+                "exception_type": type(e).__name__,
+                "exception_message": str(e),
+            }
+            logger.error("LLM request failed with exception: %s", error_details)
             raise
 
         else:

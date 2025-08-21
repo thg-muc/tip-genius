@@ -1,17 +1,23 @@
 # LLM Configuration File
+#
+# IMPORTANT: After adding a new LLM configuration here, you must also:
+# 1. Enable it in tip_genius_config.yaml under 'llm_provider_options'
+# 2. Add the API key to GitHub workflow (.github/workflows/match-predictions.yaml)
+#    Example: PROVIDER_API_KEY: ${{ secrets.PROVIDER_API_KEY }}
+# 3. Add the API key to GitHub Secrets in the repository settings
 
-mistral-large:
-  api_rate_limit: 20 # requests per minute for free tier
+mistral-medium:
+  api_rate_limit: 8 # requests per minute for free tier
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
-  model: mistral-large-latest
+  model: mistral-medium-latest
   kwargs:
     temperature: 0.0
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 deepseek-chat:
   api_key_env_name: DEEPSEEK_API_KEY
@@ -23,7 +29,7 @@ deepseek-chat:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 google-gemini-flash:
   api_rate_limit: 8 # requests per minute for free tier
@@ -46,32 +52,32 @@ microsoft-phi-medium:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
-meta-llama-70b:
+meta-llama-mid:
   api_key_env_name: DEEPINFRA_API_KEY
   base_url: https://api.deepinfra.com/v1
   operation: openai/chat/completions
-  model: meta-llama/Llama-3.3-70B-Instruct-Turbo
+  model: meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8
   kwargs:
     temperature: 0.0
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 openai-gpt-mini:
   api_key_env_name: OPENAI_API_KEY
   base_url: https://api.openai.com/v1
   operation: chat/completions
-  model: gpt-4o-mini
+  model: gpt-5-mini
   kwargs:
-    seed: 42
-    temperature: 0.0
+    temperature: 1.0 # GPT 5 only supports temperature >= 1.0
     stream: false
-    max_tokens: 8192
+    max_completion_tokens: 8192
+    reasoning_effort: low # 'minimal', 'low', 'medium', 'high'
     response_format:
-      type: 'json_object'
+      type: json_object
 
 anthropic-claude-haiku:
   api_key_env_name: ANTHROPIC_API_KEY
@@ -82,3 +88,18 @@ anthropic-claude-haiku:
     temperature: 0.0
     stream: false
     max_tokens: 8192
+
+openrouter-grok:
+  api_key_env_name: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  operation: chat/completions
+  model: x-ai/grok-3-mini
+  kwargs:
+    temperature: 0.0
+    stream: false
+    max_tokens: 8192
+    response_format:
+      type: json_object
+  optional_headers:
+    HTTP-Referer: 'https://tip-genius.vercel.app'
+    X-Title: 'Tip Genius'

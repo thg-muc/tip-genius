@@ -4,19 +4,19 @@
 // LLM provider configuration with PNG logos
 const LLM_PROVIDERS = [
   {
-    value: 'Mistral-Large',
-    label: 'Mistral Large 2',
-    logo: `/images/llm-logos/Mistral.png`,
-  },
-  {
     value: 'Google-Gemini-Flash',
     label: 'Gemini 2.5 Flash',
     logo: `/images/llm-logos/Google.png`,
   },
   {
     value: 'OpenAI-GPT-Mini',
-    label: 'GPT-4o Mini',
+    label: 'GPT-5 Mini',
     logo: `/images/llm-logos/OpenAI.png`,
+  },
+  {
+    value: 'Mistral-Medium',
+    label: 'Mistral Medium 3',
+    logo: `/images/llm-logos/Mistral.png`,
   },
   {
     value: 'Deepseek-Chat',
@@ -24,14 +24,19 @@ const LLM_PROVIDERS = [
     logo: `/images/llm-logos/DeepSeek.png`,
   },
   {
-    value: 'Meta-Llama-70b',
-    label: 'Llama 3 70b',
+    value: 'Meta-Llama-Mid',
+    label: 'Llama 4 Maverick',
     logo: `/images/llm-logos/Meta.png`,
   },
   {
     value: 'Microsoft-Phi-Medium',
     label: 'Phi 4 Medium',
     logo: `/images/llm-logos/Microsoft.png`,
+  },
+  {
+    value: 'Openrouter-Grok',
+    label: 'Grok 3 Mini',
+    logo: `/images/llm-logos/xAI.png`,
   },
   // {
   //     value: 'Anthropic-Claude-Haiku',
@@ -190,7 +195,7 @@ function createMatchElement(match) {
   // Create the front of the card (using existing design)
   const cardFront = document.createElement('div')
   cardFront.className =
-    'card-front bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl'
+    'card-front bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl'
 
   // Keep the exact same front content structure
   cardFront.innerHTML = `
@@ -238,7 +243,7 @@ function createMatchElement(match) {
   // Create the back of the card (with reasoning)
   const cardBack = document.createElement('div')
   cardBack.className =
-    'card-back bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200'
+    'card-back bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200'
 
   // Minimalist design for the back with monospace font and scrollability
   cardBack.innerHTML = `
@@ -300,7 +305,7 @@ function renderMatches(matches, timestamp) {
     for (let i = elementsToShow; i < elements.length; i++) {
       const element = elements[i]
       void element.offsetWidth
-      element.style.transition = 'opacity 300ms ease-in-out'
+      element.style.transition = 'opacity 280ms ease-in-out'
       setTimeout(
         () => {
           element.style.opacity = '1'
@@ -354,7 +359,7 @@ function renderMatches(matches, timestamp) {
     // Add the inner HTML for the match card
     matchElement.innerHTML = `
       <div class="card-inner">
-        <div class="card-front bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl">
+        <div class="card-front bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200 hover:shadow-xl">
           <div class="flex flex-col">
             <div class="flex items-center justify-between mb-1">
               <div class="flex items-center text-xs sm:text-2xl font-semibold text-gray-800 dark:text-gray-200">
@@ -395,7 +400,7 @@ function renderMatches(matches, timestamp) {
             </div>
           </div>
         </div>
-        <div class="card-back bg-white dark:bg-dark-card bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200">
+        <div class="card-back bg-white dark:bg-gray-800 bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl py-2 px-2 sm:px-4 transition-all duration-200">
           <div class="flex flex-col h-full">
             <div class="overflow-y-auto pr-1 -mr-1">
               <p class="font-mono text-[0.65rem] sm:text-base text-gray-700 dark:text-gray-300 py-1">
@@ -586,7 +591,7 @@ async function loadLeagueData(leagueName) {
 
 // API data fetching (with caching)
 async function fetchLeagueData() {
-  console.log('Fetching data using LLM Provider:', currentLLM)
+  console.log('Fetching data using Large Language Model:', currentLLM)
   const currentTime = Date.now()
   const timeDiff = currentTime - lastFetchTime
   const cacheDuration = CONFIG.CACHE_DURATION * 1000
@@ -641,18 +646,18 @@ function setActiveTab(tabId) {
     tab.classList.remove(
       // Inactive state classes
       'bg-gray-100',
-      'dark:bg-dark',
+      'dark:bg-slate-900',
       'text-gray-500',
       'dark:text-gray-400',
       'font-normal',
       'hover:bg-gray-50',
-      'dark:hover:bg-dark',
+      'dark:hover:bg-gray-700',
       'hover:text-sky-700',
       'dark:hover:text-sky-400',
       'border-transparent',
       // Active state classes
       'bg-white',
-      'dark:bg-dark-card',
+      'dark:bg-gray-800',
       'text-sky-700',
       'dark:text-sky-400',
       'font-semibold',
@@ -666,7 +671,7 @@ function setActiveTab(tabId) {
     if (isActive) {
       tab.classList.add(
         'bg-white',
-        'dark:bg-dark-card',
+        'dark:bg-gray-800',
         'text-sky-700',
         'dark:text-sky-400',
         'font-semibold',
@@ -678,12 +683,12 @@ function setActiveTab(tabId) {
     } else {
       tab.classList.add(
         'bg-gray-100',
-        'dark:bg-dark',
+        'dark:bg-slate-900',
         'text-gray-500',
         'dark:text-gray-400',
         'font-normal',
         'hover:bg-gray-50',
-        'dark:hover:bg-dark',
+        'dark:hover:bg-gray-700',
         'hover:text-sky-700',
         'dark:hover:text-sky-400',
         'border-transparent'
@@ -706,18 +711,23 @@ function createTab(league, index, totalLeagues) {
     'gap-2',
     'px-2',
     'sm:px-4',
-    'py-2',
+    'py-3',
+    'sm:py-4',
     'text-[10px]',
     'sm:text-lg',
     'focus:z-10',
-    'min-w-[90px]',
-    'sm:w-[180px]',
+    'flex-1',
+    'lg:flex-none',
+    'lg:w-56',
+    'sm:min-w-32',
+    'sm:max-w-64',
     'transition-all',
     'duration-300',
     'relative',
     'border-b-2',
     'border-transparent',
     'tracking-wide',
+    'font-mono',
   ]
 
   // Conditional rounding classes
@@ -727,12 +737,12 @@ function createTab(league, index, totalLeagues) {
   // Interactive state classes
   const stateClasses = [
     'bg-gray-100',
-    'dark:bg-dark',
+    'dark:bg-slate-900',
     'text-gray-500',
     'dark:text-gray-400',
     'font-normal',
     'hover:bg-gray-50',
-    'dark:hover:bg-dark',
+    'dark:hover:bg-gray-700',
     'hover:text-sky-700',
     'dark:hover:text-sky-400',
     'hover:shadow-md',
@@ -839,7 +849,7 @@ document.addEventListener('DOMContentLoaded', () => {
   LLM_PROVIDERS.forEach((provider) => {
     const label = document.createElement('label')
     label.className =
-      'flex items-center space-x-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-card p-2 rounded-lg transition-colors'
+      'flex items-center space-x-3 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors'
 
     const input = document.createElement('input')
     input.type = 'radio'
@@ -866,7 +876,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add the label text
     const span = document.createElement('span')
-    span.className = 'text-sm sm:text-base text-gray-700 dark:text-gray-300'
+    span.className =
+      'text-sm sm:text-base text-gray-700 dark:text-gray-300 sm:whitespace-nowrap'
     span.textContent = provider.label
 
     // Assemble all pieces
@@ -958,7 +969,7 @@ if ('serviceWorker' in navigator) {
               // Show update notification if not first install
               const notification = document.createElement('div')
               notification.className =
-                'fixed bottom-4 right-4 bg-white dark:bg-dark-card rounded-lg shadow-lg p-4 z-50 flex items-center'
+                'fixed bottom-4 right-4 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 z-50 flex items-center'
               notification.innerHTML = `
                 <div class="mr-3 text-sky-700 dark:text-sky-400">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

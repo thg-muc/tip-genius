@@ -59,6 +59,7 @@ TODO.*
 .env.local
 .env*.local
 *.local.*
+public/version.json
 
 # Node.js
 node_modules/
@@ -77,3 +78,4 @@ public/css/tailwind.css
 
 # Logs
 *.log
+logs/

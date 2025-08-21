@@ -2,21 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Light mode styles */
+/* Body fade-in animation */
 body {
-  /* Gradient background for light theme */
-  background-image: linear-gradient(to bottom right, #f0f4f8, #d9e2ec);
   /* Initial state for fade-in animation */
   opacity: 0;
   /* Smooth fade-in transition */
   transition: opacity 0.4s ease-in;
-}
-
-/* Dark mode gradient */
-@media (prefers-color-scheme: dark) {
-  body {
-    background-image: linear-gradient(to bottom right, #1a1a1a, #2d2d2d);
-  }
 }
 
 /* Animation class for content fade-in */
@@ -53,7 +44,7 @@ html {
 }
 
 .card-container.flipped .card-inner {
-  transform: rotateY(180deg);
+  transform: rotateX(180deg);
 }
 
 .card-front,
@@ -68,7 +59,7 @@ html {
   top: 0;
   left: 0;
   height: 100%;
-  transform: rotateY(180deg);
+  transform: rotateX(180deg);
   overflow-y: auto;
   max-height: 100%;
 }
@@ -91,7 +82,7 @@ html {
 
   .card-back {
     z-index: 1;
-    transform: rotateY(180deg);
+    transform: rotateX(180deg);
     /* When flipped, show the back */
     .card-container.flipped & {
       z-index: 3;

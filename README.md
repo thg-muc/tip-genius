@@ -1,4 +1,4 @@
-# ⚽️ Tip Genius
+# ⚽️ Tip Genius V3.0.0
 
 AI-powered soccer match predictions with a modern, responsive web interface.
 
@@ -14,15 +14,19 @@ Tip Genius combines the power of Large Language Models (LLMs) with real-world od
 
 Tip Genius leverages LLMs to generate match predictions by analyzing odds data and applying domain knowledge. The project uses a lightweight approach with direct API calls instead of individual LLM libraries, minimizing dependencies while maintaining robust performance. This approach ensures sustainable operation while delivering quality predictions.
 
-So far, the following LLM families have been successfully tested with Tip Genius:
+So far, the following LLM models have been successfully tested with Tip Genius:
 
-- Mistral AI (Free API available)
-- Google Gemini (Free API available)
-- DeepSeek Chat
-- OpenAI ChatGPT
-- Meta Llama (via DeepInfra)
-- Microsoft Phi (via DeepInfra)
-- Anthropic Claude (Claude 3.5 does not have a native JSON mode, so it sometimes struggles to generate valid predictions)
+- **Mistral Medium 3** (Free API available)
+- **Google Gemini 2.5 Flash** (Free API available)
+- **DeepSeek Chat**
+- **OpenAI GPT-5 Mini**
+- **Meta Llama 4 Maverick** (via DeepInfra)
+- **Microsoft Phi-4** (via DeepInfra)
+- **xAI Grok 3 Mini** (via OpenRouter)
+
+Issues with some LLMs:
+
+- Anthropic Claude (does not have a native JSON mode yet, sometimes struggles to generate valid prediction output)
 
 ## Features
 
@@ -35,6 +39,7 @@ So far, the following LLM families have been successfully tested with Tip Genius
 - 🎨 Modern UI with Tailwind CSS
 - 🔄 Automated prediction updates via GitHub Actions
 - 💾 Efficient data storage using Vercel KV (Redis)
+- 🔢 Build-time version generation for deployment tracking
 
 ## Tech Stack
 
@@ -103,7 +108,10 @@ The project uses modern Python and frontend development tools for code quality a
 
 ```bash
 # Install dependencies
-uv install
+uv sync
+
+# Install development dependencies
+uv sync --group dev
 
 # Run Python linting and formatting
 uv run ruff check --fix src/
@@ -163,7 +171,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
    curl -LsSf https://astral.sh/uv/install.sh | sh
 
    # Install project dependencies
-   uv install
+   uv sync
    ```
 
 3. Install Vercel CLI and login:
@@ -188,10 +196,18 @@ Tip Genius is designed to run completely on Vercel's free tier:
    GOOGLE_API_KEY=your_google_api_key
    MISTRAL_API_KEY=your_mistral_api_key
    OPENAI_API_KEY=your_openai_api_key
+   OPENROUTER_API_KEY=your_openrouter_api_key
 
    # Vercel KV (Redis) Configuration
    KV_REST_API_TOKEN=your_vercel_kv_token
    KV_REST_API_URL=your_vercel_kv_url
+   KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
+   KV_DEFAULT_KEY=Match_Predictions_Mistral-Medium_FourPointsScoring_named_with-info
+
+   # Debug Options (Optional)
+   DEBUG_MODE=TRUE
+   DEBUG_LOG_FILE=TRUE
+   DEBUG_LOG_DIR=logs
    ```
 
    For deployment, these variables should be added to Github Secrets and Vercel Environment Variables.
@@ -206,11 +222,16 @@ Tip Genius is designed to run completely on Vercel's free tier:
 
 2. Open <http://localhost:3000> in your browser
 
-## License & Credits
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Credits
 
 - Team logos originally sourced from [football-logos](https://github.com/luukhopman/football-logos) (thanks for your great work 👍🏻)
+- The `utils/process_team_logos.py` script can be used to automatically download and standardize all team logos from the repository
+
+## License
+
+This project is licensed under the **MIT License with Commons Clause**. Free for personal, educational, and research use. Commercial use requires permission.
+
+See the [LICENSE](LICENSE) file for complete terms.
 
 ## Links
 

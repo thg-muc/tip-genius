@@ -10,7 +10,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:css": "tailwindcss -i ./src/css/styles.css -o ./public/css/tailwind.css",
     "watch:css": "tailwindcss -i ./src/css/styles.css -o ./public/css/tailwind.css --watch",
-    "build": "tailwindcss -i ./src/css/styles.css -o ./public/css/tailwind.css --minify"
+    "generate:version": "node -e \"const fs=require('fs'); const d=new Date(); const v=d.getFullYear().toString().slice(2)+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2)+('0'+d.getHours()).slice(-2)+('0'+d.getMinutes()).slice(-2); fs.writeFileSync('public/version.json', JSON.stringify({version:v,buildDate:d.toISOString()}));\"",
+    "build": "npm run generate:version && tailwindcss -i ./src/css/styles.css -o ./public/css/tailwind.css --minify"
   },
   "repository": {
     "type": "git",

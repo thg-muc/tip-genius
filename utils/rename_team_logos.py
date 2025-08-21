@@ -1,4 +1,12 @@
-"""Utility script to standardize image filenames to be URL-friendly."""
+"""Utility functions to standardize image filenames to be URL-friendly.
+
+This module provides functions to purify filenames for team logos,
+making them URL-friendly and consistent across the application.
+
+Can be used as:
+1. Standalone script: python rename_team_logos.py
+2. Imported module: from rename_team_logos import purify_image_filename
+"""
 
 # * Author(s): Thomas Glanzer
 # * Creation : Feb 2025
@@ -12,11 +20,14 @@ from pathlib import Path
 
 from slugify import slugify
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+# Only set up logging if running as standalone script
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
 logger = logging.getLogger(__name__)
 
 # %% --------------------------------------------
