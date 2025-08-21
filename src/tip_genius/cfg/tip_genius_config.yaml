@@ -12,7 +12,7 @@ llm_provider_options:
   - Mistral-Medium
   - Google-Gemini-Flash
   - Deepseek-Chat
-  - Meta-Llama-400b
+  - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenAI-GPT-Mini
   - OpenRouter-Grok

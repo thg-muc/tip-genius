@@ -24,7 +24,7 @@ const LLM_PROVIDERS = [
     logo: `/images/llm-logos/DeepSeek.png`,
   },
   {
-    value: 'Meta-Llama-400b',
+    value: 'Meta-Llama-Mid',
     label: 'Llama 4 Maverick',
     logo: `/images/llm-logos/Meta.png`,
   },
