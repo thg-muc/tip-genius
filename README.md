@@ -222,11 +222,14 @@ Tip Genius is designed to run completely on Vercel's free tier:
 
 2. Open <http://localhost:3000> in your browser
 
-## License & Credits
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Credits
 
 - Team logos originally sourced from [football-logos](https://github.com/luukhopman/football-logos) (thanks for your great work 👍🏻)
+- The `utils/process_team_logos.py` script can be used to automatically download and standardize all team logos from the repository
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Links
 
