@@ -34,7 +34,7 @@ const LLM_PROVIDERS = [
     logo: `/images/llm-logos/Microsoft.png`,
   },
   {
-    value: 'Openrouter-Grok',
+    value: 'OpenRouter-Grok',
     label: 'Grok 3 Mini',
     logo: `/images/llm-logos/xAI.png`,
   },
