@@ -17,7 +17,7 @@ mistral-medium:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 deepseek-chat:
   api_key_env_name: DEEPSEEK_API_KEY
@@ -29,7 +29,7 @@ deepseek-chat:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 google-gemini-flash:
   api_rate_limit: 8 # requests per minute for free tier
@@ -52,7 +52,7 @@ microsoft-phi-medium:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 meta-llama-400b:
   api_key_env_name: DEEPINFRA_API_KEY
@@ -64,7 +64,7 @@ meta-llama-400b:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
 
 openai-gpt-mini:
   api_key_env_name: OPENAI_API_KEY
@@ -72,10 +72,12 @@ openai-gpt-mini:
   operation: chat/completions
   model: gpt-5-mini
   kwargs:
+    temperature: 1.0 # GPT 5 only supports temperature >= 1.0
     stream: false
     max_completion_tokens: 8192
+    reasoning_effort: low # 'minimal', 'low', 'medium', 'high'
     response_format:
-      type: 'json_object'
+      type: json_object
 
 anthropic-claude-haiku:
   api_key_env_name: ANTHROPIC_API_KEY
@@ -97,7 +99,7 @@ openrouter-grok:
     stream: false
     max_tokens: 8192
     response_format:
-      type: 'json_object'
+      type: json_object
   optional_headers:
     HTTP-Referer: 'https://tip-genius.vercel.app'
     X-Title: 'Tip Genius'
