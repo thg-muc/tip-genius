@@ -58,7 +58,7 @@ meta-llama-400b:
   api_key_env_name: DEEPINFRA_API_KEY
   base_url: https://api.deepinfra.com/v1
   operation: openai/chat/completions
-  model: meta-llama/Llama-4-Maverick-17B-128E-Instruct-Turbo
+  model: meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8
   kwargs:
     temperature: 0.0
     stream: false
