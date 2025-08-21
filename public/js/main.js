@@ -591,7 +591,7 @@ async function loadLeagueData(leagueName) {
 
 // API data fetching (with caching)
 async function fetchLeagueData() {
-  console.log('Fetching data using LLM Provider:', currentLLM)
+  console.log('Fetching data using Large Language Model:', currentLLM)
   const currentTime = Date.now()
   const timeDiff = currentTime - lastFetchTime
   const cacheDuration = CONFIG.CACHE_DURATION * 1000
