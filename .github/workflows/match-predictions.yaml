@@ -12,7 +12,7 @@ on:
 jobs:
   update-predictions:
     runs-on: ubuntu-latest
-    environment: PRODUCTION
+    environment: ${{ github.event_name == 'workflow_dispatch' && 'Preview' || 'Production' }}
 
     steps:
       # Check out the repository code
