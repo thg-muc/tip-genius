@@ -708,12 +708,11 @@ function createTab(league, index, totalLeagues) {
     'flex',
     'items-center',
     'justify-center',
-    'gap-2',
-    'px-2',
+    'sm:gap-2',
+    'px-3',
     'sm:px-4',
     'py-3',
     'sm:py-4',
-    'text-[10px]',
     'sm:text-lg',
     'focus:z-10',
     'flex-1',
@@ -774,7 +773,7 @@ async function createTabs() {
         .join('-')
       img.src = `/images/leagues/${logoFilename}.png`
       img.alt = `${league.name} logo`
-      img.className = 'w-4 h-4 sm:w-6 sm:h-6 object-contain'
+      img.className = 'w-7 h-7 sm:w-6 sm:h-6 object-contain'
       img.loading = 'lazy'
       img.onerror = () => {
         console.warn(
@@ -785,8 +784,9 @@ async function createTabs() {
         img.style.display = 'none'
       }
 
-      // Create span for league name
+      // Create span for league name (hidden on mobile, visible on sm and up)
       const span = document.createElement('span')
+      span.className = 'hidden sm:inline-block'
       let displayName = league.name
         .replace(/UEFA\s+/, '') // Remove "UEFA" prefix
         .split(' - ')[0] // Remove country suffix
