@@ -294,24 +294,41 @@ function renderMatches(matches, timestamp) {
 
   // Helper to show first elements once preloading is complete
   const showFirstElements = () => {
-    // Show the first 2 elements (typically date header + first match)
+    // Show the first 2 elements (date header + first match) instantly
     const elementsToShow = Math.min(2, elements.length)
     for (let i = 0; i < elementsToShow; i++) {
       elements[i].style.transition = 'none'
       elements[i].style.opacity = '1'
     }
 
-    // Staggered fade-in for remaining elements with consistent timing
+    // Sequential progressive animation with consistent fade
+    // Items appear one after another with accelerating delays
     for (let i = elementsToShow; i < elements.length; i++) {
       const element = elements[i]
-      void element.offsetWidth
-      element.style.transition = 'opacity 280ms ease-in-out'
-      setTimeout(
-        () => {
-          element.style.opacity = '1'
-        },
-        80 * (i - elementsToShow)
-      )
+      const itemIndex = i - elementsToShow // 0-based index for remaining items
+
+      // Calculate animation timing: consistent 120ms fade, accelerating delays
+      let delay
+      if (itemIndex === 0) {
+        delay = 0
+      } else if (itemIndex === 1) {
+        delay = 80
+      } else if (itemIndex === 2) {
+        delay = 140
+      } else if (itemIndex === 3) {
+        delay = 180
+      } else {
+        // Items 7+: all appear at same time
+        delay = 200
+      }
+
+      const duration = 100 // Consistent fade duration for smooth appearance
+
+      element.style.transition = `opacity ${duration}ms ease-in-out`
+
+      setTimeout(() => {
+        element.style.opacity = '1'
+      }, delay)
     }
   }
 
