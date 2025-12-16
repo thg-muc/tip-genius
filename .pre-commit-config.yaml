@@ -1,7 +1,7 @@
 repos:
   # Ruff linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.14.9
     hooks:
       - id: ruff
         args: [--fix]
@@ -22,7 +22,7 @@ repos:
 
   # Conventional commit message validation
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.4.0
+    rev: v4.3.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
@@ -41,7 +41,7 @@ repos:
 
   # Standard pre-commit hooks for file quality
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
         name: trim trailing whitespace
