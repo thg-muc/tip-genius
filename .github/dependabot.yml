@@ -31,6 +31,12 @@ updates:
       - dependency-name: '*'
         update-types:
           - 'version-update:semver-patch'
+      # Tailwind CSS v4 requires significant configuration changes
+      # (CSS @source directive, config format updates). Pinned to v3 until migration needed.
+      # See: CLAUDE.local.md for architectural notes
+      - dependency-name: 'tailwindcss'
+        versions:
+          - '>= 4.0.0'
 
   # Python dependencies (pyproject.toml with uv)
   - package-ecosystem: 'pip'
