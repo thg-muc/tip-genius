@@ -36,7 +36,7 @@ google-gemini-flash:
   api_key_env_name: GOOGLE_API_KEY
   base_url: https://generativelanguage.googleapis.com/v1beta
   operation: generateContent # alternative: streamGenerateContent for stream
-  model: gemini-2.5-flash-preview-05-20
+  model: gemini-2.5-flash
   kwargs:
     temperature: 0.0
     maxOutputTokens: 8192
@@ -93,7 +93,7 @@ openrouter-grok:
   api_key_env_name: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
   operation: chat/completions
-  model: x-ai/grok-3-mini
+  model: x-ai/grok-4.1-fast
   kwargs:
     temperature: 0.0
     stream: false

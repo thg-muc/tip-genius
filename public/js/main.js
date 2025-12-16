@@ -15,12 +15,12 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'Mistral-Medium',
-    label: 'Mistral Medium 3',
+    label: 'Mistral Medium 3.1',
     logo: `/images/llm-logos/Mistral.png`,
   },
   {
     value: 'Deepseek-Chat',
-    label: 'DeepSeek V3',
+    label: 'DeepSeek V3.2',
     logo: `/images/llm-logos/DeepSeek.png`,
   },
   {
@@ -35,7 +35,7 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'OpenRouter-Grok',
-    label: 'Grok 3 Mini',
+    label: 'Grok 4.1 Fast',
     logo: `/images/llm-logos/xAI.png`,
   },
   // {
