@@ -9,12 +9,13 @@ sports_list:
 
 # List of LLM Providers to use for Tips generation
 llm_provider_options:
-  - Google-Gemini-Flash-Lite
+  # - Google-Gemini-Flash-Lite # API Rate Limits
   - Deepseek-Chat
   - Mistral-Medium
   - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenAI-GPT-Mini
+  - OpenRouter-Gemini-Flash-Lite
   - OpenRouter-Grok
   # - Anthropic-Claude-Haiku # No Json Mode: sometimes has issues with JSON output
 
