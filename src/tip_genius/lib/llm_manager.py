@@ -197,7 +197,7 @@ class LLMManager:
                 "stream": False,
                 **llm_kwargs,
             }
-        # For Google Gemini, we need to structure the request differently
+        # For Google Gemini API, we need to structure the request differently
         elif self.provider.startswith("google"):
             url = f"{self.base_url}/models/{self.model}:{self.operation}"
             headers["x-goog-api-key"] = self.api_key

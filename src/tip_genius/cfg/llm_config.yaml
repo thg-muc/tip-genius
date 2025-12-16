@@ -31,16 +31,16 @@ deepseek-chat:
     response_format:
       type: json_object
 
-google-gemini-flash-lite:
-  api_rate_limit: 8 # requests per minute for free tier
-  api_key_env_name: GOOGLE_API_KEY
-  base_url: https://generativelanguage.googleapis.com/v1beta
-  operation: generateContent # alternative: streamGenerateContent for stream
-  model: gemini-2.5-flash-lite
-  kwargs:
-    temperature: 0.0
-    maxOutputTokens: 8192
-    response_mime_type: 'application/json'
+# google-gemini-flash-lite:
+#   api_rate_limit: 8 # requests per minute for free tier
+#   api_key_env_name: GOOGLE_API_KEY
+#   base_url: https://generativelanguage.googleapis.com/v1beta
+#   operation: generateContent # alternative: streamGenerateContent for stream
+#   model: gemini-2.5-flash-lite
+#   kwargs:
+#     temperature: 0.0
+#     maxOutputTokens: 8192
+#     response_mime_type: 'application/json'
 
 microsoft-phi-medium:
   api_key_env_name: DEEPINFRA_API_KEY
@@ -79,15 +79,32 @@ openai-gpt-mini:
     response_format:
       type: json_object
 
-anthropic-claude-haiku:
-  api_key_env_name: ANTHROPIC_API_KEY
-  base_url: https://api.anthropic.com/v1
-  operation: messages
-  model: claude-3-5-haiku-20241022
+# anthropic-claude-haiku:
+#   api_key_env_name: ANTHROPIC_API_KEY
+#   base_url: https://api.anthropic.com/v1
+#   operation: messages
+#   model: claude-3-5-haiku-20241022
+#   kwargs:
+#     temperature: 0.0
+#     stream: false
+#     max_tokens: 8192
+
+openrouter-gemini-flash-lite:
+  api_key_env_name: OPENROUTER_API_KEY
+  base_url: https://openrouter.ai/api/v1
+  operation: chat/completions
+  model: google/gemini-2.5-flash-lite
   kwargs:
     temperature: 0.0
     stream: false
     max_tokens: 8192
+    reasoning:
+      effort: medium # 'low', 'medium', 'high', 'xhigh'
+    response_format:
+      type: json_object
+  optional_headers:
+    HTTP-Referer: 'https://tip-genius.vercel.app'
+    X-Title: 'Tip Genius'
 
 openrouter-grok:
   api_key_env_name: OPENROUTER_API_KEY
@@ -98,6 +115,8 @@ openrouter-grok:
     temperature: 0.0
     stream: false
     max_tokens: 8192
+    reasoning:
+      effort: medium # 'low', 'medium', 'high', 'xhigh'
     response_format:
       type: json_object
   optional_headers:
