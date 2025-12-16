@@ -4,8 +4,8 @@
 // LLM provider configuration with PNG logos
 const LLM_PROVIDERS = [
   {
-    value: 'Google-Gemini-Flash',
-    label: 'Gemini 2.5 Flash',
+    value: 'Google-Gemini-Flash-Lite',
+    label: 'Gemini 2.5 Flash Lite',
     logo: `/images/llm-logos/Google.png`,
   },
   {

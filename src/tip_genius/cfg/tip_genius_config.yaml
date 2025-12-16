@@ -9,7 +9,7 @@ sports_list:
 
 # List of LLM Providers to use for Tips generation
 llm_provider_options:
-  - Google-Gemini-Flash
+  - Google-Gemini-Flash-Lite
   - Deepseek-Chat
   - Mistral-Medium
   - Meta-Llama-Mid

@@ -31,12 +31,12 @@ deepseek-chat:
     response_format:
       type: json_object
 
-google-gemini-flash:
+google-gemini-flash-lite:
   api_rate_limit: 8 # requests per minute for free tier
   api_key_env_name: GOOGLE_API_KEY
   base_url: https://generativelanguage.googleapis.com/v1beta
   operation: generateContent # alternative: streamGenerateContent for stream
-  model: gemini-2.5-flash
+  model: gemini-2.5-flash-lite
   kwargs:
     temperature: 0.0
     maxOutputTokens: 8192
