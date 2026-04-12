@@ -79,7 +79,7 @@ meta-llama-mid:
 #     response_format:
 #       type: json_object
 
-openrouter-gpt-5-mini:
+openrouter-gpt-mini:
   api_key_env_name: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
   operation: chat/completions
