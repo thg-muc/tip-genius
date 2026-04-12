@@ -14,7 +14,7 @@ const LLM_PROVIDERS = [
     logo: `/images/llm-logos/Google.png`,
   },
   {
-    value: 'OpenAI-GPT-Mini',
+    value: 'OpenRouter-GPT-5-Mini',
     label: 'GPT-5 Mini',
     logo: `/images/llm-logos/OpenAI.png`,
   },
