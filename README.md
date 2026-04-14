@@ -1,4 +1,4 @@
-# ⚽️ Tip Genius V3.1.0
+# ⚽️ Tip Genius V3.2.0
 
 AI-powered soccer match predictions with a modern, responsive web interface.
 
