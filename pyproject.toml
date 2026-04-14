@@ -93,5 +93,7 @@ exclude = [
     "**/.pytest_cache",
     "**/.ruff_cache",
     "**/.venv",
-    "**/venv"
+    "**/venv",
+    "**/node_modules",
+    "**/.*",
 ]
