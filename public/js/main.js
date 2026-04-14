@@ -65,9 +65,19 @@ let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
 let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM_PROVIDER
 
+// Keep the footer copyright year current without manual updates
+function updateFooterYear() {
+  const yearElement = document.getElementById('currentYear')
+  if (yearElement) {
+    yearElement.textContent = new Date().getFullYear()
+  }
+}
+
 // Initialize the application
 async function initializeApp() {
   try {
+    updateFooterYear()
+
     // Fetch the version information first
     const response = await fetch('/version.json?v=' + Date.now())
     if (response.ok) {
