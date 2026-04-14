@@ -1,6 +1,6 @@
 {
   "name": "tip-genius",
-  "version": "1.0.0",
+  "version": "3.2.0",
   "description": "AI-powered soccer match predictions with a modern, responsive web interface.",
   "main": "index.js",
   "directories": {
@@ -19,7 +19,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "SEE LICENSE FILE",
   "bugs": {
     "url": "https://github.com/thg-muc/tip-genius/issues"
   },

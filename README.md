@@ -1,4 +1,4 @@
-# ⚽️ Tip Genius V3.1.0
+# ⚽️ Tip Genius V3.2.0
 
 AI-powered soccer match predictions with a modern, responsive web interface.
 
@@ -107,26 +107,53 @@ The project uses modern Python and frontend development tools for code quality a
 ### Development Commands
 
 ```bash
-# Install dependencies
+# Install Python dependencies
 uv sync
 
 # Install development dependencies
 uv sync --group dev
 
-# Run Python linting and formatting
-uv run ruff check --fix src/
-uv run ruff format src/
+# Install frontend dependencies
+npm install
+
+# Build frontend assets for production
+npm run build
+
+# Build CSS only
+npm run build:css
+
+# Generate build-time version file
+npm run generate:version
+
+# Watch CSS changes during development
+npm run watch:css
+
+# Run Python linting and formatting checks
+uv run ruff check src/
+uv run ruff format --check src/
 
 # Run type checking
 uv run pyright src/
 
-# Format frontend files
-npx prettier --write "public/**/*.{js,css,json}"
+# Check frontend formatting
+npx prettier --check "public/**/*.{js,css,json}"
+
+# Optional local autofix commands
+uv run ruff check --fix src/
+uv run ruff format src/
+npx prettier --write "public/**/*.{js,css,json}" "api/**/*.js" "src/**/*.{yaml,yml}" ".github/**/*.yaml" "utils/**/*.py"
 
 # Install pre-commit hooks
 uv run pre-commit install
 uv run pre-commit install --hook-type commit-msg
 ```
+
+`npm test` is currently a placeholder and exits with an error; there is no dedicated automated test suite yet.
+
+### Generated Files
+
+- Edit `src/css/styles.css`, not `public/css/tailwind.css`
+- Treat `public/version.json` as a generated file created by `npm run generate:version` or `npm run build`
 
 ## Vercel Setup
 
@@ -141,8 +168,15 @@ Tip Genius is designed to run completely on Vercel's free tier:
    - Automatic deployments triggered by GitHub push events
    - Preview deployments for pull requests
    - GitHub Actions handle prediction generation while Vercel manages deployment
+   - The `match-predictions.yaml` workflow runs on Tuesdays and Fridays at 03:00 UTC and also supports manual `workflow_dispatch` runs
+   - The workflow runs repository quality checks before executing the prediction update job
 
-3. **Monitoring**:
+3. **Environment Configuration**:
+   - GitHub Actions uses repository secrets for API and KV credentials
+   - GitHub Actions uses repository variables for debug controls such as `DEBUG_MODE` and `DEBUG_PROCESSING_LIMIT`
+   - Vercel needs the API route variables used by `api/predictions.js`: `KV_REST_API_URL`, `KV_REST_API_READ_ONLY_TOKEN`, and `KV_DEFAULT_KEY`
+
+4. **Monitoring**:
    - Access request logs and performance metrics in Vercel dashboard
    - Web Analytics available in free tier
 
@@ -174,43 +208,33 @@ Tip Genius is designed to run completely on Vercel's free tier:
    uv sync
    ```
 
-3. Install Vercel CLI and login:
+3. Install frontend dependencies:
+
+   ```bash
+   npm install
+   ```
+
+4. Install Vercel CLI and login:
 
    ```bash
    npm i -g vercel
    vercel login
    ```
 
-4. Configure environment variables:
+5. Configure environment variables:
 
-   Create a `.env.local` file in the project root with the following variables:
+   Use the checked-in example file as the starting point:
 
    ```bash
-   # API Keys for Odds Data
-   ODDS_API_KEY=your_odds_api_key
-
-   # API Keys for LLM Providers
-   ANTHROPIC_API_KEY=your_anthropic_api_key
-   DEEPINFRA_API_KEY=your_deepinfra_api_key
-   DEEPSEEK_API_KEY=your_deepseek_api_key
-   GOOGLE_API_KEY=your_google_api_key
-   MISTRAL_API_KEY=your_mistral_api_key
-   OPENAI_API_KEY=your_openai_api_key
-   OPENROUTER_API_KEY=your_openrouter_api_key
-
-   # Vercel KV (Redis) Configuration
-   KV_REST_API_TOKEN=your_vercel_kv_token
-   KV_REST_API_URL=your_vercel_kv_url
-   KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
-   KV_DEFAULT_KEY=Match_Predictions_Mistral-Medium_FourPointsScoring_named_with-info
-
-   # Debug Options (Optional)
-   DEBUG_MODE=TRUE
-   DEBUG_LOG_FILE=TRUE
-   DEBUG_LOG_DIR=logs
+   cp .env.example .env.local
    ```
 
-   For deployment, these variables should be added to Github Secrets and Vercel Environment Variables.
+   Then edit `.env.local` with your actual credentials and local debug settings. The example file includes the full set of supported variables, including `DEBUG_PROCESSING_LIMIT`.
+
+   For deployment:
+   - Add API and KV credentials to GitHub Actions repository secrets
+   - Add debug controls such as `DEBUG_MODE` and `DEBUG_PROCESSING_LIMIT` to GitHub Actions repository variables
+   - Add the API route variables required by Vercel (`KV_REST_API_URL`, `KV_REST_API_READ_ONLY_TOKEN`, `KV_DEFAULT_KEY`) to Vercel Environment Variables
 
 ### Running Locally
 
@@ -221,6 +245,8 @@ Tip Genius is designed to run completely on Vercel's free tier:
    ```
 
 2. Open <http://localhost:3000> in your browser
+
+If you are changing styles locally, run `npm run watch:css` in a separate terminal so `public/css/tailwind.css` stays in sync.
 
 ## Credits
 

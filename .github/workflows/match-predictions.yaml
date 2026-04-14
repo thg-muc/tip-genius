@@ -65,7 +65,7 @@ jobs:
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
           # Debug Configuration
           DEBUG_MODE: ${{ vars.DEBUG_MODE }}
-          DEBUG_PROCESS_LIMIT: ${{ vars.DEBUG_PROCESS_LIMIT }}
+          DEBUG_PROCESSING_LIMIT: ${{ vars.DEBUG_PROCESSING_LIMIT }}
         working-directory: src/tip_genius
         run: |
           echo "Starting prediction workflow..."

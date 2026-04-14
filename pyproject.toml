@@ -1,6 +1,6 @@
 [project]
 name = "tip-genius"
-version = "1.0.0"
+version = "3.2.0"
 description = "AI-powered soccer match predictions with a modern, responsive web interface."
 readme = "README.md"
 requires-python = ">= 3.12, < 3.13"
