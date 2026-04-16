@@ -297,9 +297,15 @@ class LLMManager:
             if self.provider.startswith("anthropic"):
                 prediction = full_response["content"][0]["text"]
             elif self.provider.startswith("google"):
-                prediction = full_response["candidates"][0]["content"]["parts"][0][
-                    "text"
-                ]
+                # Skip thought parts (present when thinkingConfig is used or omitted)
+                # and return the first non-thought part
+                parts = full_response["candidates"][0]["content"]["parts"]
+                prediction = next(
+                    (p["text"] for p in parts if not p.get("thought")), None
+                )
+                if prediction is None:
+                    msg = f"No answer part in Google API response for {self.model}"
+                    raise ValueError(msg)
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
 

@@ -14,8 +14,8 @@ llm_provider_options:
   - Mistral-Medium
   - Meta-Llama-Mid
   - Microsoft-Phi-Medium
-  - OpenRouter-GPT-Mini
-  - OpenRouter-Gemini-Flash-Lite
+  - OpenRouter-GPT-OSS-Large
+  - Google-Gemma-Medium
   - OpenRouter-Grok
   # - Anthropic-Claude-Haiku # No Json Mode: sometimes has issues with JSON output
 
