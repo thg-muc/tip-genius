@@ -9,13 +9,13 @@ const LLM_PROVIDERS = [
   //   logo: `/images/llm-logos/Google.png`,
   // },
   {
-    value: 'OpenRouter-Gemini-Flash-Lite',
-    label: 'Gemini 2.5 Flash Lite',
+    value: 'Google-Gemma-Medium',
+    label: 'Gemma 4',
     logo: `/images/llm-logos/Google.png`,
   },
   {
-    value: 'OpenRouter-GPT-Mini',
-    label: 'GPT-5 Mini',
+    value: 'OpenRouter-GPT-OSS-Large',
+    label: 'GPT-OSS 120b',
     logo: `/images/llm-logos/OpenAI.png`,
   },
   {

@@ -79,39 +79,37 @@ meta-llama-mid:
 #     response_format:
 #       type: json_object
 
-openrouter-gpt-mini:
+openrouter-gpt-oss-large:
   api_key_env_name: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
   operation: chat/completions
-  model: openai/gpt-5-mini
+  model: openai/gpt-oss-120b:free
   kwargs:
-    temperature: 1.0 # GPT 5 only supports temperature >= 1.0
+    temperature: 0.0
     stream: false
     max_tokens: 8192
     reasoning:
-      effort: low # 'low', 'medium', 'high', 'xhigh'
+      effort: low # 'low', 'medium', 'high'
     response_format:
       type: json_object
   optional_headers:
     HTTP-Referer: 'https://tip-genius.vercel.app'
     X-Title: 'Tip Genius'
 
-openrouter-gemini-flash-lite:
-  api_key_env_name: OPENROUTER_API_KEY
-  base_url: https://openrouter.ai/api/v1
-  operation: chat/completions
-  model: google/gemini-2.5-flash-lite
+google-gemma-medium:
+  api_rate_limit: 8 # requests per minute for free tier
+  api_key_env_name: GOOGLE_API_KEY
+  base_url: https://generativelanguage.googleapis.com/v1beta
+  operation: generateContent
+  model: gemma-4-26b-a4b-it
   kwargs:
     temperature: 0.0
-    stream: false
-    max_tokens: 8192
-    reasoning:
-      effort: medium # 'low', 'medium', 'high', 'xhigh'
-    response_format:
-      type: json_object
-  optional_headers:
-    HTTP-Referer: 'https://tip-genius.vercel.app'
-    X-Title: 'Tip Genius'
+    maxOutputTokens: 8192
+    responseMimeType: 'application/json'
+    # thinkingConfig options for Gemma models:
+    # - omit entirely: full thinking (~259 thought tokens, default)
+    # - thinkingConfig: {thinkingLevel: minimal}: near-zero thinking (~0 thought tokens)
+    # - thinkingLevel: low/medium/high: NOT supported for Gemma (Gemini-only)
 
 openrouter-grok:
   api_key_env_name: OPENROUTER_API_KEY
