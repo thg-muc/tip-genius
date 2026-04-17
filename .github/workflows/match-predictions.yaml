@@ -9,6 +9,9 @@ on:
   # Allow manual triggers through GitHub UI for testing and ad-hoc updates
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   update-predictions:
     runs-on: ubuntu-latest

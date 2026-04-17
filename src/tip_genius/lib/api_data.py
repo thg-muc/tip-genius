@@ -12,6 +12,7 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl
 
 import polars as pl
 import requests
@@ -147,31 +148,37 @@ class OddsAPI(BaseAPI):
             error_msg = f"Sport key not found in sports mapping: {sport_key}"
             raise KeyError(error_msg) from exc
 
-        # Construct the URL for the API request
-        url = f"{self.base_url}{sports_value}/{self.parameters}&apiKey={self.api_key}"
+        # Construct the URL and query parameters for the API request.
+        endpoint, _, query_string = self.parameters.partition("?")
+        url = f"{self.base_url}{sports_value}/{endpoint}"
+        request_params = dict(parse_qsl(query_string, keep_blank_values=True))
+        request_params["apiKey"] = self.api_key
 
         # Fetch data from the API
         logger.debug("Fetching odds data for sport: %s", sport_key)
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, params=request_params, timeout=10)
 
         # Check if the response was successful
         if response.status_code != 200:
+            request_id = (
+                response.headers.get("x-request-id")
+                or response.headers.get("request-id")
+                or "unavailable"
+            )
             logger.error(
-                "Failed to fetch odds data: %s %s",
+                "Failed to fetch odds data for sport %s: status=%s request_id=%s",
+                sport_key,
                 response.status_code,
-                response.text,
+                request_id,
             )
             error_message = (
-                f"Failed to fetch odds data: {response.status_code} {response.text}"
+                f"Failed to fetch odds data for sport {sport_key}: "
+                f"HTTP {response.status_code} (request_id={request_id})"
             )
-            raise requests.exceptions.HTTPError(error_message)
+            raise requests.exceptions.HTTPError(error_message, response=response)
 
         api_result = response.json()
-        logger.info(
-            "Successfully fetched odds data for sport: %s | API credits remaining: %s",
-            sport_key,
-            response.headers.get("x-requests-remaining", "unknown"),
-        )
+        logger.info("Successfully fetched odds data for sport: %s", sport_key)
 
         return api_result
 
