@@ -389,6 +389,30 @@ class TipGenius:
         except Exception:
             logger.exception("A problem occurred while storing API result: %s")
 
+    def _wait_before_retry(
+        self,
+        attempt: int,
+        api_error: bool,  # noqa: FBT001
+        request_duration: float,
+        rate_limit: float,
+    ) -> None:
+        """Wait before a retry attempt based on error type and rate limit.
+
+        Applies exponential backoff (3^(attempt+1)s) for API errors, using
+        max(rate_limit_interval, backoff) when a rate limit is configured.
+        For consistency failures, only rate limit spacing is applied.
+        """
+        min_interval = (60.0 / rate_limit) * 1.1 if rate_limit > 0 else 0.0
+        if api_error:
+            backoff = float(3 ** (attempt + 1))
+            wait_time = max(min_interval, backoff)
+            logger.debug(
+                "API error on attempt %d, backing off %.1fs", attempt + 1, wait_time
+            )
+            time.sleep(wait_time)
+        elif min_interval > request_duration:
+            time.sleep(min_interval - request_duration)
+
     def predict_results(
         self,
         data: pl.DataFrame,
@@ -448,25 +472,21 @@ class TipGenius:
             try:
                 last_response = None
                 attempt = 0
-                start_time = time.time()  # Track start time for rate limiting
 
                 for attempt in range(self.llm_attempts):
-                    try:
-                        # Calculate time since last request for rate limiting
-                        if attempt > 0 and llm.rate_limit > 0:
-                            elapsed = time.time() - start_time
-                            llm.wait_for_rate_limit(elapsed)
+                    api_error = False
+                    request_start = time.time()
 
+                    try:
                         # Calculate temperature for retry attempts
                         # Only increase temp for models starting at 0.0
                         # Models with fixed temp (GPT-5) should not be modified
                         base_temperature = llm.kwargs.get("temperature", 0.0)
-                        if base_temperature == 0.0:
-                            # Model supports temperature variation, increase on retries
-                            temperature = base_temperature + 0.2 * attempt
-                        else:
-                            # Model has fixed temperature, don't modify it
-                            temperature = base_temperature
+                        temperature = (
+                            base_temperature + 0.2 * attempt
+                            if base_temperature == 0.0
+                            else base_temperature
+                        )
 
                         response = literal_eval(
                             llm.get_prediction(
@@ -488,14 +508,24 @@ class TipGenius:
                             i + 1,
                             attempt + 1,
                         )
+
                     except Exception as e:
+                        api_error = True
                         logger.warning(
                             "LLM prediction attempt %d failed for row %d: %s",
                             attempt + 1,
                             i + 1,
                             str(e),
                         )
-                        continue  # Try next attempt even if this one fails
+
+                    # Apply wait before next attempt (skip wait after last attempt)
+                    if attempt < self.llm_attempts - 1:
+                        self._wait_before_retry(
+                            attempt=attempt,
+                            api_error=api_error,
+                            request_duration=time.time() - request_start,
+                            rate_limit=llm.rate_limit,
+                        )
 
                 if not last_response:
                     warning_msg = f"No valid LLM response for row {i + 1}, skipping..."
