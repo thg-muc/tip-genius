@@ -128,7 +128,7 @@ class TipGenius:
 
         # Read debug settings from environment
         self.debug = os.environ.get("DEBUG_MODE", "FALSE").upper() == "TRUE"
-        self.debug_limit = int(os.environ.get("DEBUG_PROCESSING_LIMIT", "0"))
+        self.debug_limit = int(os.environ.get("DEBUG_PROCESSING_LIMIT") or "0")
 
         # Initialize class attributes
         self.storage_manager = None
