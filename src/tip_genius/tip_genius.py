@@ -884,7 +884,7 @@ if __name__ == "__main__":
         setattr(tip_genius, option, value)
 
     # Load Config
-    config_path = Path("cfg") / "tip_genius_config.yaml"
+    config_path = Path(__file__).parent / "cfg" / "tip_genius_config.yaml"
     with config_path.open(encoding="utf-8") as f:
         tip_genius_config = yaml.safe_load(f)
     # Execute Workflow
