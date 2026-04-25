@@ -25,7 +25,7 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'Deepseek-Chat',
-    label: 'DeepSeek V3.2',
+    label: 'DeepSeek V4 Flash',
     logo: `/images/llm-logos/DeepSeek.png`,
   },
   {

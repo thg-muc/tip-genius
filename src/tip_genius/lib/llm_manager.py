@@ -15,9 +15,10 @@ from typing import Any
 
 import requests
 import yaml
-from lib.llm_prompts import Prompt
 
-LLM_CONFIG_FILE = Path("cfg") / "llm_config.yaml"
+from .llm_prompts import Prompt
+
+LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 
 # Set up logging
 logger = logging.getLogger(__name__)

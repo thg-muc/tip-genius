@@ -23,11 +23,13 @@ deepseek-chat:
   api_key_env_name: DEEPSEEK_API_KEY
   base_url: https://api.deepseek.com
   operation: chat/completions
-  model: deepseek-chat
+  model: deepseek-v4-flash
   kwargs:
     temperature: 0.0
     stream: false
     max_tokens: 8192
+    thinking:
+      type: disabled
     response_format:
       type: json_object
 
@@ -106,8 +108,10 @@ google-gemma-medium:
     temperature: 0.0
     maxOutputTokens: 8192
     responseMimeType: 'application/json'
+    thinkingConfig:
+      thinkingLevel: minimal
     # thinkingConfig options for Gemma models:
-    # - omit entirely: full thinking (~259 thought tokens, default)
+    # - omit entirely: full thinking (default)
     # - thinkingConfig: {thinkingLevel: minimal}: near-zero thinking (~0 thought tokens)
     # - thinkingLevel: low/medium/high: NOT supported for Gemma (Gemini-only)
 

@@ -82,7 +82,7 @@ class StorageManager:
         """
         try:
             # Load KV config
-            config_path = Path("cfg") / "vercel_config.yaml"
+            config_path = Path(__file__).parents[1] / "cfg" / "vercel_config.yaml"
             with config_path.open(encoding="utf-8") as f:
                 config = yaml.safe_load(f)["tip_genius"]
 

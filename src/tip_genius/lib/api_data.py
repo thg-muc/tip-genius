@@ -21,7 +21,7 @@ import yaml
 # %% --------------------------------------------
 # * Config
 
-ODDS_CONFIG_FILE = Path("cfg") / "api_config.yaml"
+ODDS_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "api_config.yaml"
 
 # Set up logging
 logger = logging.getLogger(__name__)
