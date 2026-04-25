@@ -37,7 +37,18 @@ uv run pre-commit install --hook-type commit-msg
 # Run prediction workflow locally with debug logging
 cd src/tip_genius && DEBUG_MODE=TRUE uv run python tip_genius.py
 # Logs written to src/tip_genius/logs/ — load .env.local from repo root
+
+# Smoke tests (live LLM calls — costs real money, run on demand only)
+RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -v
 ```
+
+## Smoke Tests
+
+`tests/smoke/test_tip_genius_workflow.py` invokes every active provider via
+`LLMManager.get_prediction()`. Gated by the `smoke` marker and `RUN_SMOKE=1`
+(deselected by default). Each run costs real API spend — never execute
+automatically. **Suggest running** after changes to `cfg/llm_config.yaml`,
+`cfg/tip_genius_config.yaml`, or `lib/llm_manager.py`.
 
 ## Generated Artifacts & Large Directories
 
