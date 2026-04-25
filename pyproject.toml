@@ -18,7 +18,16 @@ dev = [
     "pre-commit>=4.3.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
+    "pytest>=8.0.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "smoke: live smoke tests that hit external LLM APIs (incurs cost; gated by RUN_SMOKE=1)",
+]
+addopts = "-m 'not smoke'"
+pythonpath = ["src/tip_genius"]
 
 [tool.ruff]
 line-length = 88
@@ -86,8 +95,8 @@ line-ending = "auto"
 [tool.pyright]
 typeCheckingMode = "standard"
 pythonVersion = "3.12"
-include = ["src", "utils"]
-extraPaths = ["src"]
+include = ["src", "utils", "tests"]
+extraPaths = ["src", "src/tip_genius"]
 exclude = [
     "**/__pycache__",
     "**/.pytest_cache",
