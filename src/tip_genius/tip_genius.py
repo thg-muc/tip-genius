@@ -141,6 +141,8 @@ class TipGenius:
 
         # Valid predictions saved per provider, used to detect dead providers
         self.predictions_per_provider = defaultdict(int)
+        # None while no export has been attempted yet
+        self.export_succeeded: bool | None = None
         # Whether any sport had upcoming matches at all (off-season guard)
         self.matches_available = False
         # Odds fetches that succeeded and that raised, per workflow run
@@ -318,13 +320,43 @@ class TipGenius:
 
         healthy_list = ", ".join(healthy) if healthy else "none"
 
-        # Only reassure about kept predictions if any were actually produced
-        kept = (
-            f"The {total_saved} valid predictions were already exported "
-            f"and are not lost. "
-            if total_saved
-            else "No predictions were produced at all, so nothing was exported. "
-        )
+        # Only reassure about kept predictions if the export actually stored them
+        if not total_saved:
+            kept = "No predictions were produced at all, so nothing was exported. "
+            kept_summary = (
+                "**No predictions were produced at all**, so nothing was "
+                "exported and the stored data is unchanged from the last "
+                "successful run."
+            )
+        elif self.export_succeeded:
+            kept = (
+                f"The {total_saved} valid predictions were already exported "
+                f"and are not lost. "
+            )
+            kept_summary = (
+                "These predictions are **not lost** — the export runs before "
+                "this check, so everything the working providers produced was "
+                "already written to storage."
+            )
+        elif self.export_succeeded is None:
+            kept = (
+                f"{total_saved} valid predictions were produced, but no export "
+                f"was attempted. "
+            )
+            kept_summary = (
+                "These predictions were **not exported** — both export targets "
+                "are disabled, so the stored data is unchanged."
+            )
+        else:
+            kept = (
+                f"The export of {total_saved} valid predictions also failed, "
+                f"so they were not stored. "
+            )
+            kept_summary = (
+                "The export **also failed**, so these predictions were **not "
+                "stored** and the stored data is unchanged from the last "
+                "successful run. Check the job log for the storage error."
+            )
 
         logger.error(
             "No predictions produced by: %s. Providers that worked: %s. "
@@ -357,17 +389,9 @@ class TipGenius:
             "",
             f"- Providers with no predictions: `{provider_list}`",
             f"- Providers that worked: `{healthy_list}`",
-            f"- Valid predictions exported: **{total_saved}**",
+            f"- Valid predictions produced: **{total_saved}**",
             "",
-            (
-                "These predictions are **not lost** — the export runs before "
-                "this check, so everything the working providers produced was "
-                "already written to storage."
-                if total_saved
-                else "**No predictions were produced at all**, so nothing was "
-                "exported and the stored data is unchanged from the last "
-                "successful run."
-            ),
+            kept_summary,
             "",
             (
                 "A provider returning nothing across every sport usually means "
@@ -822,6 +846,7 @@ class TipGenius:
             self.matches_available = False
             self.sports_fetched = 0
             self.sports_fetch_failed = 0
+            self.export_succeeded = None
 
             # Initialize logo matcher if folder is configured and exists
             if team_logos_path := config.get("team_logos_folder"):
@@ -1010,6 +1035,7 @@ class TipGenius:
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
                     export_success = self.export_results()
+                    self.export_succeeded = export_success
                     if not export_success and is_cloud_environment():
                         # Only exit with failure in cloud environments
                         logger.exception(
@@ -1017,6 +1043,7 @@ class TipGenius:
                         )
                         sys.exit(1)
                 except Exception:
+                    self.export_succeeded = False
                     logger.exception("Failed to export results: %s")
                     if is_cloud_environment():
                         sys.exit(1)
@@ -1030,9 +1057,11 @@ class TipGenius:
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
                     export_success = self.export_results()
+                    self.export_succeeded = export_success
                     if not export_success and is_cloud_environment():
                         sys.exit(1)
                 except Exception:
+                    self.export_succeeded = False
                     logger.exception("Failed to export results after error: %s")
                     if is_cloud_environment():
                         sys.exit(1)
