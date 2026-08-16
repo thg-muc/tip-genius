@@ -60,7 +60,8 @@ def strip_code_fence(text: str) -> str:
 
     body = text[opening.end() :]
 
-    # Last fence, not the first: a fence inside a JSON string must not truncate
+    # A fence may also appear inside a JSON string value, so the closing one
+    # is the last occurrence. Truncated responses have none.
     closing = body.rfind("```")
     if closing != -1:
         body = body[:closing]

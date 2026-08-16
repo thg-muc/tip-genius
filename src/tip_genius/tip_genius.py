@@ -796,8 +796,7 @@ class TipGenius:
                     sys.exit(1)
                 return
 
-            # Seed at zero, so a provider skipped before the counter is still
-            # reported as dead instead of being absent from the dict
+            # Every provider needs an entry, including ones that never run
             for provider in llm_provider_options:
                 self.predictions_per_provider.setdefault(provider, 0)
 
@@ -979,8 +978,7 @@ class TipGenius:
             raise  # Re-raise the exception after attempting to save data
 
         else:
-            # Exit only on the clean path, so an in-flight exception is never
-            # masked by this one
+            # Only on the clean path, so an in-flight exception is not masked
             if self._get_dead_providers() and is_cloud_environment():
                 sys.exit(1)
 
