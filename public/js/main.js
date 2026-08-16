@@ -53,6 +53,20 @@ const LLM_PROVIDERS = [
 // Default provider is the first one in the list
 const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
 
+// Resolve a stored provider, falling back to the default if it is no longer
+// offered. Without this, a user whose pick was retired keeps requesting a KV
+// key that is no longer updated and only ever sees a load error.
+function resolveLlmProvider(storedValue) {
+  if (LLM_PROVIDERS.some((p) => p.value === storedValue)) {
+    return storedValue
+  }
+  if (storedValue) {
+    console.warn(`Stored LLM provider "${storedValue}" is no longer available`)
+    localStorage.removeItem('lastUsedLLM')
+  }
+  return DEFAULT_LLM_PROVIDER
+}
+
 // Default fallback version in YYMMDDhhmm format
 let appVersion = '2501010000'
 
@@ -63,7 +77,7 @@ let CONFIG
 let currentLeague = localStorage.getItem('lastUsedLeague')
 let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
-let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM_PROVIDER
+let currentLLM = resolveLlmProvider(localStorage.getItem('lastUsedLLM'))
 
 // Keep the footer copyright year current without manual updates
 function updateFooterYear() {
@@ -864,7 +878,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize currentLLM if it hasn't been done yet
   if (typeof currentLLM === 'undefined') {
-    currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM
+    currentLLM = resolveLlmProvider(localStorage.getItem('lastUsedLLM'))
   }
 
   // Make sure the container exists
