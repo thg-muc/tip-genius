@@ -143,6 +143,9 @@ class TipGenius:
         self.predictions_per_provider = defaultdict(int)
         # Whether any sport had upcoming matches at all (off-season guard)
         self.matches_available = False
+        # Odds fetches that succeeded and that raised, per workflow run
+        self.sports_fetched = 0
+        self.sports_fetch_failed = 0
 
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
@@ -251,6 +254,57 @@ class TipGenius:
             for provider, count in self.predictions_per_provider.items()
             if count == 0
         )
+
+    def _odds_api_unavailable(self) -> bool:
+        """Whether every odds fetch failed, leaving nothing to predict.
+
+        Distinct from an off-season week: there the API answers with an empty
+        list, so no fetch is counted as failed.
+        """
+        return self.sports_fetched == 0 and self.sports_fetch_failed > 0
+
+    def _report_odds_api_unavailable(self) -> None:
+        """Report a total odds API failure to the console and GitHub Actions."""
+        msg = (
+            f"Odds could not be retrieved for any of the "
+            f"{self.sports_fetch_failed} configured sports, so no predictions "
+            f"were generated. The stored data is unchanged from the last "
+            f"successful run."
+        )
+        logger.error(msg)
+
+        if not is_cloud_environment():
+            return
+
+        print(f"::error::{msg}")
+
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+            return
+
+        lines = [
+            "",  # in case an earlier step left no trailing newline
+            "## Match Predictions Update — failed",
+            "",
+            "**The odds API could not be reached for any configured sport.**",
+            "",
+            f"- Sports attempted: **{self.sports_fetch_failed}**",
+            "- Predictions generated: **0**",
+            "",
+            (
+                "The stored data is unchanged from the last successful run, so "
+                "the website still shows the previous predictions."
+            ),
+            "",
+            (
+                "Check the job log for the underlying error — an expired "
+                "`ODDS_API_KEY`, an exhausted quota, or an API outage are the "
+                "usual causes."
+            ),
+            "",
+        ]
+        with Path(summary_path).open("a", encoding="utf-8") as summary_file:
+            summary_file.write("\n".join(lines))
 
     def _report_dead_providers(self, dead_providers: list[str]) -> None:
         """Report dead providers to the console and to GitHub Actions."""
@@ -763,6 +817,8 @@ class TipGenius:
             self.prediction_data.clear()
             self.predictions_per_provider.clear()
             self.matches_available = False
+            self.sports_fetched = 0
+            self.sports_fetch_failed = 0
 
             # Initialize logo matcher if folder is configured and exists
             if team_logos_path := config.get("team_logos_folder"):
@@ -827,7 +883,10 @@ class TipGenius:
                         )
                 except Exception:
                     logger.exception("Failed to fetch odds for sport %s", sport)
+                    self.sports_fetch_failed += 1
                     continue  # Skip this sport but continue with others
+
+                self.sports_fetched += 1
 
                 combinations = product(
                     llm_provider_options,
@@ -978,15 +1037,17 @@ class TipGenius:
 
         else:
             # Only on the clean path, so an in-flight exception is not masked
-            if self._get_dead_providers() and is_cloud_environment():
+            failed = self._odds_api_unavailable() or self._get_dead_providers()
+            if failed and is_cloud_environment():
                 sys.exit(1)
 
         finally:
             # In finally, so an export exiting first cannot skip it; gated on
             # completion, so an aborted run does not report unreached providers
             if combinations_completed:
-                dead_providers = self._get_dead_providers()
-                if dead_providers:
+                if self._odds_api_unavailable():
+                    self._report_odds_api_unavailable()
+                elif dead_providers := self._get_dead_providers():
                     self._report_dead_providers(dead_providers)
 
 
