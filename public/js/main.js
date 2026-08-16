@@ -62,7 +62,7 @@ function resolveLlmProvider(storedValue) {
   if (storedValue) {
     console.warn(`Stored LLM provider "${storedValue}" is no longer available`)
     localStorage.removeItem('lastUsedLLM')
-    // Cached predictions belong to the old provider, same as when switching
+    // Cached predictions belong to the old provider and would never be refreshed
     localStorage.removeItem('cachedLeagueData')
     localStorage.removeItem('lastFetchTime')
   }
