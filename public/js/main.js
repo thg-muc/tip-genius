@@ -62,6 +62,9 @@ function resolveLlmProvider(storedValue) {
   if (storedValue) {
     console.warn(`Stored LLM provider "${storedValue}" is no longer available`)
     localStorage.removeItem('lastUsedLLM')
+    // Cached predictions belong to the old provider, same as when switching
+    localStorage.removeItem('cachedLeagueData')
+    localStorage.removeItem('lastFetchTime')
   }
   return DEFAULT_LLM_PROVIDER
 }
@@ -74,9 +77,10 @@ let CONFIG
 
 // Global state variables
 let currentLeague = localStorage.getItem('lastUsedLeague')
+// Resolved first: a retired provider also clears the cache it was read from
+let currentLLM = resolveLlmProvider(localStorage.getItem('lastUsedLLM'))
 let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
-let currentLLM = resolveLlmProvider(localStorage.getItem('lastUsedLLM'))
 
 // Keep the footer copyright year current without manual updates
 function updateFooterYear() {
