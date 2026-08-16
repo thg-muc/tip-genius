@@ -879,11 +879,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const menuButton = document.getElementById('menuButton')
   const dropdownMenu = document.getElementById('dropdownMenu')
 
-  // Initialize currentLLM if it hasn't been done yet
-  if (typeof currentLLM === 'undefined') {
-    currentLLM = resolveLlmProvider(localStorage.getItem('lastUsedLLM'))
-  }
-
   // Make sure the container exists
   const providersContainer = document.getElementById('llm-providers')
   if (!providersContainer) {
