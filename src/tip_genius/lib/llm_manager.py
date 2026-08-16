@@ -24,7 +24,7 @@ LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 # Matches a markdown code fence wrapping the whole response, e.g. ```json ... ```
 # Some providers (notably Anthropic) return fenced JSON even in JSON mode.
 CODE_FENCE_PATTERN = re.compile(
-    r"^\s*```[a-zA-Z]*\s*(?P<body>.*?)\s*```\s*$",
+    r"^\s*```[\w+-]*\s*(?P<body>.*?)\s*```",
     re.DOTALL,
 )
 
@@ -334,7 +334,7 @@ class LLMManager:
 
             # Get the prediction
             if self.provider.startswith("anthropic"):
-                prediction = full_response["content"][0]["text"]
+                prediction = full_response["content"][0].get("text")
             elif self.provider.startswith("google"):
                 # Skip thought parts (present when thinkingConfig is used or omitted)
                 # and return the first non-thought part
@@ -342,15 +342,15 @@ class LLMManager:
                 prediction = next(
                     (p["text"] for p in parts if not p.get("thought")), None
                 )
-                if prediction is None:
-                    msg = f"No answer part in Google API response for {self.model}"
-                    raise ValueError(msg)
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
-                if not prediction:
-                    # Reasoning models can return no content at all
-                    msg = f"Empty content in API response for {self.model}"
-                    raise ValueError(msg)
+
+            # Reasoning models can return no content at all, and a truncated
+            # response can end up empty. Fail with a clear reason rather than
+            # letting an empty string reach the caller's parser.
+            if not prediction:
+                msg = f"Empty content in API response for {self.model}"
+                raise ValueError(msg)
 
             # Strip a markdown code fence if the provider wrapped the JSON
             prediction = strip_code_fence(prediction)

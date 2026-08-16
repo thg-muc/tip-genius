@@ -265,14 +265,21 @@ class TipGenius:
 
         healthy_list = ", ".join(healthy) if healthy else "none"
 
+        # Only reassure about kept predictions if any were actually produced
+        kept = (
+            f"The {total_saved} valid predictions were already exported "
+            f"and are not lost. "
+            if total_saved
+            else "No predictions were produced at all, so nothing was exported. "
+        )
+
         logger.error(
             "No predictions produced by: %s. Providers that worked: %s. "
-            "The %d valid predictions were already exported and are not lost. "
-            "A provider returning nothing usually means its model was retired "
+            "%sA provider returning nothing usually means its model was retired "
             "or renamed, its API key expired, or its endpoint changed.",
             provider_list,
             healthy_list,
-            total_saved,
+            kept,
         )
 
         if not is_cloud_environment():
@@ -280,9 +287,7 @@ class TipGenius:
 
         print(
             f"::error::At least one provider did not produce a single "
-            f"prediction: {provider_list}. The {total_saved} valid predictions "
-            f"from the other providers are not lost -- they were already "
-            f"exported before this check."
+            f"prediction: {provider_list}. {kept.strip()}"
         )
 
         # A step summary is rendered on the run page itself, so the reason is
@@ -305,6 +310,10 @@ class TipGenius:
                 "These predictions are **not lost** — the export runs before "
                 "this check, so everything the working providers produced was "
                 "already written to storage."
+                if total_saved
+                else "**No predictions were produced at all**, so nothing was "
+                "exported and the stored data is unchanged from the last "
+                "successful run."
             ),
             "",
             (
@@ -751,6 +760,8 @@ class TipGenius:
                 export_to_file=self.export_to_file,
             )
             self.prediction_data.clear()
+            self.predictions_per_provider.clear()
+            self.matches_available = False
 
             # Initialize logo matcher if folder is configured and exists
             if team_logos_path := config.get("team_logos_folder"):
@@ -850,9 +861,6 @@ class TipGenius:
                             self.add_failed_combination(sport, llm_provider, error_msg)
                             continue
 
-                        # At least one sport had fixtures to predict
-                        self.matches_available = True
-
                         data = self.api_pipeline.process_api_data(
                             api_result=api_result,
                             named_teams=named_teams,
@@ -861,6 +869,19 @@ class TipGenius:
 
                         if self.debug and self.debug_limit > 0:
                             data = data.limit(self.debug_limit)
+
+                        # Only count rows the LLM can actually predict: rows
+                        # without odds are skipped before any request is made
+                        if (
+                            data.height > 0
+                            and data.filter(
+                                (pl.col("odds_home") != 0)
+                                & (pl.col("odds_away") != 0)
+                                & (pl.col("odds_draw") != 0)
+                            ).height
+                            > 0
+                        ):
+                            self.matches_available = True
 
                         data_processed = self.predict_results(
                             data=data,
@@ -954,12 +975,17 @@ class TipGenius:
             raise  # Re-raise the exception after attempting to save data
 
         else:
-            # After the export, so SystemExit cannot skip it
+            # Exit only on the clean path, so an in-flight exception or an
+            # earlier sys.exit is never masked by this one
+            if self._get_dead_providers() and is_cloud_environment():
+                sys.exit(1)
+
+        finally:
+            # Report here rather than in else, so the diagnostic survives an
+            # export failure exiting first (SystemExit skips else)
             dead_providers = self._get_dead_providers()
             if dead_providers:
                 self._report_dead_providers(dead_providers)
-                if is_cloud_environment():
-                    sys.exit(1)
 
 
 # %% --------------------------------------------
