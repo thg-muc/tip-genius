@@ -284,9 +284,7 @@ class TipGenius:
             return
 
         lines = [
-            # Leading blank line, in case an earlier step left the summary
-            # without a trailing newline
-            "",
+            "",  # in case an earlier step left no trailing newline
             "## Match Predictions Update — failed",
             "",
             "**At least one LLM provider did not produce a single prediction.**",
@@ -777,9 +775,8 @@ class TipGenius:
                     sys.exit(1)
                 return
 
-            # Seed every configured provider at zero, so a provider that never
-            # reaches the counter (e.g. the odds fetch failed for every sport)
-            # is still reported as dead instead of being absent from the dict.
+            # Seed at zero, so a provider skipped before the counter is still
+            # reported as dead instead of being absent from the dict
             for provider in llm_provider_options:
                 self.predictions_per_provider.setdefault(provider, 0)
 
@@ -946,9 +943,7 @@ class TipGenius:
             raise  # Re-raise the exception after attempting to save data
 
         else:
-            # Exit non-zero if a provider produced nothing at all. Runs after
-            # the export, otherwise SystemExit would skip it. In the else
-            # branch so it cannot mask an in-flight exception.
+            # After the export, so SystemExit cannot skip it
             dead_providers = self._get_dead_providers()
             if dead_providers:
                 self._report_dead_providers(dead_providers)
