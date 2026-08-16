@@ -44,9 +44,9 @@ const LLM_PROVIDERS = [
   //   logo: `/images/llm-logos/xAI.png`,
   // },
   // {
-  //     value: 'Anthropic-Claude-Haiku',
-  //     label: 'Claude Haiku',
-  //     logo: `/images/llm-logos/Anthropic.png`
+  //   value: 'OpenRouter-Claude-Haiku',
+  //   label: 'Claude Haiku 4.5',
+  //   logo: `/images/llm-logos/Anthropic.png`,
   // },
 ]
 

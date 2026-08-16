@@ -9,6 +9,7 @@
 
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,43 @@ from .llm_prompts import Prompt
 
 LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 
+# Matches a markdown code fence wrapping the whole response, e.g. ```json ... ```
+# Some providers (notably Anthropic) return fenced JSON even in JSON mode.
+CODE_FENCE_PATTERN = re.compile(
+    r"^\s*```(?:json|JSON)?\s*\n(?P<body>.*?)\n?\s*```\s*$",
+    re.DOTALL,
+)
+
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# %% --------------------------------------------
+# * Helper Functions
+
+
+def strip_code_fence(text: str) -> str:
+    """Remove a markdown code fence wrapping an entire response.
+
+    Providers are asked for JSON mode, but some still wrap the payload in a
+    ```json ... ``` fence, which breaks downstream parsing. Responses without
+    a fence are returned unchanged.
+
+    Parameters
+    ----------
+    text : str
+        The raw response text from the LLM.
+
+    Returns
+    -------
+    str
+        The response with any surrounding code fence removed.
+
+    """
+    match = CODE_FENCE_PATTERN.match(text)
+    if match is None:
+        return text
+    return match.group("body").strip()
+
 
 # %% --------------------------------------------
 # * Class Definitions
@@ -309,6 +345,9 @@ class LLMManager:
                     raise ValueError(msg)
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
+
+            # Strip a markdown code fence if the provider wrapped the JSON
+            prediction = strip_code_fence(prediction)
 
             # Observe a rate limit if specified
             if self.rate_limit > 0:  # Check for rate limit

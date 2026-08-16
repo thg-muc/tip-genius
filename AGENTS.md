@@ -128,3 +128,5 @@ Pinned to `^3.4` — v4 introduces breaking changes (new `@source` directive, co
 
 - Always prefer standard Tailwind classes over arbitrary values (e.g. `w-56` not `w-[224px]`) — arbitrary values may be purged
 - **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; Google response parser skips thought parts to extract the actual answer
+- **Code fence stripping**: `strip_code_fence` in `lib/llm_manager.py` removes a markdown fence wrapping the whole response before it is returned. Anthropic models wrap JSON in ` ```json ` even in JSON mode, which breaks the `literal_eval` in `tip_genius.py`. Applies to every provider; responses without a fence pass through unchanged.
+- **Provider keys select the request/response shape**: a key starting with `anthropic` uses the native Anthropic Messages format, `google` uses the Gemini format, everything else uses the OpenAI-compatible format. Name OpenRouter-hosted models `openrouter-*` regardless of who made the model, or the wrong parser is used.

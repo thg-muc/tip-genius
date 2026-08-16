@@ -25,7 +25,7 @@ So far, the following LLM models have been successfully tested with Tip Genius:
 
 Known LLM Issues:
 
-- Anthropic Claude 4.x (does not have a native JSON mode yet, sometimes struggles to generate valid prediction output)
+- Anthropic Claude (supports JSON mode, but wraps the payload in a markdown code fence; handled by `strip_code_fence` in `lib/llm_manager.py`)
 
 ## Features
 
