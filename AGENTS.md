@@ -50,6 +50,16 @@ RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -v
 automatically. **Suggest running** after changes to `cfg/llm_config.yaml`,
 `cfg/tip_genius_config.yaml`, or `lib/llm_manager.py`.
 
+To check a single provider — e.g. after changing a model id, or to confirm a
+provider still answers before re-enabling it — narrow the same test with `-k`
+instead of running the full sweep:
+
+```bash
+RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -k Mistral-Medium -v
+```
+
+A retired or renamed model surfaces here as a 404 from the provider.
+
 ## Generated Artifacts & Large Directories
 
 - **Edit source files, not generated outputs**:
@@ -117,4 +127,4 @@ Pinned to `^3.4` — v4 introduces breaking changes (new `@source` directive, co
 ## Development Notes
 
 - Always prefer standard Tailwind classes over arbitrary values (e.g. `w-56` not `w-[224px]`) — arbitrary values may be purged
-- **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b, Grok) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; Google response parser skips thought parts to extract the actual answer
+- **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; Google response parser skips thought parts to extract the actual answer

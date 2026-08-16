@@ -38,11 +38,11 @@ const LLM_PROVIDERS = [
     label: 'Phi 4 Medium',
     logo: `/images/llm-logos/Microsoft.png`,
   },
-  {
-    value: 'OpenRouter-Grok',
-    label: 'Grok 4.1 Fast',
-    logo: `/images/llm-logos/xAI.png`,
-  },
+  // {
+  //   value: 'OpenRouter-Grok',
+  //   label: 'Grok 4.3',
+  //   logo: `/images/llm-logos/xAI.png`,
+  // },
   // {
   //     value: 'Anthropic-Claude-Haiku',
   //     label: 'Claude Haiku',

@@ -16,7 +16,7 @@ llm_provider_options:
   - Microsoft-Phi-Medium
   - OpenRouter-GPT-OSS-Large
   - Google-Gemma-Medium
-  - OpenRouter-Grok
+  # - OpenRouter-Grok # Grok 4.3: works, but expensive
   # - Anthropic-Claude-Haiku # No Json Mode: sometimes has issues with JSON output
 
 # LLM Prompt Option - Include Point Scoring System

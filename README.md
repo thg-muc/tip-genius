@@ -22,7 +22,6 @@ So far, the following LLM models have been successfully tested with Tip Genius:
 - **Meta Llama 4 Maverick** (via DeepInfra)
 - **Microsoft Phi-4** (via DeepInfra)
 - **Google Gemma 4** (free, via Google AI Studio)
-- **xAI Grok 4.1 Fast** (via OpenRouter)
 
 Known LLM Issues:
 
