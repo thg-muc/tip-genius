@@ -20,7 +20,7 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'Mistral-Medium',
-    label: 'Mistral Medium 3.1',
+    label: 'Mistral Medium 3.5',
     logo: `/images/llm-logos/Mistral.png`,
   },
   {
