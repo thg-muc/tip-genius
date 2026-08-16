@@ -242,8 +242,7 @@ class TipGenius:
 
         Failing on some matches is normal; producing nothing across every
         sport is structural (retired model, revoked key, changed endpoint).
-        Returns nothing when no sport had fixtures (off-season, international
-        break), since there was nothing to predict.
+        Empty when no sport had fixtures, since nothing was predictable.
         """
         if not self.matches_available:
             return []

@@ -50,15 +50,18 @@ RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -v
 automatically. **Suggest running** after changes to `cfg/llm_config.yaml`,
 `cfg/tip_genius_config.yaml`, or `lib/llm_manager.py`.
 
-To check a single provider — e.g. after changing a model id, or to confirm a
-provider still answers before re-enabling it — narrow the same test with `-k`
-instead of running the full sweep:
+To check a single active provider — e.g. after changing its model id — narrow
+the same test with `-k` instead of running the full sweep:
 
 ```bash
 RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -k Mistral-Medium -v
 ```
 
 A retired or renamed model surfaces here as a 404 from the provider.
+
+The test parametrizes over `llm_provider_options`, so `-k` cannot reach a
+commented-out provider — it selects zero tests and exits 0. Enable the provider
+first, or call `LLMManager.get_prediction()` directly.
 
 ## Generated Artifacts & Large Directories
 

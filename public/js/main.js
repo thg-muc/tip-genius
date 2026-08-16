@@ -53,9 +53,8 @@ const LLM_PROVIDERS = [
 // Default provider is the first one in the list
 const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
 
-// Resolve a stored provider, falling back to the default if it is no longer
-// offered. Without this, a user whose pick was retired keeps requesting a KV
-// key that is no longer updated and only ever sees a load error.
+// Falls back to the default when a stored provider is no longer offered,
+// since its KV key stops being updated and every fetch would fail
 function resolveLlmProvider(storedValue) {
   if (LLM_PROVIDERS.some((p) => p.value === storedValue)) {
     return storedValue

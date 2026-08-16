@@ -21,9 +21,7 @@ from .llm_prompts import Prompt
 
 LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 
-# Matches a markdown code fence wrapping the whole response, e.g. ```json ... ```
-# Some providers (notably Anthropic) return fenced JSON even in JSON mode.
-# Opening fence, optionally followed by a language tag, at the start of a response
+# Opening code fence with an optional language tag, e.g. ```json
 OPENING_FENCE_PATTERN = re.compile(r"^\s*```[\w+-]*[ \t]*\r?\n?")
 
 # Set up logging
