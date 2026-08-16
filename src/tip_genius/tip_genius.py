@@ -139,6 +139,9 @@ class TipGenius:
         self.errors = []
         self.failed_combinations = []
 
+        # Valid predictions saved per provider, used to detect dead providers
+        self.predictions_per_provider = defaultdict(int)
+
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
         self._setup_logging(log_level)
@@ -231,6 +234,80 @@ class TipGenius:
                 f"::notice::Failed combination "
                 f"{failed['sport']}/{failed['provider']}: {failed['error']}"
             )
+
+    def _get_dead_providers(self) -> list[str]:
+        """Return providers that produced no valid prediction at all.
+
+        Failing on some matches is normal; producing nothing across every
+        sport is structural (retired model, revoked key, changed endpoint).
+        """
+        return sorted(
+            provider
+            for provider, count in self.predictions_per_provider.items()
+            if count == 0
+        )
+
+    def _report_dead_providers(self, dead_providers: list[str]) -> None:
+        """Report dead providers to the console and to GitHub Actions."""
+        provider_list = ", ".join(dead_providers)
+        healthy = sorted(
+            provider
+            for provider, count in self.predictions_per_provider.items()
+            if count > 0
+        )
+        total_saved = sum(self.predictions_per_provider.values())
+
+        healthy_list = ", ".join(healthy) if healthy else "none"
+
+        logger.error(
+            "No predictions produced by: %s. The %d predictions from the "
+            "remaining providers (%s) were kept.",
+            provider_list,
+            total_saved,
+            healthy_list,
+        )
+
+        if not is_cloud_environment():
+            return
+
+        print(
+            f"::error::At least one provider did not produce a single "
+            f"prediction: {provider_list}. The {total_saved} valid predictions "
+            f"from the other providers are not lost -- they were already "
+            f"exported before this check."
+        )
+
+        # A step summary is rendered on the run page itself, so the reason is
+        # visible without opening the job log
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+            return
+
+        lines = [
+            "## Match Predictions Update — failed",
+            "",
+            "**At least one LLM provider did not produce a single prediction.**",
+            "",
+            f"- Providers with no predictions: `{provider_list}`",
+            f"- Providers that worked: `{healthy_list}`",
+            f"- Valid predictions exported: **{total_saved}**",
+            "",
+            (
+                "These predictions are **not lost** — the export runs before "
+                "this check, so everything the working providers produced was "
+                "already written to storage."
+            ),
+            "",
+            (
+                "A provider returning nothing across every sport usually means "
+                "its model was retired or renamed, its API key expired, or its "
+                "endpoint changed. Check the job log for the underlying API "
+                "error."
+            ),
+            "",
+        ]
+        with Path(summary_path).open("a", encoding="utf-8") as summary_file:
+            summary_file.write("\n".join(lines))
 
     def _setup_logging(self, log_level: int) -> None:
         """Set up logging configuration with optional file output in debug mode."""
@@ -800,6 +877,12 @@ class TipGenius:
                             .to_dicts()
                         )
 
+                        # Track output per provider, so a provider that produces
+                        # nothing at all can be detected after the loop
+                        self.predictions_per_provider[llm_provider] += len(
+                            valid_matches
+                        )
+
                         # Save valid predictions
                         if valid_matches:
                             self.save_results(
@@ -837,6 +920,14 @@ class TipGenius:
 
             # Log summary of failures using tracking system
             self._log_workflow_summary()
+
+            # Exit non-zero if a provider produced nothing at all. Must run
+            # after the export, otherwise SystemExit would skip it.
+            dead_providers = self._get_dead_providers()
+            if dead_providers:
+                self._report_dead_providers(dead_providers)
+                if is_cloud_environment():
+                    sys.exit(1)
 
         except Exception:
             logger.exception("Critical workflow error: %s")
