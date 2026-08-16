@@ -22,10 +22,11 @@ So far, the following LLM models have been successfully tested with Tip Genius:
 - **Meta Llama 4 Maverick** (via DeepInfra)
 - **Microsoft Phi-4** (via DeepInfra)
 - **Google Gemma 4** (free, via Google AI Studio)
+- **Anthropic Claude Haiku 4.5** (via OpenRouter)
+- **xAI Grok 4.3** (via OpenRouter)
 
-Known LLM Issues:
-
-- Anthropic Claude (supports JSON mode, but wraps the payload in a markdown code fence; handled by `strip_code_fence` in `lib/llm_manager.py`)
+Please note that not all of these models are active at the same time — the
+selection is configured in `src/tip_genius/cfg/tip_genius_config.yaml`.
 
 ## Features
 
