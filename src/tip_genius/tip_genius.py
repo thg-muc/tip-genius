@@ -816,6 +816,9 @@ class TipGenius:
             )
             self.prediction_data.clear()
             self.predictions_per_provider.clear()
+            self.warnings.clear()
+            self.errors.clear()
+            self.failed_combinations.clear()
             self.matches_available = False
             self.sports_fetched = 0
             self.sports_fetch_failed = 0
