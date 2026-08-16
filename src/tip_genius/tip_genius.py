@@ -751,6 +751,8 @@ class TipGenius:
             The configuration dictionary with workflow parameters.
 
         """
+        combinations_completed = False
+
         try:
             # Initialize storage manager
             self.storage_manager = StorageManager(
@@ -942,6 +944,8 @@ class TipGenius:
                         self.add_failed_combination(sport, llm_provider, str(e))
                         continue  # Skip this combination but continue with others
 
+            combinations_completed = True
+
             # Export results even if some combinations failed
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
@@ -975,17 +979,18 @@ class TipGenius:
             raise  # Re-raise the exception after attempting to save data
 
         else:
-            # Exit only on the clean path, so an in-flight exception or an
-            # earlier sys.exit is never masked by this one
+            # Exit only on the clean path, so an in-flight exception is never
+            # masked by this one
             if self._get_dead_providers() and is_cloud_environment():
                 sys.exit(1)
 
         finally:
-            # Report here rather than in else, so the diagnostic survives an
-            # export failure exiting first (SystemExit skips else)
-            dead_providers = self._get_dead_providers()
-            if dead_providers:
-                self._report_dead_providers(dead_providers)
+            # In finally, so an export exiting first cannot skip it; gated on
+            # completion, so an aborted run does not report unreached providers
+            if combinations_completed:
+                dead_providers = self._get_dead_providers()
+                if dead_providers:
+                    self._report_dead_providers(dead_providers)
 
 
 # %% --------------------------------------------

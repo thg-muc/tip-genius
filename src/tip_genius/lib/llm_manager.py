@@ -23,10 +23,8 @@ LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 
 # Matches a markdown code fence wrapping the whole response, e.g. ```json ... ```
 # Some providers (notably Anthropic) return fenced JSON even in JSON mode.
-CODE_FENCE_PATTERN = re.compile(
-    r"^\s*```[\w+-]*\s*(?P<body>.*?)\s*```",
-    re.DOTALL,
-)
+# Opening fence, optionally followed by a language tag, at the start of a response
+OPENING_FENCE_PATTERN = re.compile(r"^\s*```[\w+-]*[ \t]*\r?\n?")
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -55,10 +53,19 @@ def strip_code_fence(text: str) -> str:
     """
     if not isinstance(text, str):
         return text
-    match = CODE_FENCE_PATTERN.match(text)
-    if match is None:
+
+    opening = OPENING_FENCE_PATTERN.match(text)
+    if opening is None:
         return text
-    return match.group("body").strip()
+
+    body = text[opening.end() :]
+
+    # Last fence, not the first: a fence inside a JSON string must not truncate
+    closing = body.rfind("```")
+    if closing != -1:
+        body = body[:closing]
+
+    return body.strip()
 
 
 # %% --------------------------------------------
@@ -345,9 +352,8 @@ class LLMManager:
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
 
-            # Reasoning models can return no content at all, and a truncated
-            # response can end up empty. Fail with a clear reason rather than
-            # letting an empty string reach the caller's parser.
+            # Reasoning models can return no content at all -- fail with a
+            # clear reason instead of passing an empty string to the parser
             if not prediction:
                 msg = f"Empty content in API response for {self.model}"
                 raise ValueError(msg)
