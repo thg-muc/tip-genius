@@ -20,7 +20,7 @@ const LLM_PROVIDERS = [
   },
   {
     value: 'Mistral-Medium',
-    label: 'Mistral Medium 3.1',
+    label: 'Mistral Medium 3.5',
     logo: `/images/llm-logos/Mistral.png`,
   },
   {
@@ -38,20 +38,36 @@ const LLM_PROVIDERS = [
     label: 'Phi 4 Medium',
     logo: `/images/llm-logos/Microsoft.png`,
   },
-  {
-    value: 'OpenRouter-Grok',
-    label: 'Grok 4.1 Fast',
-    logo: `/images/llm-logos/xAI.png`,
-  },
   // {
-  //     value: 'Anthropic-Claude-Haiku',
-  //     label: 'Claude Haiku',
-  //     logo: `/images/llm-logos/Anthropic.png`
+  //   value: 'OpenRouter-Grok',
+  //   label: 'Grok 4.3',
+  //   logo: `/images/llm-logos/xAI.png`,
+  // },
+  // {
+  //   value: 'OpenRouter-Claude-Haiku',
+  //   label: 'Claude Haiku 4.5',
+  //   logo: `/images/llm-logos/Anthropic.png`,
   // },
 ]
 
 // Default provider is the first one in the list
 const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
+
+// Falls back to the default when a stored provider is no longer offered,
+// since its KV key stops being updated and every fetch would fail
+function resolveLlmProvider(storedValue) {
+  if (LLM_PROVIDERS.some((p) => p.value === storedValue)) {
+    return storedValue
+  }
+  if (storedValue) {
+    console.warn(`Stored LLM provider "${storedValue}" is no longer available`)
+    localStorage.removeItem('lastUsedLLM')
+    // Cached predictions belong to the old provider and would never be refreshed
+    localStorage.removeItem('cachedLeagueData')
+    localStorage.removeItem('lastFetchTime')
+  }
+  return DEFAULT_LLM_PROVIDER
+}
 
 // Default fallback version in YYMMDDhhmm format
 let appVersion = '2501010000'
@@ -61,9 +77,10 @@ let CONFIG
 
 // Global state variables
 let currentLeague = localStorage.getItem('lastUsedLeague')
+// Resolved first: a retired provider also clears the cache it was read from
+let currentLLM = resolveLlmProvider(localStorage.getItem('lastUsedLLM'))
 let lastFetchTime = parseInt(localStorage.getItem('lastFetchTime')) || 0
 let cachedLeagueData = null
-let currentLLM = localStorage.getItem('lastUsedLLM') || DEFAULT_LLM_PROVIDER
 
 // Keep the footer copyright year current without manual updates
 function updateFooterYear() {
@@ -861,11 +878,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const menuButton = document.getElementById('menuButton')
   const dropdownMenu = document.getElementById('dropdownMenu')
-
-  // Initialize currentLLM if it hasn't been done yet
-  if (typeof currentLLM === 'undefined') {
-    currentLLM = localStorage.getItem('lastUsedLLM') || CONFIG.DEFAULT_LLM
-  }
 
   // Make sure the container exists
   const providersContainer = document.getElementById('llm-providers')

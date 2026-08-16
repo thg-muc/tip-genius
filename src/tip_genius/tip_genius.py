@@ -139,6 +139,14 @@ class TipGenius:
         self.errors = []
         self.failed_combinations = []
 
+        # Valid predictions saved per provider, used to detect dead providers
+        self.predictions_per_provider = defaultdict(int)
+        # Whether any sport had upcoming matches at all (off-season guard)
+        self.matches_available = False
+        # Odds fetches that succeeded and that raised, per workflow run
+        self.sports_fetched = 0
+        self.sports_fetch_failed = 0
+
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
         self._setup_logging(log_level)
@@ -231,6 +239,127 @@ class TipGenius:
                 f"::notice::Failed combination "
                 f"{failed['sport']}/{failed['provider']}: {failed['error']}"
             )
+
+    def _get_dead_providers(self) -> list[str]:
+        """Return providers that produced no valid prediction at all.
+
+        Failing on some matches is normal; producing nothing across every
+        sport is structural (retired model, revoked key, changed endpoint).
+        Empty when no sport had fixtures, since nothing was predictable.
+        """
+        if not self.matches_available:
+            return []
+        return sorted(
+            provider
+            for provider, count in self.predictions_per_provider.items()
+            if count == 0
+        )
+
+    def _odds_api_unavailable(self) -> bool:
+        """Whether every odds fetch failed, leaving nothing to predict.
+
+        Distinct from an off-season week: there the API answers with an empty
+        list, so no fetch is counted as failed.
+        """
+        return self.sports_fetched == 0 and self.sports_fetch_failed > 0
+
+    def _report_odds_api_unavailable(self) -> None:
+        """Report a total odds API failure to the console and GitHub Actions."""
+        msg = (
+            f"Odds could not be retrieved for any of the "
+            f"{self.sports_fetch_failed} configured sports, so no predictions "
+            f"were generated. The stored data is unchanged from the last "
+            f"successful run."
+        )
+        logger.error(msg)
+
+        if not is_cloud_environment():
+            return
+
+        print(f"::error::{msg}")
+
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+            return
+
+        lines = [
+            "",  # in case an earlier step left no trailing newline
+            "## Match Predictions Update — failed",
+            "",
+            "**The odds API could not be reached for any configured sport.**",
+            "",
+            f"- Sports attempted: **{self.sports_fetch_failed}**",
+            "- Predictions generated: **0**",
+            "",
+            (
+                "The stored data is unchanged from the last successful run, so "
+                "the website still shows the previous predictions."
+            ),
+            "",
+            (
+                "Check the job log for the underlying error — an expired "
+                "`ODDS_API_KEY`, an exhausted quota, or an API outage are the "
+                "usual causes."
+            ),
+            "",
+        ]
+        with Path(summary_path).open("a", encoding="utf-8") as summary_file:
+            summary_file.write("\n".join(lines))
+
+    def _report_dead_providers(self, dead_providers: list[str]) -> None:
+        """Report dead providers to the console and to GitHub Actions."""
+        provider_list = ", ".join(dead_providers)
+        healthy = sorted(
+            provider
+            for provider, count in self.predictions_per_provider.items()
+            if count > 0
+        )
+        total_saved = sum(self.predictions_per_provider.values())
+
+        healthy_list = ", ".join(healthy) if healthy else "none"
+
+        logger.error(
+            "No predictions produced by: %s. Providers that worked: %s. "
+            "A provider returning nothing usually means its model was retired "
+            "or renamed, its API key expired, or its endpoint changed.",
+            provider_list,
+            healthy_list,
+        )
+
+        if not is_cloud_environment():
+            return
+
+        print(
+            f"::error::At least one provider did not produce a single "
+            f"prediction: {provider_list}. Providers that worked: {healthy_list}."
+        )
+
+        # A step summary is rendered on the run page itself, so the reason is
+        # visible without opening the job log
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+            return
+
+        lines = [
+            "",  # in case an earlier step left no trailing newline
+            "## Match Predictions Update — failed",
+            "",
+            "**At least one LLM provider did not produce a single prediction.**",
+            "",
+            f"- Providers with no predictions: `{provider_list}`",
+            f"- Providers that worked: `{healthy_list}`",
+            f"- Valid predictions produced: **{total_saved}**",
+            "",
+            (
+                "A provider returning nothing across every sport usually means "
+                "its model was retired or renamed, its API key expired, or its "
+                "endpoint changed. Check the job log for the underlying API "
+                "error and for what was written to storage."
+            ),
+            "",
+        ]
+        with Path(summary_path).open("a", encoding="utf-8") as summary_file:
+            summary_file.write("\n".join(lines))
 
     def _setup_logging(self, log_level: int) -> None:
         """Set up logging configuration with optional file output in debug mode."""
@@ -656,6 +785,8 @@ class TipGenius:
             The configuration dictionary with workflow parameters.
 
         """
+        combinations_completed = False
+
         try:
             # Initialize storage manager
             self.storage_manager = StorageManager(
@@ -665,6 +796,13 @@ class TipGenius:
                 export_to_file=self.export_to_file,
             )
             self.prediction_data.clear()
+            self.predictions_per_provider.clear()
+            self.warnings.clear()
+            self.errors.clear()
+            self.failed_combinations.clear()
+            self.matches_available = False
+            self.sports_fetched = 0
+            self.sports_fetch_failed = 0
 
             # Initialize logo matcher if folder is configured and exists
             if team_logos_path := config.get("team_logos_folder"):
@@ -687,14 +825,19 @@ class TipGenius:
             named_teams_options = config["named_teams_options"]
             additional_info_options = config["additional_info_options"]
 
-            if not sports_list:
-                logger.warning("No sports defined in the configuration, aborting.")
+            if not sports_list or not llm_provider_options:
+                missing = "sports" if not sports_list else "LLM providers"
+                msg = f"No {missing} defined in the configuration, aborting."
+                logger.error(msg)
+                self.add_error(msg, "Configuration")
+                if is_cloud_environment():
+                    print(f"::error::{msg}")
+                    sys.exit(1)
                 return
-            if not llm_provider_options:
-                logger.warning(
-                    "No LLM providers defined in the configuration, aborting.",
-                )
-                return
+
+            # Every provider needs an entry, including ones that never run
+            for provider in llm_provider_options:
+                self.predictions_per_provider.setdefault(provider, 0)
 
             nr_total_combinations = (
                 len(llm_provider_options)
@@ -724,7 +867,10 @@ class TipGenius:
                         )
                 except Exception:
                     logger.exception("Failed to fetch odds for sport %s", sport)
+                    self.sports_fetch_failed += 1
                     continue  # Skip this sport but continue with others
+
+                self.sports_fetched += 1
 
                 combinations = product(
                     llm_provider_options,
@@ -767,6 +913,19 @@ class TipGenius:
                         if self.debug and self.debug_limit > 0:
                             data = data.limit(self.debug_limit)
 
+                        # Only count rows the LLM can actually predict: rows
+                        # without odds are skipped before any request is made
+                        if (
+                            data.height > 0
+                            and data.filter(
+                                (pl.col("odds_home") != 0)
+                                & (pl.col("odds_away") != 0)
+                                & (pl.col("odds_draw") != 0)
+                            ).height
+                            > 0
+                        ):
+                            self.matches_available = True
+
                         data_processed = self.predict_results(
                             data=data,
                             llm_provider=llm_provider,
@@ -800,6 +959,12 @@ class TipGenius:
                             .to_dicts()
                         )
 
+                        # Track output per provider, so a provider that produces
+                        # nothing at all can be detected after the loop
+                        self.predictions_per_provider[llm_provider] += len(
+                            valid_matches
+                        )
+
                         # Save valid predictions
                         if valid_matches:
                             self.save_results(
@@ -819,6 +984,8 @@ class TipGenius:
                         self.add_error(error_msg, "Workflow processing")
                         self.add_failed_combination(sport, llm_provider, str(e))
                         continue  # Skip this combination but continue with others
+
+            combinations_completed = True
 
             # Export results even if some combinations failed
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
@@ -851,6 +1018,21 @@ class TipGenius:
                     if is_cloud_environment():
                         sys.exit(1)
             raise  # Re-raise the exception after attempting to save data
+
+        else:
+            # Only on the clean path, so an in-flight exception is not masked
+            failed = self._odds_api_unavailable() or self._get_dead_providers()
+            if failed and is_cloud_environment():
+                sys.exit(1)
+
+        finally:
+            # In finally, so an export exiting first cannot skip it; gated on
+            # completion, so an aborted run does not report unreached providers
+            if combinations_completed:
+                if self._odds_api_unavailable():
+                    self._report_odds_api_unavailable()
+                elif dead_providers := self._get_dead_providers():
+                    self._report_dead_providers(dead_providers)
 
 
 # %% --------------------------------------------

@@ -50,6 +50,19 @@ RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -v
 automatically. **Suggest running** after changes to `cfg/llm_config.yaml`,
 `cfg/tip_genius_config.yaml`, or `lib/llm_manager.py`.
 
+To check a single active provider — e.g. after changing its model id — narrow
+the same test with `-k` instead of running the full sweep:
+
+```bash
+RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -k Mistral-Medium -v
+```
+
+A retired or renamed model surfaces here as a 404 from the provider.
+
+The test parametrizes over `llm_provider_options`, so `-k` cannot reach a
+commented-out provider — it selects zero tests and exits 0. Enable the provider
+first, or call `LLMManager.get_prediction()` directly.
+
 ## Generated Artifacts & Large Directories
 
 - **Edit source files, not generated outputs**:
@@ -117,4 +130,8 @@ Pinned to `^3.4` — v4 introduces breaking changes (new `@source` directive, co
 ## Development Notes
 
 - Always prefer standard Tailwind classes over arbitrary values (e.g. `w-56` not `w-[224px]`) — arbitrary values may be purged
-- **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b, Grok) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; Google response parser skips thought parts to extract the actual answer
+- **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; Google response parser skips thought parts to extract the actual answer
+- **Code fence stripping**: `strip_code_fence` in `lib/llm_manager.py` unwraps fenced responses for every provider (some models wrap JSON in ` ```json ` even in JSON mode, which breaks the `literal_eval` in `tip_genius.py`). Unfenced responses pass through unchanged.
+- **Provider keys select the request/response shape**: a key starting with `anthropic` uses the native Anthropic Messages format, `google` uses the Gemini format, everything else uses the OpenAI-compatible format. Name OpenRouter-hosted models `openrouter-*` regardless of who made the model, or the wrong parser is used.
+- **Retiring a frontend provider**: removing it from `LLM_PROVIDERS` in `public/js/main.js` is enough — `resolveLlmProvider` migrates users whose stored selection is gone.
+- **Dead provider detection**: `_get_dead_providers` flags any provider with zero valid predictions and the workflow exits 1, after the export has been attempted. The report names the dead and healthy providers and points at the job log — it deliberately makes no claim about what reached storage, since the export can fail or partially fail. Partial failures and weeks without fixtures do not trigger it. A total odds API failure is reported separately by `_odds_api_unavailable`.

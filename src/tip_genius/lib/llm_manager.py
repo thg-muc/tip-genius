@@ -7,9 +7,12 @@
 # %% --------------------------------------------
 # * Libs and Config
 
+import json
 import logging
 import os
+import re
 import time
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -20,8 +23,76 @@ from .llm_prompts import Prompt
 
 LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 
+# Opening code fence with an optional language tag, e.g. ```json
+OPENING_FENCE_PATTERN = re.compile(r"^\s*```[\w+-]*[ \t]*\r?\n?")
+
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# %% --------------------------------------------
+# * Helper Functions
+
+
+def _is_parseable(text: str) -> bool:
+    """Whether text is a JSON object the caller will be able to parse."""
+    try:
+        return isinstance(json.loads(text), dict)
+    except (ValueError, TypeError):
+        return False
+
+
+def _fenced_candidates(body: str) -> list[str]:
+    """Payload candidates from a response body, in decreasing likelihood."""
+    positions = [i for i in range(len(body)) if body.startswith("```", i)]
+    # Text up to each fence, then each block between two fences with its
+    # opening fence and language tag removed
+    candidates = [body[:pos] for pos in positions]
+    candidates += [
+        OPENING_FENCE_PATTERN.sub("", body[start:end], count=1)
+        for start, end in pairwise(positions)
+    ]
+    return [stripped for c in candidates if (stripped := c.strip())]
+
+
+def strip_code_fence(text: str | None) -> str | None:
+    """Remove a markdown code fence wrapping an entire response.
+
+    Providers are asked for JSON mode, but some still wrap the payload in a
+    ```json ... ``` fence, which breaks downstream parsing. Responses without
+    a fence are returned unchanged.
+
+    Parameters
+    ----------
+    text : str or None
+        The raw response text from the LLM.
+
+    Returns
+    -------
+    str or None
+        The response with any surrounding code fence removed.
+
+    """
+    if not isinstance(text, str):
+        return text
+
+    opening = OPENING_FENCE_PATTERN.match(text)
+    if opening is None:
+        return text
+
+    body = text[opening.end() :]
+
+    # A response may hold several fenced blocks, and a fence may appear inside
+    # a JSON string value, so prefer whichever candidate actually parses.
+    for candidate in _fenced_candidates(body):
+        if _is_parseable(candidate):
+            return candidate
+
+    closing = body.rfind("```")
+    if closing != -1:
+        body = body[:closing]
+
+    return body.strip()
+
 
 # %% --------------------------------------------
 # * Class Definitions
@@ -296,7 +367,11 @@ class LLMManager:
 
             # Get the prediction
             if self.provider.startswith("anthropic"):
-                prediction = full_response["content"][0]["text"]
+                # Skip thinking and tool_use blocks to find the answer
+                blocks = full_response["content"]
+                prediction = next(
+                    (b["text"] for b in blocks if b.get("type") == "text"), None
+                )
             elif self.provider.startswith("google"):
                 # Skip thought parts (present when thinkingConfig is used or omitted)
                 # and return the first non-thought part
@@ -304,11 +379,17 @@ class LLMManager:
                 prediction = next(
                     (p["text"] for p in parts if not p.get("thought")), None
                 )
-                if prediction is None:
-                    msg = f"No answer part in Google API response for {self.model}"
-                    raise ValueError(msg)
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
+
+            # Strip a markdown code fence if the provider wrapped the JSON
+            prediction = strip_code_fence(prediction)
+
+            # Checked after stripping, since a truncated fence strips to empty.
+            # Reasoning models can also return no content at all.
+            if not prediction:
+                msg = f"Empty content in API response for {self.model}"
+                raise ValueError(msg)
 
             # Observe a rate limit if specified
             if self.rate_limit > 0:  # Check for rate limit

@@ -16,17 +16,17 @@ Tip Genius leverages LLMs to generate match predictions by analyzing odds data a
 
 So far, the following LLM models have been successfully tested with Tip Genius:
 
-- **Mistral Medium 3.1** (Free API, via Mistral AI)
-- **OpenAI GPT-OSS 120b** (free, via OpenRouter)
+- **Mistral Medium 3.5** (Free API, via Mistral AI)
+- **OpenAI GPT-OSS 120b** (via OpenRouter)
 - **DeepSeek V4 Flash** (via DeepSeek)
 - **Meta Llama 4 Maverick** (via DeepInfra)
 - **Microsoft Phi-4** (via DeepInfra)
 - **Google Gemma 4** (free, via Google AI Studio)
-- **xAI Grok 4.1 Fast** (via OpenRouter)
+- **Anthropic Claude Haiku 4.5** (via OpenRouter)
+- **xAI Grok 4.3** (via OpenRouter)
 
-Known LLM Issues:
-
-- Anthropic Claude 4.x (does not have a native JSON mode yet, sometimes struggles to generate valid prediction output)
+Please note that not all of these models are active at the same time — the
+selection is configured in `src/tip_genius/cfg/tip_genius_config.yaml`.
 
 ## Features
 

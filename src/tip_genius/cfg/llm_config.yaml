@@ -85,7 +85,7 @@ openrouter-gpt-oss-large:
   api_key_env_name: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
   operation: chat/completions
-  model: openai/gpt-oss-120b:free
+  model: openai/gpt-oss-120b
   kwargs:
     temperature: 0.0
     stream: false
@@ -114,29 +114,34 @@ google-gemma-medium:
     # - omit entirely: full thinking (default)
     # - thinkingConfig: {thinkingLevel: minimal}: near-zero thinking (~0 thought tokens)
     # - thinkingLevel: low/medium/high: NOT supported for Gemma (Gemini-only)
-
-openrouter-grok:
-  api_key_env_name: OPENROUTER_API_KEY
-  base_url: https://openrouter.ai/api/v1
-  operation: chat/completions
-  model: x-ai/grok-4.1-fast
-  kwargs:
-    temperature: 0.0
-    stream: false
-    max_tokens: 8192
-    reasoning:
-      effort: medium # 'low', 'medium', 'high', 'xhigh'
-    response_format:
-      type: json_object
-  optional_headers:
-    HTTP-Referer: 'https://tip-genius.vercel.app'
-    X-Title: 'Tip Genius'
-# anthropic-claude-haiku:
-#   api_key_env_name: ANTHROPIC_API_KEY
-#   base_url: https://api.anthropic.com/v1
-#   operation: messages
-#   model: claude-3-5-haiku-20241022
+# openrouter-grok:
+#   api_key_env_name: OPENROUTER_API_KEY
+#   base_url: https://openrouter.ai/api/v1
+#   operation: chat/completions
+#   model: x-ai/grok-4.3
 #   kwargs:
 #     temperature: 0.0
 #     stream: false
 #     max_tokens: 8192
+#     reasoning:
+#       effort: medium # 'low', 'medium', 'high', 'xhigh'
+#     response_format:
+#       type: json_object
+#   optional_headers:
+#     HTTP-Referer: 'https://tip-genius.vercel.app'
+#     X-Title: 'Tip Genius'
+
+# openrouter-claude-haiku:
+#   api_key_env_name: OPENROUTER_API_KEY
+#   base_url: https://openrouter.ai/api/v1
+#   operation: chat/completions
+#   model: anthropic/claude-haiku-4.5
+#   kwargs:
+#     temperature: 0.0
+#     stream: false
+#     max_tokens: 8192
+#     response_format:
+#       type: json_object
+#   optional_headers:
+#     HTTP-Referer: 'https://tip-genius.vercel.app'
+#     X-Title: 'Tip Genius'
