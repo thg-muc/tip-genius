@@ -54,7 +54,7 @@ class BaseAPI(ABC):
             error_msg = f"Config file not found: {ODDS_CONFIG_FILE}"
             raise FileNotFoundError(error_msg) from exc
         except KeyError as exc:
-            logger.exception("Key not found in config: %s")
+            logger.exception("Key not found in config")
             error_msg = f"Key not found in config: {exc}"
             raise KeyError(error_msg) from exc
 

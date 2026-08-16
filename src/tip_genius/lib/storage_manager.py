@@ -99,7 +99,7 @@ class StorageManager:
             )
 
         except (FileNotFoundError, KeyError, yaml.YAMLError) as e:
-            logger.warning(("Vercel KV storage failed to initialize: %s", str(e)))
+            logger.warning("Vercel KV storage failed to initialize: %s", str(e))
 
         return False
 
@@ -264,7 +264,7 @@ class StorageManager:
                     key_name,
                 )
                 return True
-            logger.exception(
+            logger.error(
                 "Failed to write predictions in Vercel KV: HTTP %d, Response: %s",
                 response.status_code,
                 # Truncate the response text to avoid excessive logging
@@ -272,7 +272,7 @@ class StorageManager:
             )
 
         except Exception:
-            logger.exception("Failed to write predictions to KV: %s")
+            logger.exception("Failed to write predictions to KV")
             return False
 
         else:
