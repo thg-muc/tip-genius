@@ -473,7 +473,7 @@ class TipGenius:
             logger.debug("LLM data stored in CSV: %s", csv_path)
 
         except Exception:
-            logger.exception("Failed to store LLM data: %s")
+            logger.exception("Failed to store LLM data")
             raise
 
     def store_api_data(
@@ -516,7 +516,7 @@ class TipGenius:
             logger.debug("API result stored successfully at: %s", file_path)
 
         except Exception:
-            logger.exception("A problem occurred while storing API result: %s")
+            logger.exception("A problem occurred while storing API result")
 
     def _wait_before_retry(
         self,
@@ -812,7 +812,7 @@ class TipGenius:
                         self.logo_matcher = TeamLogoMatcher(logo_directory=full_path)
                         logger.debug("TeamLogoMatcher successfully initialized.")
                     except Exception:
-                        logger.warning("Failed to initialize logo matcher: %s")
+                        logger.exception("Failed to initialize logo matcher")
                 else:
                     logger.warning(
                         "Not performing Logo matching, logo dir does not exist: %s",
@@ -993,12 +993,12 @@ class TipGenius:
                     export_success = self.export_results()
                     if not export_success and is_cloud_environment():
                         # Only exit with failure in cloud environments
-                        logger.exception(
+                        logger.error(
                             "Critical error during export. Exiting with status code 1.",
                         )
                         sys.exit(1)
                 except Exception:
-                    logger.exception("Failed to export results: %s")
+                    logger.exception("Failed to export results")
                     if is_cloud_environment():
                         sys.exit(1)
 
@@ -1006,7 +1006,7 @@ class TipGenius:
             self._log_workflow_summary()
 
         except Exception:
-            logger.exception("Critical workflow error: %s")
+            logger.exception("Critical workflow error")
             # Try to save any collected data even if workflow fails
             if self.prediction_data and (self.export_to_kv or self.export_to_file):
                 try:
@@ -1014,7 +1014,7 @@ class TipGenius:
                     if not export_success and is_cloud_environment():
                         sys.exit(1)
                 except Exception:
-                    logger.exception("Failed to export results after error: %s")
+                    logger.exception("Failed to export results after error")
                     if is_cloud_environment():
                         sys.exit(1)
             raise  # Re-raise the exception after attempting to save data
