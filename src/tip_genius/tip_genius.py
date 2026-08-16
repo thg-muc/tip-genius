@@ -284,6 +284,9 @@ class TipGenius:
             return
 
         lines = [
+            # Leading blank line, in case an earlier step left the summary
+            # without a trailing newline
+            "",
             "## Match Predictions Update — failed",
             "",
             "**At least one LLM provider did not produce a single prediction.**",
@@ -764,14 +767,21 @@ class TipGenius:
             named_teams_options = config["named_teams_options"]
             additional_info_options = config["additional_info_options"]
 
-            if not sports_list:
-                logger.warning("No sports defined in the configuration, aborting.")
+            if not sports_list or not llm_provider_options:
+                missing = "sports" if not sports_list else "LLM providers"
+                msg = f"No {missing} defined in the configuration, aborting."
+                logger.error(msg)
+                self.add_error(msg, "Configuration")
+                if is_cloud_environment():
+                    print(f"::error::{msg}")
+                    sys.exit(1)
                 return
-            if not llm_provider_options:
-                logger.warning(
-                    "No LLM providers defined in the configuration, aborting.",
-                )
-                return
+
+            # Seed every configured provider at zero, so a provider that never
+            # reaches the counter (e.g. the odds fetch failed for every sport)
+            # is still reported as dead instead of being absent from the dict.
+            for provider in llm_provider_options:
+                self.predictions_per_provider.setdefault(provider, 0)
 
             nr_total_combinations = (
                 len(llm_provider_options)
@@ -921,14 +931,6 @@ class TipGenius:
             # Log summary of failures using tracking system
             self._log_workflow_summary()
 
-            # Exit non-zero if a provider produced nothing at all. Must run
-            # after the export, otherwise SystemExit would skip it.
-            dead_providers = self._get_dead_providers()
-            if dead_providers:
-                self._report_dead_providers(dead_providers)
-                if is_cloud_environment():
-                    sys.exit(1)
-
         except Exception:
             logger.exception("Critical workflow error: %s")
             # Try to save any collected data even if workflow fails
@@ -942,6 +944,16 @@ class TipGenius:
                     if is_cloud_environment():
                         sys.exit(1)
             raise  # Re-raise the exception after attempting to save data
+
+        else:
+            # Exit non-zero if a provider produced nothing at all. Runs after
+            # the export, otherwise SystemExit would skip it. In the else
+            # branch so it cannot mask an in-flight exception.
+            dead_providers = self._get_dead_providers()
+            if dead_providers:
+                self._report_dead_providers(dead_providers)
+                if is_cloud_environment():
+                    sys.exit(1)
 
 
 # %% --------------------------------------------
