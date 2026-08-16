@@ -141,6 +141,8 @@ class TipGenius:
 
         # Valid predictions saved per provider, used to detect dead providers
         self.predictions_per_provider = defaultdict(int)
+        # Whether any sport had upcoming matches at all (off-season guard)
+        self.matches_available = False
 
         # Initialize logging
         log_level = logging.DEBUG if self.debug else logging.INFO
@@ -240,7 +242,11 @@ class TipGenius:
 
         Failing on some matches is normal; producing nothing across every
         sport is structural (retired model, revoked key, changed endpoint).
+        Returns nothing when no sport had fixtures (off-season, international
+        break), since there was nothing to predict.
         """
+        if not self.matches_available:
+            return []
         return sorted(
             provider
             for provider, count in self.predictions_per_provider.items()
@@ -843,6 +849,9 @@ class TipGenius:
                             logger.warning("No valid API data, skipping combination...")
                             self.add_failed_combination(sport, llm_provider, error_msg)
                             continue
+
+                        # At least one sport had fixtures to predict
+                        self.matches_available = True
 
                         data = self.api_pipeline.process_api_data(
                             api_result=api_result,

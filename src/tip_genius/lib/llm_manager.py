@@ -24,7 +24,7 @@ LLM_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "llm_config.yaml"
 # Matches a markdown code fence wrapping the whole response, e.g. ```json ... ```
 # Some providers (notably Anthropic) return fenced JSON even in JSON mode.
 CODE_FENCE_PATTERN = re.compile(
-    r"^\s*```(?:json|JSON)?\s*\n(?P<body>.*?)\n?\s*```\s*$",
+    r"^\s*```[a-zA-Z]*\s*(?P<body>.*?)\s*```\s*$",
     re.DOTALL,
 )
 
@@ -53,6 +53,8 @@ def strip_code_fence(text: str) -> str:
         The response with any surrounding code fence removed.
 
     """
+    if not isinstance(text, str):
+        return text
     match = CODE_FENCE_PATTERN.match(text)
     if match is None:
         return text
@@ -345,6 +347,10 @@ class LLMManager:
                     raise ValueError(msg)
             else:
                 prediction = full_response["choices"][0]["message"]["content"]
+                if not prediction:
+                    # Reasoning models can return no content at all
+                    msg = f"Empty content in API response for {self.model}"
+                    raise ValueError(msg)
 
             # Strip a markdown code fence if the provider wrapped the JSON
             prediction = strip_code_fence(prediction)
