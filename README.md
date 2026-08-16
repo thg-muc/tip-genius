@@ -17,7 +17,7 @@ Tip Genius leverages LLMs to generate match predictions by analyzing odds data a
 So far, the following LLM models have been successfully tested with Tip Genius:
 
 - **Mistral Medium 3.1** (Free API, via Mistral AI)
-- **OpenAI GPT-OSS 120b** (free, via OpenRouter)
+- **OpenAI GPT-OSS 120b** (via OpenRouter)
 - **DeepSeek V4 Flash** (via DeepSeek)
 - **Meta Llama 4 Maverick** (via DeepInfra)
 - **Microsoft Phi-4** (via DeepInfra)

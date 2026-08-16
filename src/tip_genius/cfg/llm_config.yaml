@@ -85,7 +85,7 @@ openrouter-gpt-oss-large:
   api_key_env_name: OPENROUTER_API_KEY
   base_url: https://openrouter.ai/api/v1
   operation: chat/completions
-  model: openai/gpt-oss-120b:free
+  model: openai/gpt-oss-120b
   kwargs:
     temperature: 0.0
     stream: false
