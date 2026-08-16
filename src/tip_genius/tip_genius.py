@@ -260,11 +260,13 @@ class TipGenius:
         healthy_list = ", ".join(healthy) if healthy else "none"
 
         logger.error(
-            "No predictions produced by: %s. The %d predictions from the "
-            "remaining providers (%s) were kept.",
+            "No predictions produced by: %s. Providers that worked: %s. "
+            "The %d valid predictions were already exported and are not lost. "
+            "A provider returning nothing usually means its model was retired "
+            "or renamed, its API key expired, or its endpoint changed.",
             provider_list,
-            total_saved,
             healthy_list,
+            total_saved,
         )
 
         if not is_cloud_environment():
