@@ -113,7 +113,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key
 KV_REST_API_TOKEN=your_vercel_kv_token
 KV_REST_API_URL=your_vercel_kv_url
 KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
-KV_DEFAULT_KEY=Match_Predictions_Mistral-Medium_FourPointsScoring_named_with-info
+KV_DEFAULT_KEY=Match_Predictions_Google-Gemma-Medium_FourPointsScoring_named_with-info
 
 DEBUG_MODE=TRUE/FALSE
 DEBUG_PROCESSING_LIMIT=5

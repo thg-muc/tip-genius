@@ -16,7 +16,7 @@ Tip Genius leverages LLMs to generate match predictions by analyzing odds data a
 
 So far, the following LLM models have been successfully tested with Tip Genius:
 
-- **Mistral Medium 3.5** (Free API, via Mistral AI)
+- **Mistral Medium 3.5** (Free API, via Mistral AI) — currently disabled, see below
 - **OpenAI GPT-OSS 120b** (via OpenRouter)
 - **DeepSeek V4 Flash** (via DeepSeek)
 - **Meta Llama 4 Maverick** (via DeepInfra)
@@ -27,6 +27,10 @@ So far, the following LLM models have been successfully tested with Tip Genius:
 
 Please note that not all of these models are active at the same time — the
 selection is configured in `src/tip_genius/cfg/tip_genius_config.yaml`.
+
+Mistral Medium is disabled as of September 2026: the API account is provisioned
+at zero requests per minute (`x-ratelimit-limit-req-minute: 0`), so every call
+returns HTTP 429. Re-enable it in that config once the account is restored.
 
 ## Features
 

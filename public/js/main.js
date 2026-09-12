@@ -18,11 +18,11 @@ const LLM_PROVIDERS = [
     label: 'GPT-OSS 120b',
     logo: `/images/llm-logos/OpenAI.png`,
   },
-  {
-    value: 'Mistral-Medium',
-    label: 'Mistral Medium 3.5',
-    logo: `/images/llm-logos/Mistral.png`,
-  },
+  // {
+  //   value: 'Mistral-Medium',
+  //   label: 'Mistral Medium 3.5',
+  //   logo: `/images/llm-logos/Mistral.png`,
+  // },
   {
     value: 'Deepseek-Chat',
     label: 'DeepSeek V4 Flash',

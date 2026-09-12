@@ -11,7 +11,7 @@ sports_list:
 llm_provider_options:
   # - Google-Gemini-Flash-Lite # API Rate Limits
   - Deepseek-Chat
-  - Mistral-Medium
+  # - Mistral-Medium # API quota: account provisioned 0 req/minute
   - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenRouter-GPT-OSS-Large
