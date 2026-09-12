@@ -89,6 +89,15 @@ class TipGenius:
         Flag to store intermediate LLM results to file system.
     llm_attempts : int, default 4
         Number of attempts for LLM predictions before giving up.
+    llm_abandon_after_rows : int, default 3
+        Number of consecutive rows failing with API errors before a provider is
+        abandoned for the rest of the run. Prevents a fully unavailable provider
+        (expired key, zero quota) from burning the full retry budget on every row
+        of every sport.
+    abandoned_providers : set[str]
+        Providers abandoned mid-run after sustained API errors. Persists across
+        sports, so an unavailable provider is skipped run-wide rather than
+        re-probed for each sport.
     api_data_folder : str, default 'data/api_result'
         The folder path for storing API data.
     llm_data_folder : str, default 'data/llm_data'
@@ -111,6 +120,7 @@ class TipGenius:
     store_api_results = False
     store_llm_results = False
     llm_attempts = 4
+    llm_abandon_after_rows = 3
 
     api_data_folder = Path("data") / "api_result"
     llm_data_folder = Path("data") / "llm_data"
@@ -141,6 +151,8 @@ class TipGenius:
 
         # Valid predictions saved per provider, used to detect dead providers
         self.predictions_per_provider = defaultdict(int)
+        # Providers abandoned mid-run after sustained API errors, skipped run-wide
+        self.abandoned_providers: set[str] = set()
         # Whether any sport had upcoming matches at all (off-season guard)
         self.matches_available = False
         # Odds fetches that succeeded and that raised, per workflow run
@@ -542,6 +554,50 @@ class TipGenius:
         elif min_interval > request_duration:
             time.sleep(min_interval - request_duration)
 
+    @staticmethod
+    def _is_prediction_consistent(
+        p_home: int,
+        p_away: int,
+        o_home: float,
+        o_away: float,
+    ) -> bool:
+        """Whether a predicted scoreline agrees with which side the odds favour."""
+        return not (
+            (p_home > p_away and o_home >= o_away)
+            or (p_home < p_away and o_home <= o_away)
+        )
+
+    @staticmethod
+    def _validate_prediction(pred: dict) -> bool:
+        """Whether a prediction has usable reasoning, outlook and integer scores."""
+        return (
+            pred["reasoning"]
+            and pred["outlook"]
+            and isinstance(pred["prediction"]["home"], int)
+            and isinstance(pred["prediction"]["away"], int)
+        )
+
+    def _should_abandon(self, llm_provider: str, consecutive_failures: int) -> bool:
+        """Whether a provider has failed enough consecutive rows to give up on it.
+
+        Records the provider so later sports skip it without re-probing. Only
+        counts rows actually attempted; rows skipped for invalid odds neither
+        advance nor reset the count.
+        """
+        if consecutive_failures < self.llm_abandon_after_rows:
+            return False
+
+        warning_msg = (
+            f"Abandoning {llm_provider} for the rest of this run: the last "
+            f"{consecutive_failures} attempted rows all failed with API errors, "
+            f"so the provider looks unavailable. Remaining rows and sports are "
+            f"skipped instead of retried."
+        )
+        logger.warning(warning_msg)
+        self.add_warning(warning_msg, f"LLM processing for {llm_provider}")
+        self.abandoned_providers.add(llm_provider)
+        return True
+
     def predict_results(
         self,
         data: pl.DataFrame,
@@ -565,6 +621,14 @@ class TipGenius:
             The processed dataframe with predictions.
 
         """
+        # Abandoned earlier in this run: skip without re-probing for each sport
+        if llm_provider in self.abandoned_providers:
+            logger.info(
+                "Skipping %s: abandoned earlier in this run after API errors",
+                llm_provider,
+            )
+            return data
+
         try:
             llm = LLMManager(provider=llm_provider, prediction_type=prediction_type)
         except Exception:
@@ -574,33 +638,23 @@ class TipGenius:
             )
             return data  # Return unmodified dataframe if LLM initialization fails
 
-        def is_prediction_consistent(
-            p_home: int,
-            p_away: int,
-            o_home: float,
-            o_away: float,
-        ) -> bool:
-            return not (
-                (p_home > p_away and o_home >= o_away)
-                or (p_home < p_away and o_home <= o_away)
-            )
+        is_prediction_consistent = self._is_prediction_consistent
+        validate_prediction = self._validate_prediction
 
-        def validate_prediction(pred: dict) -> bool:
-            return (
-                pred["reasoning"]
-                and pred["outlook"]
-                and isinstance(pred["prediction"]["home"], int)
-                and isinstance(pred["prediction"]["away"], int)
-            )
+        consecutive_api_failures = 0
 
         for i in range(data.shape[0]):
             if any(data[i, f"odds_{key}"] == 0 for key in ["home", "away", "draw"]):
                 logger.debug("Odds are invalid for row %d, skipping...", i + 1)
                 continue
 
+            if self._should_abandon(llm_provider, consecutive_api_failures):
+                break
+
             try:
                 last_response = None
                 attempt = 0
+                row_had_api_error = False
 
                 for attempt in range(self.llm_attempts):
                     api_error = False
@@ -640,6 +694,7 @@ class TipGenius:
 
                     except Exception as e:
                         api_error = True
+                        row_had_api_error = True
                         logger.warning(
                             "LLM prediction attempt %d failed for row %d: %s",
                             attempt + 1,
@@ -657,6 +712,8 @@ class TipGenius:
                         )
 
                 if not last_response:
+                    if row_had_api_error:
+                        consecutive_api_failures += 1
                     warning_msg = f"No valid LLM response for row {i + 1}, skipping..."
                     logger.warning(warning_msg)
                     self.add_warning(warning_msg, f"LLM processing for {llm_provider}")
@@ -679,7 +736,14 @@ class TipGenius:
                 data[i, "outlook"] = last_response["outlook"]
                 data[i, "validity"] = validate_prediction(last_response)
 
+                # Only a row written end to end proves the provider is usable;
+                # resetting before the writes would mask payloads that break here
+                consecutive_api_failures = 0
+
             except Exception as e:
+                # Counts toward abandonment too: a provider returning payloads
+                # that always break here is as unusable as one that never answers
+                consecutive_api_failures += 1
                 warning_msg = f"Failed to process row {i + 1}: {e!s}"
                 logger.warning(warning_msg)
                 self.add_warning(warning_msg, f"Row processing for {llm_provider}")
@@ -797,6 +861,7 @@ class TipGenius:
             )
             self.prediction_data.clear()
             self.predictions_per_provider.clear()
+            self.abandoned_providers.clear()
             self.warnings.clear()
             self.errors.clear()
             self.failed_combinations.clear()
