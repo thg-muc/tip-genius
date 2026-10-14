@@ -46,7 +46,7 @@ deepseek-chat:
   api_key_env_name: DEEPSEEK_API_KEY
   base_url: https://api.deepseek.com
   operation: chat/completions
-  model: deepseek-v4-flash
+  model: deepseek-flash # DeepSeek V4.1 Flash; the old name deepseek-v4-flash is retired
   kwargs:
     temperature: 0.0
     stream: false
