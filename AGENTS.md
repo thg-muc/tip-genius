@@ -108,7 +108,6 @@ DEEPSEEK_API_KEY=your_deepseek_api_key
 GOOGLE_API_KEY=your_google_api_key
 MISTRAL_API_KEY=your_mistral_api_key
 NVIDIA_API_KEY=your_nvidia_api_key
-NVIDIA_API_KEY=your_nvidia_api_key
 OPENAI_API_KEY=your_openai_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
 
@@ -132,7 +131,7 @@ Pinned to `^3.4` — v4 introduces breaking changes (new `@source` directive, co
 ## Development Notes
 
 - Always prefer standard Tailwind classes over arbitrary values (e.g. `w-56` not `w-[224px]`) — arbitrary values may be purged
-- **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; NVIDIA Nemotron disables thinking via `chat_template_kwargs.enable_thinking: false` (with thinking on it was slow and often returned empty content); NVIDIA Nemotron disables thinking via `chat_template_kwargs.enable_thinking: false` (with thinking on it was slow and often returned empty content); Google response parser skips thought parts to extract the actual answer
+- **Reasoning Model Support**: OpenRouter reasoning models (GPT-OSS 120b) use `reasoning.effort` parameter; Google Gemma uses native `thinkingConfig` with `thinkingLevel: minimal` option; NVIDIA Nemotron disables thinking via `chat_template_kwargs.enable_thinking: false` (with thinking on it was slow and often returned empty content); Google response parser skips thought parts to extract the actual answer
 - **Code fence stripping**: `strip_code_fence` in `lib/llm_manager.py` unwraps fenced responses for every provider (some models wrap JSON in ` ```json ` even in JSON mode, which breaks the `literal_eval` in `tip_genius.py`). Unfenced responses pass through unchanged.
 - **Provider keys select the request/response shape**: a key starting with `anthropic` uses the native Anthropic Messages format, `google` uses the Gemini format, everything else uses the OpenAI-compatible format. Name OpenRouter-hosted models `openrouter-*` regardless of who made the model, or the wrong parser is used.
 - **Retiring a frontend provider**: removing it from `LLM_PROVIDERS` in `public/js/main.js` is enough — `resolveLlmProvider` migrates users whose stored selection is gone.
