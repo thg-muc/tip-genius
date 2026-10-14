@@ -15,6 +15,7 @@ llm_provider_options:
   - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenRouter-GPT-OSS-Large
+  - Nvidia-Nemotron-Lightning
   - Google-Gemma-Medium
   # - OpenRouter-Grok # Grok 4.3: works, but expensive
   # - OpenRouter-Claude-Haiku # Claude Haiku 4.5: works, but expensive

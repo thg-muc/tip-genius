@@ -18,6 +18,11 @@ const LLM_PROVIDERS = [
     label: 'GPT-OSS 120b',
     logo: `/images/llm-logos/OpenAI.png`,
   },
+  {
+    value: 'Nvidia-Nemotron-Lightning',
+    label: 'Nemotron 3.5 Lightning',
+    logo: `/images/llm-logos/NVIDIA.png`,
+  },
   // {
   //   value: 'Mistral-Medium',
   //   label: 'Mistral Medium 3.5',
