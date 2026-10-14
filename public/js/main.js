@@ -3,6 +3,11 @@
 
 // LLM provider configuration with PNG logos
 const LLM_PROVIDERS = [
+  {
+    value: 'Deepseek-Chat',
+    label: 'DeepSeek V4.1 Flash',
+    logo: `/images/llm-logos/DeepSeek.png`,
+  },
   // {
   //   value: 'Google-Gemini-Flash-Lite',
   //   label: 'Gemini 2.5 Flash Lite',
@@ -29,11 +34,6 @@ const LLM_PROVIDERS = [
     logo: `/images/llm-logos/Mistral.png`,
   },
   {
-    value: 'Deepseek-Chat',
-    label: 'DeepSeek V4 Flash',
-    logo: `/images/llm-logos/DeepSeek.png`,
-  },
-  {
     value: 'Meta-Llama-Mid',
     label: 'Llama 4 Maverick',
     logo: `/images/llm-logos/Meta.png`,
@@ -55,11 +55,25 @@ const LLM_PROVIDERS = [
   // },
 ]
 
-// Default provider is the first one in the list
-const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
+// Leagues shown as tabs, mirroring sports_list in tip_genius_config.yaml.
+// Fixed rather than read from the predictions, so a provider that failed for
+// some leagues does not hide those tabs for every other provider.
+const LEAGUES = [
+  'Premier League - England',
+  'Bundesliga - Germany',
+  'La Liga - Spain',
+  'UEFA Champions League',
+]
 
-// Falls back to the default when a stored provider is no longer offered,
-// since its KV key stops being updated and every fetch would fail
+// Visitors who never picked a provider get a random one on every visit,
+// so no single provider is everyone's first impression
+function randomLlmProvider() {
+  return LLM_PROVIDERS[Math.floor(Math.random() * LLM_PROVIDERS.length)].value
+}
+
+// Keeps a deliberately chosen provider (lastUsedLLM is only written by the menu).
+// Falls back to a random one when none was chosen or the stored one is no longer
+// offered, since its KV key stops being updated and every fetch would fail
 function resolveLlmProvider(storedValue) {
   if (LLM_PROVIDERS.some((p) => p.value === storedValue)) {
     return storedValue
@@ -71,7 +85,7 @@ function resolveLlmProvider(storedValue) {
     localStorage.removeItem('cachedLeagueData')
     localStorage.removeItem('lastFetchTime')
   }
-  return DEFAULT_LLM_PROVIDER
+  return randomLlmProvider()
 }
 
 // Default fallback version in YYMMDDhhmm format
@@ -121,13 +135,18 @@ async function initializeApp() {
     ],
     CACHE_DURATION: 3600, // Cache in seconds (1 hour)
     DYNAMIC_CACHE: `tip-genius-dynamic-${appVersion}`,
-    DEFAULT_LLM: DEFAULT_LLM_PROVIDER,
     API_URL: '/api/predictions',
   }
 
-  // Try to restore cached data if it's still valid
+  // Try to restore cached data if it's still valid and from the current provider;
+  // a random pick differs between visits, so the cache may belong to another one
   const storedData = localStorage.getItem('cachedLeagueData')
-  if (storedData && Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000) {
+  const storedDataLLM = localStorage.getItem('cachedLeagueDataLLM')
+  if (
+    storedData &&
+    storedDataLLM === currentLLM &&
+    Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000
+  ) {
     try {
       cachedLeagueData = JSON.parse(storedData)
     } catch (e) {
@@ -684,6 +703,7 @@ async function fetchLeagueData() {
     localStorage.setItem('lastFetchTime', currentTime.toString())
     // Store the fetched data in local storage
     localStorage.setItem('cachedLeagueData', JSON.stringify(data))
+    localStorage.setItem('cachedLeagueDataLLM', currentLLM)
 
     // Preload the Team Data
     preloadTeamLogos(data)
@@ -811,7 +831,7 @@ async function createTabs() {
   const tabContainer = document.getElementById('league-tabs')
 
   try {
-    const leagues = cachedLeagueData || (await fetchLeagueData())
+    const leagues = LEAGUES.map((name) => ({ name }))
 
     // Clear existing tabs
     tabContainer.innerHTML = ''
