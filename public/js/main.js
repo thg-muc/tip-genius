@@ -3,6 +3,11 @@
 
 // LLM provider configuration with PNG logos
 const LLM_PROVIDERS = [
+  {
+    value: 'Deepseek-Chat',
+    label: 'DeepSeek V4 Flash',
+    logo: `/images/llm-logos/DeepSeek.png`,
+  },
   // {
   //   value: 'Google-Gemini-Flash-Lite',
   //   label: 'Gemini 2.5 Flash Lite',
@@ -24,11 +29,6 @@ const LLM_PROVIDERS = [
   //   logo: `/images/llm-logos/Mistral.png`,
   // },
   {
-    value: 'Deepseek-Chat',
-    label: 'DeepSeek V4 Flash',
-    logo: `/images/llm-logos/DeepSeek.png`,
-  },
-  {
     value: 'Meta-Llama-Mid',
     label: 'Llama 4 Maverick',
     logo: `/images/llm-logos/Meta.png`,
@@ -48,6 +48,16 @@ const LLM_PROVIDERS = [
   //   label: 'Claude Haiku 4.5',
   //   logo: `/images/llm-logos/Anthropic.png`,
   // },
+]
+
+// Leagues shown as tabs, mirroring sports_list in tip_genius_config.yaml.
+// Fixed rather than read from the predictions, so a provider that failed for
+// some leagues does not hide those tabs for every other provider.
+const LEAGUES = [
+  'Premier League - England',
+  'Bundesliga - Germany',
+  'La Liga - Spain',
+  'UEFA Champions League',
 ]
 
 // Default provider is the first one in the list
@@ -806,7 +816,7 @@ async function createTabs() {
   const tabContainer = document.getElementById('league-tabs')
 
   try {
-    const leagues = cachedLeagueData || (await fetchLeagueData())
+    const leagues = LEAGUES.map((name) => ({ name }))
 
     // Clear existing tabs
     tabContainer.innerHTML = ''
