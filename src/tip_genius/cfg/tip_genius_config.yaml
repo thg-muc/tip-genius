@@ -11,10 +11,11 @@ sports_list:
 llm_provider_options:
   # - Google-Gemini-Flash-Lite # API Rate Limits
   - Deepseek-Chat
-  # - Mistral-Medium # API quota: account provisioned 0 req/minute
+  - Mistral-Ministral
   - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenRouter-GPT-OSS-Large
+  - Nvidia-Nemotron-Lightning
   - Google-Gemma-Medium
   # - OpenRouter-Grok # Grok 4.3: works, but expensive
   # - OpenRouter-Claude-Haiku # Claude Haiku 4.5: works, but expensive
