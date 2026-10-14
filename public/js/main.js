@@ -23,11 +23,11 @@ const LLM_PROVIDERS = [
     label: 'Nemotron 3.5 Lightning',
     logo: `/images/llm-logos/NVIDIA.png`,
   },
-  // {
-  //   value: 'Mistral-Medium',
-  //   label: 'Mistral Medium 3.5',
-  //   logo: `/images/llm-logos/Mistral.png`,
-  // },
+  {
+    value: 'Mistral-Ministral',
+    label: 'Ministral 14B',
+    logo: `/images/llm-logos/Mistral.png`,
+  },
   {
     value: 'Deepseek-Chat',
     label: 'DeepSeek V4 Flash',

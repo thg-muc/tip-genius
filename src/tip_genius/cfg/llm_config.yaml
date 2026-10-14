@@ -6,18 +6,41 @@
 #    Example: PROVIDER_API_KEY: ${{ secrets.PROVIDER_API_KEY }}
 # 3. Add the API key to GitHub Secrets in the repository settings
 
-mistral-medium:
-  api_rate_limit: 8 # requests per minute for free tier
+mistral-ministral:
+  api_rate_limit: 30 # requests per minute for free tier (Medium/Small are at 0 there)
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
-  model: mistral-medium-latest
+  model: ministral-14b-latest
   kwargs:
     temperature: 0.0
     stream: false
     max_tokens: 8192
+    # Strict schema: with plain json_object, Ministral returns 'reasoning' as a nested
+    # object for real match prompts, which breaks the workflow
     response_format:
-      type: json_object
+      type: json_schema
+      json_schema:
+        name: match_prediction
+        strict: true
+        schema:
+          type: object
+          additionalProperties: false
+          required: [reasoning, prediction, outlook]
+          properties:
+            reasoning:
+              type: string
+            prediction:
+              type: object
+              additionalProperties: false
+              required: [home, away]
+              properties:
+                home:
+                  type: integer
+                away:
+                  type: integer
+            outlook:
+              type: string
 
 deepseek-chat:
   api_key_env_name: DEEPSEEK_API_KEY

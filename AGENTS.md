@@ -54,7 +54,7 @@ To check a single active provider — e.g. after changing its model id — narro
 the same test with `-k` instead of running the full sweep:
 
 ```bash
-RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -k Mistral-Medium -v
+RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -k Mistral-Ministral -v
 ```
 
 A retired or renamed model surfaces here as a 404 from the provider.
