@@ -18,6 +18,7 @@ So far, the following LLM models have been successfully tested with Tip Genius:
 
 - **Mistral Medium 3.5** (Free API, via Mistral AI) — currently disabled, see below
 - **OpenAI GPT-OSS 120b** (via OpenRouter)
+- **NVIDIA Nemotron 3.5 Lightning** (free, via NVIDIA build.nvidia.com)
 - **DeepSeek V4 Flash** (via DeepSeek)
 - **Meta Llama 4 Maverick** (via DeepInfra)
 - **Microsoft Phi-4** (via DeepInfra)
