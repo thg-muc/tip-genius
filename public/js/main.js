@@ -60,11 +60,15 @@ const LEAGUES = [
   'UEFA Champions League',
 ]
 
-// Default provider is the first one in the list
-const DEFAULT_LLM_PROVIDER = LLM_PROVIDERS[0].value
+// Visitors who never picked a provider get a random one on every visit,
+// so no single provider is everyone's first impression
+function randomLlmProvider() {
+  return LLM_PROVIDERS[Math.floor(Math.random() * LLM_PROVIDERS.length)].value
+}
 
-// Falls back to the default when a stored provider is no longer offered,
-// since its KV key stops being updated and every fetch would fail
+// Keeps a deliberately chosen provider (lastUsedLLM is only written by the menu).
+// Falls back to a random one when none was chosen or the stored one is no longer
+// offered, since its KV key stops being updated and every fetch would fail
 function resolveLlmProvider(storedValue) {
   if (LLM_PROVIDERS.some((p) => p.value === storedValue)) {
     return storedValue
@@ -76,7 +80,7 @@ function resolveLlmProvider(storedValue) {
     localStorage.removeItem('cachedLeagueData')
     localStorage.removeItem('lastFetchTime')
   }
-  return DEFAULT_LLM_PROVIDER
+  return randomLlmProvider()
 }
 
 // Default fallback version in YYMMDDhhmm format
@@ -126,13 +130,18 @@ async function initializeApp() {
     ],
     CACHE_DURATION: 3600, // Cache in seconds (1 hour)
     DYNAMIC_CACHE: `tip-genius-dynamic-${appVersion}`,
-    DEFAULT_LLM: DEFAULT_LLM_PROVIDER,
     API_URL: '/api/predictions',
   }
 
-  // Try to restore cached data if it's still valid
+  // Try to restore cached data if it's still valid and from the current provider;
+  // a random pick differs between visits, so the cache may belong to another one
   const storedData = localStorage.getItem('cachedLeagueData')
-  if (storedData && Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000) {
+  const storedDataLLM = localStorage.getItem('cachedLeagueDataLLM')
+  if (
+    storedData &&
+    storedDataLLM === currentLLM &&
+    Date.now() - lastFetchTime <= CONFIG.CACHE_DURATION * 1000
+  ) {
     try {
       cachedLeagueData = JSON.parse(storedData)
     } catch (e) {
@@ -689,6 +698,7 @@ async function fetchLeagueData() {
     localStorage.setItem('lastFetchTime', currentTime.toString())
     // Store the fetched data in local storage
     localStorage.setItem('cachedLeagueData', JSON.stringify(data))
+    localStorage.setItem('cachedLeagueDataLLM', currentLLM)
 
     // Preload the Team Data
     preloadTeamLogos(data)
