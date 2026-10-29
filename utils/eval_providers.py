@@ -38,7 +38,7 @@ import re
 import tempfile
 import unicodedata
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -98,6 +98,7 @@ NAME_ALIASES = {
     "spurs": "tottenham hotspur",
 }
 MATCH_WINDOW = timedelta(hours=36)
+MATCHDAY_BREAK = timedelta(days=3)
 MIN_TEAM_SIMILARITY = 0.45
 MIN_PAIR_SIMILARITY = 1.25
 
@@ -130,22 +131,41 @@ class Result:
     away: str
     home_goals: int
     away_goals: int
+    matchday: str | None = None
+
+
+@dataclass(frozen=True)
+class Row:
+    """One fixture offered to one provider; points is None if it gave no tip."""
+
+    provider: str
+    league: str
+    fixture: tuple[str, str]
+    kickoff: datetime
+    matchday: str
+    points: int | None
 
 
 @dataclass
 class Score:
-    """Aggregated points for one provider."""
+    """Aggregated points for one provider; missing tips score 0."""
 
-    matches: int = 0
+    offered: int = 0
+    tipped: int = 0
     points: int = 0
     exact: int = 0
     goal_diff: int = 0
     tendency: int = 0
     squares: int = 0
+    matchdays: set[str] = field(default_factory=set)
 
-    def add(self, points: int) -> None:
-        """Count one scored match."""
-        self.matches += 1
+    def add(self, points: int | None, matchday: str) -> None:
+        """Count one offered match (points None = no tip given)."""
+        self.offered += 1
+        self.matchdays.add(matchday)
+        if points is None:
+            return
+        self.tipped += 1
         self.points += points
         self.squares += points * points
         self.exact += points == 4  # noqa: PLR2004
@@ -154,12 +174,12 @@ class Score:
 
     @property
     def std_error(self) -> float:
-        """Standard error of the average points per match."""
-        if self.matches < 2:  # noqa: PLR2004
+        """Standard error of the average points per offered match."""
+        if self.offered < 2:  # noqa: PLR2004
             return 0.0
-        mean = self.points / self.matches
-        variance = (self.squares - self.matches * mean * mean) / (self.matches - 1)
-        return (variance / self.matches) ** 0.5
+        mean = self.points / self.offered
+        variance = (self.squares - self.offered * mean * mean) / (self.offered - 1)
+        return (max(variance, 0.0) / self.offered) ** 0.5
 
 
 # %% --------------------------------------------
@@ -378,6 +398,7 @@ def openligadb_results(cache: HttpCache, seasons: set[int]) -> list[Result]:
                     match["team2"]["teamName"],
                     final[0]["pointsTeam1"],
                     final[0]["pointsTeam2"],
+                    f"{BUNDESLIGA} {season} MD {match['group']['groupOrderID']:02d}",
                 )
             )
     return results
@@ -489,85 +510,176 @@ def match_results(
 # * Reporting
 
 
-def print_table(title: str, scores: dict[str, Score]) -> list[str]:
-    """Print one ranking table and return providers ordered by average."""
+def print_table(title: str, scores: dict[str, Score]) -> None:
+    """Print one ranking table, ordered by points per offered match."""
     ranked = sorted(
-        (s for s in scores.items() if s[1].matches),
-        key=lambda item: (-item[1].points / item[1].matches, -item[1].matches),
+        (s for s in scores.items() if s[1].offered),
+        key=lambda item: (-item[1].points / item[1].offered, -item[1].offered),
     )
     print(f"\n=== {title} ===")
     if not ranked:
         print("(no scored matches)")
-        return []
+        return
     print(
-        f"{'#':>2} {'Provider':<30} {'Matches':>7} {'Points':>6} {'Avg':>5} "
-        f"{'±SE':>5} {'Exact':>6} {'GoalDiff':>8} {'Tendency':>8}"
+        f"{'#':>2} {'Provider':<30} {'Offered':>7} {'Missed':>6} {'Points':>6} "
+        f"{'Avg':>5} {'Avg0':>5} {'±SE':>5} {'MDs':>4} {'Pts/MD':>6} "
+        f"{'Exact':>6} {'GoalDiff':>8} {'Tendency':>8}"
     )
     for rank, (provider, s) in enumerate(ranked, 1):
         marker = "*" if provider in CURRENT_PROVIDERS else " "
+        tipped = max(s.tipped, 1)
         print(
-            f"{rank:>2} {provider + marker:<30} {s.matches:>7} {s.points:>6} "
-            f"{s.points / s.matches:>5.2f} "
-            f"{s.std_error:>5.2f} {s.exact / s.matches:>6.1%} "
-            f"{s.goal_diff / s.matches:>8.1%} {s.tendency / s.matches:>8.1%}"
+            f"{rank:>2} {provider + marker:<30} {s.offered:>7} "
+            f"{s.offered - s.tipped:>6} {s.points:>6} "
+            f"{s.points / tipped:>5.2f} {s.points / s.offered:>5.2f} "
+            f"{s.std_error:>5.2f} {len(s.matchdays):>4} "
+            f"{s.points / len(s.matchdays):>6.2f} {s.exact / tipped:>6.1%} "
+            f"{s.goal_diff / tipped:>8.1%} {s.tendency / tipped:>8.1%}"
         )
-    return [provider for provider, _ in ranked]
 
 
-def aggregate(scored: list[tuple[Prediction, int]]) -> dict[str, Score]:
+def aggregate(rows: list[Row]) -> dict[str, Score]:
     """Aggregate points per provider."""
     scores: dict[str, Score] = defaultdict(Score)
-    for pred, points in scored:
-        scores[pred.provider].add(points)
+    for row in rows:
+        scores[row.provider].add(row.points, row.matchday)
     return scores
 
 
-def print_report(scored: list[tuple[Prediction, int]], season: str) -> None:
+def cluster_matchdays(
+    fixtures: list[tuple[datetime, str, str]], league: str
+) -> dict[tuple[datetime, str, str], str]:
+    """Group (kickoff, home, away) fixtures into matchdays.
+
+    Every team plays once per matchday, so a new matchday starts as soon as a
+    team that already played in the current one appears again, or after a
+    break longer than MATCHDAY_BREAK. Rescheduled games can split a real
+    matchday in two; that affects all providers alike.
+    """
+    labels: dict[tuple[datetime, str, str], str] = {}
+    label = ""
+    teams: set[str] = set()
+    previous: datetime | None = None
+    for fixture in sorted(set(fixtures)):
+        kickoff, home, away = fixture
+        new_round = home in teams or away in teams
+        if previous is None or kickoff - previous > MATCHDAY_BREAK or new_round:
+            label = f"{league} {kickoff:%Y-%m-%d}"
+            teams = set()
+        teams |= {home, away}
+        labels[fixture] = label
+        previous = kickoff
+    return labels
+
+
+def build_rows(
+    raw: list[Prediction],
+    selected: list[Prediction],
+    matched: dict[tuple, Result],
+) -> list[Row]:
+    """Score every fixture each provider was active for; missing tips are None.
+
+    A provider is active from its first snapshot to the last kickoff it
+    predicted. Within that window every finished fixture that any provider
+    tipped before kickoff counts as offered to it.
+    """
+    fixtures: dict[tuple, Result] = {}
+    for pred in selected:
+        result = matched.get((pred.league, pred.home, pred.away, pred.kickoff))
+        if result:
+            key = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
+            fixtures[key] = result
+
+    by_league: dict[str, list[tuple[datetime, str, str]]] = defaultdict(list)
+    for key, result in fixtures.items():
+        if result.matchday is None:
+            by_league[key[0]].append((result.kickoff, key[1], key[2]))
+    clustered: dict[tuple, str] = {}
+    for league, league_fixtures in by_league.items():
+        for fixture, label in cluster_matchdays(league_fixtures, league).items():
+            clustered[league, *fixture] = label
+
+    window: dict[str, tuple[datetime, datetime]] = {}
+    for pred in raw:
+        first, last = window.get(pred.provider, (pred.snapshot, pred.kickoff))
+        window[pred.provider] = (min(first, pred.snapshot), max(last, pred.kickoff))
+    tips = {
+        (p.provider, p.league, p.home, p.away, season_of(p.kickoff)): p
+        for p in selected
+    }
+
+    rows = []
+    for key, result in fixtures.items():
+        matchday = result.matchday or clustered[key[0], result.kickoff, *key[1:3]]
+        actual = (result.home_goals, result.away_goals)
+        for provider, (first, last) in window.items():
+            if not first < result.kickoff <= last:
+                continue
+            tip = tips.get((provider, *key))
+            points = (
+                kicktipp_points((tip.home_goals, tip.away_goals), actual)
+                if tip
+                else None
+            )
+            rows.append(
+                Row(provider, key[0], key[1:3], result.kickoff, matchday, points)
+            )
+    return rows
+
+
+def print_report(rows: list[Row], season: str) -> None:
     """Print overall, per-league, per-season and head-to-head tables."""
     print("\n* = currently offered in the frontend")
     print(
-        "Exact = 4 pts, GoalDiff = 3+ pts (incl. exact), "
-        "Tendency = 2+ pts (any correct tendency), "
-        "±SE = standard error of Avg"
+        "Offered = finished matches while the provider was active, "
+        "Missed = offered but no tip before kickoff (scores 0), "
+        "Avg = points per tipped match, Avg0 = points per offered match "
+        "(ranking key), ±SE = standard error of Avg0, MDs = matchdays, "
+        "Pts/MD = points per matchday; Exact = 4 pts, GoalDiff = 3+ pts, "
+        "Tendency = 2+ pts, as share of tipped matches"
     )
-    print_table("All leagues, all seasons", aggregate(scored))
-    for league in sorted({p.league for p, _ in scored}):
-        rows = [row for row in scored if row[0].league == league]
-        print_table(f"{league}, all seasons", aggregate(rows))
-    for one_season in sorted({season_of(p.kickoff) for p, _ in scored}):
-        rows = [row for row in scored if season_of(row[0].kickoff) == one_season]
-        print_table(f"Season {one_season}, all leagues", aggregate(rows))
+    print_table("All leagues, all seasons", aggregate(rows))
+    for league in sorted({r.league for r in rows}):
+        league_rows = [r for r in rows if r.league == league]
+        print_table(f"{league}, all seasons", aggregate(league_rows))
+    for one_season in sorted({season_of(r.kickoff) for r in rows}):
+        season_rows = [r for r in rows if season_of(r.kickoff) == one_season]
+        print_table(f"Season {one_season}, all leagues", aggregate(season_rows))
 
-    season_rows = [row for row in scored if season_of(row[0].kickoff) == season]
-    bundesliga_rows = [row for row in season_rows if row[0].league == BUNDESLIGA]
+    season_rows = [r for r in rows if season_of(r.kickoff) == season]
+    bundesliga_rows = [r for r in season_rows if r.league == BUNDESLIGA]
     print_table(f"Season {season}, {BUNDESLIGA}", aggregate(bundesliga_rows))
     print_head_to_head(bundesliga_rows, f"Season {season}, {BUNDESLIGA}")
     print_head_to_head(season_rows, f"Season {season}, all leagues")
 
 
-def print_head_to_head(rows: list[tuple[Prediction, int]], label: str) -> None:
-    """Rank current providers on fixtures every one of them predicted.
+def print_head_to_head(rows: list[Row], label: str) -> None:
+    """Rank current providers on fixtures offered to every one of them.
 
-    Also ranks the current providers without Nemotron and Ministral, which
-    only joined recently, so the others are compared on a larger sample.
+    Missing tips score 0. Also ranks the current providers without Nemotron
+    and Ministral, which only joined recently, on a larger sample.
     """
-    by_fixture: dict[tuple, dict[str, int]] = defaultdict(dict)
-    for pred, points in rows:
-        if pred.provider in CURRENT_PROVIDERS:
-            fixture = (pred.league, pred.home, pred.away, pred.kickoff.date())
-            by_fixture[fixture][pred.provider] = points
+    by_fixture: dict[tuple, dict[str, Row]] = defaultdict(dict)
+    for row in rows:
+        if row.provider in CURRENT_PROVIDERS:
+            by_fixture[row.league, row.fixture, row.kickoff][row.provider] = row
     recent = {"Nvidia-Nemotron-Lightning", "Mistral-Ministral"}
     groups = [
         ("all current providers", set(CURRENT_PROVIDERS)),
         ("current providers excl. Nemotron/Ministral", set(CURRENT_PROVIDERS) - recent),
     ]
     for group_label, group in groups:
-        scores: dict[str, Score] = defaultdict(Score)
-        for points_by_provider in by_fixture.values():
-            if group <= points_by_provider.keys():
-                for provider in group:
-                    scores[provider].add(points_by_provider[provider])
-        print_table(f"{label}, head-to-head on common fixtures, {group_label}", scores)
+        common = [
+            row
+            for rows_by_provider in by_fixture.values()
+            if group <= rows_by_provider.keys()
+            for provider, row in rows_by_provider.items()
+            if provider in group
+        ]
+        print_table(
+            f"{label}, head-to-head on common fixtures, {group_label}",
+            aggregate(common),
+        )
 
 
 # %% --------------------------------------------
@@ -768,19 +880,11 @@ def main() -> None:
     results = load_results(cache, past)
     matched = match_results(past, results)
 
-    scored = []
-    unmatched = set()
-    for pred in past:
-        result = matched.get((pred.league, pred.home, pred.away, pred.kickoff))
-        if result is None:
-            unmatched.add((pred.league, pred.kickoff, pred.home, pred.away))
-            continue
-        points = kicktipp_points(
-            (pred.home_goals, pred.away_goals),
-            (result.home_goals, result.away_goals),
-        )
-        scored.append((pred, points))
-
+    unmatched = {
+        (p.league, p.kickoff, p.home, p.away)
+        for p in past
+        if (p.league, p.home, p.away, p.kickoff) not in matched
+    }
     fixtures = {(p.league, p.home, p.away, p.kickoff) for p in past}
     print(
         f"\nPast fixtures with predictions: {len(fixtures)}, "
@@ -789,7 +893,7 @@ def main() -> None:
     if args.show_unmatched:
         for league, kickoff, home, away in sorted(unmatched):
             print(f"  unmatched: {league} {kickoff:%Y-%m-%d %H:%M} {home} - {away}")
-    print_report(scored, args.season)
+    print_report(build_rows(raw, past, matched), args.season)
     print_reliability_report(raw, predictions, args.season)
 
 
