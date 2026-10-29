@@ -144,6 +144,7 @@ class Row:
     kickoff: datetime
     matchday: str
     points: int | None
+    tip: tuple[int, int] | None = None
 
 
 @dataclass
@@ -157,12 +158,16 @@ class Score:
     goal_diff: int = 0
     tendency: int = 0
     squares: int = 0
+    two_one: int = 0
     matchdays: set[str] = field(default_factory=set)
 
-    def add(self, points: int | None, matchday: str) -> None:
+    def add(
+        self, points: int | None, matchday: str, tip: tuple[int, int] | None = None
+    ) -> None:
         """Count one offered match (points None = no tip given)."""
         self.offered += 1
         self.matchdays.add(matchday)
+        self.two_one += tip == (2, 1)
         if points is None:
             return
         self.tipped += 1
@@ -522,7 +527,7 @@ def print_table(title: str, scores: dict[str, Score]) -> None:
         return
     print(
         f"{'#':>2} {'Provider':<30} {'Offered':>7} {'Missed':>6} {'Points':>6} "
-        f"{'Avg':>5} {'Avg0':>5} {'±SE':>5} {'MDs':>4} {'Pts/MD':>6} "
+        f"{'Avg':>5} {'Avg0':>5} {'±SE':>5} {'MDs':>4} {'Pts/MD':>6} {'2:1/MD':>6} "
         f"{'Exact':>6} {'GoalDiff':>8} {'Tendency':>8}"
     )
     for rank, (provider, s) in enumerate(ranked, 1):
@@ -533,7 +538,8 @@ def print_table(title: str, scores: dict[str, Score]) -> None:
             f"{s.offered - s.tipped:>6} {s.points:>6} "
             f"{s.points / tipped:>5.2f} {s.points / s.offered:>5.2f} "
             f"{s.std_error:>5.2f} {len(s.matchdays):>4} "
-            f"{s.points / len(s.matchdays):>6.2f} {s.exact / tipped:>6.1%} "
+            f"{s.points / len(s.matchdays):>6.2f} "
+            f"{s.two_one / len(s.matchdays):>6.2f} {s.exact / tipped:>6.1%} "
             f"{s.goal_diff / tipped:>8.1%} {s.tendency / tipped:>8.1%}"
         )
 
@@ -542,7 +548,7 @@ def aggregate(rows: list[Row]) -> dict[str, Score]:
     """Aggregate points per provider."""
     scores: dict[str, Score] = defaultdict(Score)
     for row in rows:
-        scores[row.provider].add(row.points, row.matchday)
+        scores[row.provider].add(row.points, row.matchday, row.tip)
     return scores
 
 
@@ -616,13 +622,12 @@ def build_rows(
             if not first < result.kickoff <= last:
                 continue
             tip = tips.get((provider, *key))
-            points = (
-                kicktipp_points((tip.home_goals, tip.away_goals), actual)
-                if tip
-                else None
-            )
+            tipped = (tip.home_goals, tip.away_goals) if tip else None
+            points = kicktipp_points(tipped, actual) if tipped else None
             rows.append(
-                Row(provider, key[0], key[1:3], result.kickoff, matchday, points)
+                Row(
+                    provider, key[0], key[1:3], result.kickoff, matchday, points, tipped
+                )
             )
     return rows
 
@@ -635,7 +640,8 @@ def print_report(rows: list[Row], season: str) -> None:
         "Missed = offered but no tip before kickoff (scores 0), "
         "Avg = points per tipped match, Avg0 = points per offered match "
         "(ranking key), ±SE = standard error of Avg0, MDs = matchdays, "
-        "Pts/MD = points per matchday; Exact = 4 pts, GoalDiff = 3+ pts, "
+        "Pts/MD = points per matchday, 2:1/MD = 2:1 tips per matchday; "
+        "Exact = 4 pts, GoalDiff = 3+ pts, "
         "Tendency = 2+ pts, as share of tipped matches"
     )
     print_table("All leagues, all seasons", aggregate(rows))
