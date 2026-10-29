@@ -11,6 +11,10 @@ before kickoff is used. Final scores come from openligadb.de (Bundesliga) and
 ESPN's public scoreboard (all other leagues). HTTP responses are cached on
 disk so reruns are fast. Nothing is written to KV or to the repository.
 
+A reliability table shows how many offered matches each provider actually
+predicted. The workflow drops failed or invalid LLM answers, so they show up
+as gaps in the snapshots.
+
 Usage::
 
     uv run python utils/eval_providers.py --env-file /path/to/.env.local
@@ -567,6 +571,145 @@ def print_head_to_head(rows: list[tuple[Prediction, int]], label: str) -> None:
 
 
 # %% --------------------------------------------
+# * Reliability
+
+RUN_GAP = timedelta(minutes=30)
+
+
+@dataclass
+class Coverage:
+    """Prediction coverage counts for one provider."""
+
+    runs: int = 0
+    missed_runs: int = 0
+    offered: int = 0
+    predicted: int = 0
+    past_fixtures: int = 0
+    past_predicted: int = 0
+
+
+def group_runs(stamps: set[datetime]) -> dict[datetime, datetime]:
+    """Map each snapshot timestamp to the start of its workflow run.
+
+    One run writes a snapshot per provider within seconds, so timestamps
+    closer than RUN_GAP belong to the same run.
+    """
+    run_of: dict[datetime, datetime] = {}
+    run_start: datetime | None = None
+    previous: datetime | None = None
+    for stamp in sorted(stamps):
+        if previous is None or stamp - previous > RUN_GAP:
+            run_start = stamp
+        assert run_start is not None  # noqa: S101
+        run_of[stamp] = run_start
+        previous = stamp
+    return run_of
+
+
+def reliability(
+    raw: list[Prediction], selected: list[Prediction], season: str | None
+) -> dict[str, Coverage]:
+    """Measure how many offered matches each provider actually predicted.
+
+    The workflow drops matches whose LLM call failed or returned an invalid
+    tip, and writes no snapshot at all for a provider without any valid tip.
+    So per run, a fixture predicted by any provider counts as offered to all
+    providers active then (between their first and last run); a provider with
+    no snapshot in such a run missed the whole run. Pre-kickoff coverage
+    compares the selected last-before-kickoff tips the same way, since a later
+    run can fill a gap.
+    """
+    run_of = group_runs({p.snapshot for p in raw})
+    offered: dict[datetime, set[tuple]] = defaultdict(set)
+    delivered: dict[tuple[str, datetime], set[tuple]] = defaultdict(set)
+    for pred in raw:
+        fixture = (pred.league, pred.home, pred.away)
+        offered[run_of[pred.snapshot]].add(fixture)
+        delivered[pred.provider, run_of[pred.snapshot]].add(fixture)
+    runs = sorted(offered)
+    providers = {p.provider for p in raw}
+    window = {
+        provider: (
+            min(run for prov, run in delivered if prov == provider),
+            max(run for prov, run in delivered if prov == provider),
+        )
+        for provider in providers
+    }
+    coverage: dict[str, Coverage] = defaultdict(Coverage)
+    for provider, (first, last) in window.items():
+        for run in runs:
+            if not first <= run <= last:
+                continue
+            if season and season_of(run) != season:
+                continue
+            got = delivered.get((provider, run), set())
+            cov = coverage[provider]
+            cov.runs += 1
+            cov.missed_runs += not got
+            cov.offered += len(offered[run])
+            cov.predicted += len(got & offered[run])
+
+    now = datetime.now(tz=UTC)
+    fixtures: dict[tuple, datetime] = {}
+    tipped: dict[str, set[tuple]] = defaultdict(set)
+    for pred in selected:
+        if pred.kickoff >= now:
+            continue
+        fixture = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
+        fixtures[fixture] = pred.kickoff
+        tipped[pred.provider].add(fixture)
+    for provider, (first, last) in window.items():
+        last_kickoff = max(
+            (p.kickoff for p in selected if p.provider == provider), default=last
+        )
+        for fixture, kickoff in fixtures.items():
+            if not first < kickoff <= last_kickoff:
+                continue
+            if season and season_of(kickoff) != season:
+                continue
+            coverage[provider].past_fixtures += 1
+            coverage[provider].past_predicted += fixture in tipped[provider]
+    return coverage
+
+
+def print_reliability(title: str, coverage: dict[str, Coverage]) -> None:
+    """Print one reliability table, least reliable providers last."""
+    rows = [(p, c) for p, c in coverage.items() if c.offered or c.past_fixtures]
+    rows.sort(key=lambda item: -item[1].predicted / max(item[1].offered, 1))
+    print(f"\n=== Reliability: {title} ===")
+    if not rows:
+        print("(no data)")
+        return
+    print(
+        f"{'Provider':<30} {'Runs':>5} {'Missed':>6} {'Offered':>7} "
+        f"{'Tipped':>7} {'PerRun':>6} {'Past':>6} {'Tipped':>7} {'PreKO':>6}"
+    )
+    for provider, c in rows:
+        marker = "*" if provider in CURRENT_PROVIDERS else " "
+        per_run = c.predicted / c.offered if c.offered else 0.0
+        pre_ko = c.past_predicted / c.past_fixtures if c.past_fixtures else 0.0
+        print(
+            f"{provider + marker:<30} {c.runs:>5} {c.missed_runs:>6} "
+            f"{c.offered:>7} {c.predicted:>7} {per_run:>6.1%} "
+            f"{c.past_fixtures:>6} {c.past_predicted:>7} {pre_ko:>6.1%}"
+        )
+
+
+def print_reliability_report(
+    raw: list[Prediction], selected: list[Prediction], season: str
+) -> None:
+    """Print reliability for all seasons and for the focused season."""
+    print(
+        "\nReliability: Runs = workflow runs while the provider was active, "
+        "Missed = runs with no snapshot at all, PerRun = share of matches "
+        "offered in those runs that got a valid tip, PreKO = share of past "
+        "matches with a tip before kickoff"
+    )
+    print_reliability("all seasons", reliability(raw, selected, None))
+    print_reliability(f"season {season}", reliability(raw, selected, season))
+
+
+# %% --------------------------------------------
 # * Main
 
 
@@ -613,10 +756,11 @@ def main() -> None:
     first_kv = min(stamp for stamp, _ in snapshots)
     snapshots |= load_local_snapshots(args.local_dir, before=first_kv)
 
-    predictions = last_before_kickoff(flatten(snapshots))
+    raw = flatten(snapshots)
     if args.league:
         wanted = args.league.lower()
-        predictions = [p for p in predictions if wanted in p.league.lower()]
+        raw = [p for p in raw if wanted in p.league.lower()]
+    predictions = last_before_kickoff(raw)
     now = datetime.now(tz=UTC)
     past = [p for p in predictions if p.kickoff < now - timedelta(hours=3)]
 
@@ -646,6 +790,7 @@ def main() -> None:
         for league, kickoff, home, away in sorted(unmatched):
             print(f"  unmatched: {league} {kickoff:%Y-%m-%d %H:%M} {home} - {away}")
     print_report(scored, args.season)
+    print_reliability_report(raw, predictions, args.season)
 
 
 if __name__ == "__main__":
