@@ -530,6 +530,49 @@ class TipGenius:
         except Exception:
             logger.exception("A problem occurred while storing API result")
 
+    def log_odds_snapshot(self, api_result: Any, sport: str) -> None:
+        """Log the pre-match odds of one sport as a single INFO line.
+
+        Keeps the odds fed to the LLMs in the GitHub Actions log (retained for
+        90 days) so past matches can be re-predicted later. Logged once per
+        sport and run, not per provider. Never raises: a failure here must not
+        affect the predictions.
+
+        Parameters
+        ----------
+        api_result : Any
+            The raw data returned from the API.
+        sport : str
+            The name of the sport/league.
+
+        """
+        try:
+            data = self.api_pipeline.process_api_data(
+                api_result=api_result,
+                named_teams=True,
+                additional_info=True,
+            )
+            columns = [
+                "commence_time",
+                "home_team",
+                "away_team",
+                "odds_home",
+                "odds_draw",
+                "odds_away",
+            ]
+            snapshot = {
+                "sport": sport,
+                "fetched_at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
+                "columns": columns,
+                "matches": [list(row) for row in data.select(columns).iter_rows()],
+            }
+            logger.info(
+                "ODDS_SNAPSHOT %s",
+                json.dumps(snapshot, ensure_ascii=False, separators=(",", ":")),
+            )
+        except Exception:
+            logger.warning("Could not log odds snapshot for %s", sport, exc_info=True)
+
     def _wait_before_retry(
         self,
         attempt: int,
@@ -936,6 +979,8 @@ class TipGenius:
                     continue  # Skip this sport but continue with others
 
                 self.sports_fetched += 1
+                if api_result:
+                    self.log_odds_snapshot(api_result=api_result, sport=sport)
 
                 combinations = product(
                     llm_provider_options,
