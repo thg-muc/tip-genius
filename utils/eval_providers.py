@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import os
@@ -119,6 +120,7 @@ class Prediction:
     away: str
     home_goals: int
     away_goals: int
+    reasoning: str = ""
 
 
 @dataclass(frozen=True)
@@ -355,6 +357,7 @@ def flatten(snapshots: dict[tuple[datetime, str], list[dict]]) -> list[Predictio
                         match["away_team"],
                         home_goals,
                         away_goals,
+                        match.get("reasoning") or "",
                     )
                 )
     return predictions
@@ -828,6 +831,44 @@ def print_reliability_report(
 
 
 # %% --------------------------------------------
+# * Odds baseline
+
+ODDS_BASELINE = "Odds-Favourite"
+
+
+def odds_baseline(odds_csv: Path, past: list[Prediction]) -> list[Prediction]:
+    """Build tips that follow the bookmaker favourite (2:1 or 1:2).
+
+    Gives a reference row: an LLM is only useful if it beats simply backing
+    the favourite. Uses logged or reconstructed odds; fixtures without all
+    three odds count as missed for the baseline.
+    """
+    odds: dict[tuple, tuple[float, float]] = {}
+    with odds_csv.open(encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            if row["odds_home"] and row["odds_draw"] and row["odds_away"]:
+                key = (row["league"], row["home_team"], row["away_team"], row["season"])
+                odds[key] = (float(row["odds_home"]), float(row["odds_away"]))
+    baseline = {}
+    for pred in past:
+        key = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
+        if key in odds and key not in baseline:
+            home_odds, away_odds = odds[key]
+            goals = (2, 1) if home_odds <= away_odds else (1, 2)
+            baseline[key] = Prediction(
+                ODDS_BASELINE,
+                pred.kickoff - timedelta(hours=1),
+                pred.league,
+                pred.kickoff,
+                pred.home,
+                pred.away,
+                *goals,
+            )
+    logger.info("Odds baseline tips: %d", len(baseline))
+    return list(baseline.values())
+
+
+# %% --------------------------------------------
 # * Main
 
 
@@ -857,6 +898,12 @@ def parse_args() -> argparse.Namespace:
         "--season",
         default=season_of(datetime.now(tz=UTC)),
         help="season for the focused ranking, e.g. 2026/27",
+    )
+    parser.add_argument(
+        "--odds-csv",
+        type=Path,
+        help="odds per fixture (utils/reconstruct_odds.py) for the "
+        f"{ODDS_BASELINE} baseline",
     )
     parser.add_argument(
         "--show-unmatched",
@@ -899,7 +946,9 @@ def main() -> None:
     if args.show_unmatched:
         for league, kickoff, home, away in sorted(unmatched):
             print(f"  unmatched: {league} {kickoff:%Y-%m-%d %H:%M} {home} - {away}")
-    print_report(build_rows(raw, past, matched), args.season)
+    baseline = odds_baseline(args.odds_csv, past) if args.odds_csv else []
+    rows = build_rows(raw + baseline, past + baseline, matched)
+    print_report(rows, args.season)
     print_reliability_report(raw, predictions, args.season)
 
 
