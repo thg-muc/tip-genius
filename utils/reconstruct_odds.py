@@ -74,6 +74,46 @@ AMBIGUOUS_WORDS = NAME_STOPWORDS | {
     "inter", "racing", "dynamo", "olympique", "eintracht", "hotspur", "town",
     "county", "rovers", "wanderers", "albion", "saint", "st", "munich",
 }  # fmt: skip
+# Odds read by hand from the reasoning texts where providers disagreed, so the
+# median rule left an outcome empty; each value is quoted verbatim in at least
+# one provider's reasoning (home, draw, away)
+MANUAL_ODDS = {
+    ("La Liga - Spain", "Celta Vigo", "Espanyol", "2024/25"): (1.6, 3.8, 5.8),
+    ("La Liga - Spain", "Athletic Bilbao", "Rayo Vallecano", "2024/25"): (
+        1.67,
+        3.5,
+        5.7,
+    ),
+    ("La Liga - Spain", "Celta Vigo", "Getafe", "2025/26"): (1.62, 3.7, 5.8),
+    ("La Liga - Spain", "Athletic Bilbao", "Sevilla", "2025/26"): (1.57, 3.9, 6.0),
+    ("UEFA Champions League", "Qarabağ FK", "Newcastle United", "2025/26"): (
+        7.7,
+        5.05,
+        1.41,
+    ),
+}
+# Short names the LLMs use in their reasoning, keyed by part of the team name
+NICKNAMES = {
+    "paris saint germain": ["psg", "paris"],
+    "wolverhampton": ["wolves"],
+    "tottenham": ["spurs"],
+    "manchester city": ["man city", "city"],
+    "manchester united": ["man utd", "man united", "united"],
+    "barcelona": ["barca"],
+    "atletico madrid": ["atletico", "atleti"],
+    "real madrid": ["madrid"],
+    "bayern": ["bayern"],
+    "borussia monchengladbach": ["gladbach"],
+    "borussia dortmund": ["dortmund", "bvb"],
+    "bayer leverkusen": ["leverkusen"],
+    "internazionale": ["inter"],
+    "athletic bilbao": ["athletic", "bilbao"],
+    "newcastle": ["magpies"],
+    "nottingham forest": ["forest"],
+    "west ham": ["hammers"],
+    "arsenal": ["gunners"],
+    "brighton": ["seagulls"],
+}
 BOUND_WORDS = re.compile(
     r"(over|above|more than|less than|under|at least|nearly|almost|below|"
     r"exceed\w*|up to|>|<|≥|≤)\s*[~≈]?\s*$"
@@ -107,6 +147,10 @@ def team_patterns(team: str, other: str) -> re.Pattern[str]:
     others = set(normalize_team(other).split())
     words = [w for w in own if len(w) >= 4 and w not in AMBIGUOUS_WORDS | others]  # noqa: PLR2004
     names = [re.escape(fold(team))] + [re.escape(w) for w in words]
+    other_folded = fold(other)
+    for part, nicknames in NICKNAMES.items():
+        if part in fold(team):
+            names += [re.escape(n) for n in nicknames if n not in other_folded]
     return re.compile(r"\b(" + "|".join(names) + r")\b")
 
 
@@ -440,6 +484,9 @@ def main() -> None:
         rec = reconstructed[key]
         if key in truth:
             odds, sources, source, flags = truth[key][1], {}, "logged", []
+        elif key in MANUAL_ODDS and not all(rec.odds.values()):
+            odds = dict(zip(OUTCOMES, MANUAL_ODDS[key], strict=True))
+            sources, source, flags = {}, "manual", []
         else:
             odds, sources, source, flags = (
                 rec.odds,
@@ -470,7 +517,7 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    missing = [r for r in rows if r["source"] == "reconstructed"]
+    missing = [r for r in rows if r["source"] != "logged"]
     full = [r for r in missing if all(r[f"odds_{o}"] for o in OUTCOMES)]
     partial = [r for r in missing if any(r[f"odds_{o}"] for o in OUTCOMES)]
     flagged = [r for r in full if r["flags"]]
@@ -481,7 +528,8 @@ def main() -> None:
     print(
         f"Without logged odds: {len(missing)}; now with all 3 odds: {len(full)} "
         f"({len(full) / max(len(missing), 1):.1%}), of which flagged: {len(flagged)}; "
-        f"partial: {len(partial) - len(full)}; none: {len(missing) - len(partial)}"
+        f"partial: {len(partial) - len(full)}; none: {len(missing) - len(partial)}; "
+        f"read by hand: {sum(r['source'] == 'manual' for r in missing)}"
     )
     by_season: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for r in missing:
