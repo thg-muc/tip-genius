@@ -46,6 +46,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "tip_genius"))
 
 from eval_providers import (  # noqa: E402
+    DEFAULT_FROM_SEASON,
     NAME_STOPWORDS,
     REPO_ROOT,
     HttpCache,
@@ -437,6 +438,11 @@ def main() -> None:
     parser.add_argument(
         "--out", type=Path, default=REPO_ROOT / "data" / "reconstructed_odds.csv"
     )
+    parser.add_argument(
+        "--from-season",
+        default=DEFAULT_FROM_SEASON,
+        help="first season to include, e.g. 2024/25 (default %(default)s)",
+    )
     args = parser.parse_args()
     load_dotenv(args.env_file)
 
@@ -448,6 +454,7 @@ def main() -> None:
         p
         for p in last_before_kickoff(flatten(snapshots))
         if p.kickoff < now - timedelta(hours=3)
+        and season_of(p.kickoff) >= args.from_season
     ]
     cache = HttpCache(Path(tempfile.gettempdir()) / "tip-genius-eval-cache")
     matched = match_results(selected, load_results(cache, selected))

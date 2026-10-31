@@ -69,6 +69,8 @@ ESPN_LEAGUES = {
     "Bundesliga - Austria": "aut.1",
 }
 BUNDESLIGA = "Bundesliga - Germany"
+# 2024/25 is incomplete (no reasoning texts, partial history) and not needed
+DEFAULT_FROM_SEASON = "2025/26"
 # Providers currently offered in the frontend (public/js/main.js LLM_PROVIDERS)
 CURRENT_PROVIDERS = [
     "Deepseek-Chat",
@@ -635,7 +637,7 @@ def build_rows(
     return rows
 
 
-def print_report(rows: list[Row], season: str) -> None:
+def print_report(rows: list[Row], season: str, from_season: str) -> None:
     """Print overall, per-league, per-season and head-to-head tables."""
     print("\n* = currently offered in the frontend")
     print(
@@ -647,10 +649,10 @@ def print_report(rows: list[Row], season: str) -> None:
         "Exact = 4 pts, GoalDiff = 3+ pts, "
         "Tendency = 2+ pts, as share of tipped matches"
     )
-    print_table("All leagues, all seasons", aggregate(rows))
+    print_table(f"All leagues, since {from_season}", aggregate(rows))
     for league in sorted({r.league for r in rows}):
         league_rows = [r for r in rows if r.league == league]
-        print_table(f"{league}, all seasons", aggregate(league_rows))
+        print_table(f"{league}, since {from_season}", aggregate(league_rows))
     for one_season in sorted({season_of(r.kickoff) for r in rows}):
         season_rows = [r for r in rows if season_of(r.kickoff) == one_season]
         print_table(f"Season {one_season}, all leagues", aggregate(season_rows))
@@ -817,16 +819,16 @@ def print_reliability(title: str, coverage: dict[str, Coverage]) -> None:
 
 
 def print_reliability_report(
-    raw: list[Prediction], selected: list[Prediction], season: str
+    raw: list[Prediction], selected: list[Prediction], season: str, from_season: str
 ) -> None:
-    """Print reliability for all seasons and for the focused season."""
+    """Print reliability since the first season and for the focused season."""
     print(
         "\nReliability: Runs = workflow runs while the provider was active, "
         "Missed = runs with no snapshot at all, PerRun = share of matches "
         "offered in those runs that got a valid tip, PreKO = share of past "
         "matches with a tip before kickoff"
     )
-    print_reliability("all seasons", reliability(raw, selected, None))
+    print_reliability(f"since {from_season}", reliability(raw, selected, None))
     print_reliability(f"season {season}", reliability(raw, selected, season))
 
 
@@ -900,6 +902,11 @@ def parse_args() -> argparse.Namespace:
         help="season for the focused ranking, e.g. 2026/27",
     )
     parser.add_argument(
+        "--from-season",
+        default=DEFAULT_FROM_SEASON,
+        help="first season to include, e.g. 2024/25 (default %(default)s)",
+    )
+    parser.add_argument(
         "--odds-csv",
         type=Path,
         help="odds per fixture (utils/reconstruct_odds.py) for the "
@@ -921,7 +928,7 @@ def main() -> None:
     first_kv = min(stamp for stamp, _ in snapshots)
     snapshots |= load_local_snapshots(args.local_dir, before=first_kv)
 
-    raw = flatten(snapshots)
+    raw = [p for p in flatten(snapshots) if season_of(p.kickoff) >= args.from_season]
     if args.league:
         wanted = args.league.lower()
         raw = [p for p in raw if wanted in p.league.lower()]
@@ -948,8 +955,8 @@ def main() -> None:
             print(f"  unmatched: {league} {kickoff:%Y-%m-%d %H:%M} {home} - {away}")
     baseline = odds_baseline(args.odds_csv, past) if args.odds_csv else []
     rows = build_rows(raw + baseline, past + baseline, matched)
-    print_report(rows, args.season)
-    print_reliability_report(raw, predictions, args.season)
+    print_report(rows, args.season, args.from_season)
+    print_reliability_report(raw, predictions, args.season, args.from_season)
 
 
 if __name__ == "__main__":
