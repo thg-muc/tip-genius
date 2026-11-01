@@ -337,6 +337,11 @@ def all_predicted(
     return selected
 
 
+def current_kickoff(preds: list[Prediction]) -> datetime:
+    """Return a fixture's current kickoff (the one in its newest snapshot)."""
+    return max(preds, key=lambda p: p.snapshot).kickoff
+
+
 def sport_names() -> dict[str, str]:
     """Map Odds API sport keys to the league names used in snapshots."""
     path = REPO_ROOT / "src" / "tip_genius" / "cfg" / "api_config.yaml"
@@ -572,7 +577,8 @@ def main() -> None:
     validate({k: r.odds for k, r in reconstructed.items()}, truth, "combined")
 
     rows = []
-    for key, preds in sorted(by_fixture.items(), key=lambda item: item[1][0].kickoff):
+
+    for key, preds in sorted(by_fixture.items(), key=lambda i: current_kickoff(i[1])):
         league, home, away, season = key[:4]
         rec = reconstructed[key]
         after_kickoff = all(p.snapshot >= p.kickoff for p in preds)
@@ -592,7 +598,8 @@ def main() -> None:
             {
                 "league": league,
                 "season": season,
-                "kickoff_utc": preds[0].kickoff.isoformat(),
+                # The newest snapshot carries the fixture's current kickoff
+                "kickoff_utc": current_kickoff(preds).isoformat(),
                 "home_team": home,
                 "away_team": away,
                 "odds_home": odds.get("home") or "",
