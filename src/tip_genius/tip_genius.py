@@ -22,6 +22,7 @@ from typing import Any
 import polars as pl
 import yaml
 from lib.api_data import BaseAPI, OddsAPI
+from lib.blob_archive import ODDS_COLUMNS as ODDS_ARCHIVE_COLUMNS
 from lib.llm_manager import LLMManager
 from lib.storage_manager import StorageManager
 from lib.team_matching import TeamLogoMatcher
@@ -83,6 +84,9 @@ class TipGenius:
         Flag to enable writing of result to Vercel KV storage, by default False.
     export_to_file : bool, optional
         Flag to enable writing of result to file system, by default False.
+    export_to_blob : bool, optional
+        Flag to enable the Vercel Blob archive of predictions and odds, by
+        default False. Skipped in debug mode and without a Blob token.
     store_api_results : bool, default False
         Flag to store intermediate API results to file system.
     store_llm_results : bool, default False
@@ -117,6 +121,7 @@ class TipGenius:
     # Initialize all attributes with default values
     export_to_kv = False
     export_to_file = False
+    export_to_blob = False
     store_api_results = False
     store_llm_results = False
     llm_attempts = 4
@@ -531,12 +536,13 @@ class TipGenius:
             logger.exception("A problem occurred while storing API result")
 
     def log_odds_snapshot(self, api_result: Any, sport: str) -> None:
-        """Log the pre-match odds of one sport as a single INFO line.
+        """Log and archive the pre-match odds of one sport.
 
-        Keeps the odds fed to the LLMs in the GitHub Actions log (retained for
-        90 days) so past matches can be re-predicted later. Logged once per
-        sport and run, not per provider. Never raises: a failure here must not
-        affect the predictions.
+        Archives the odds fed to the LLMs in Vercel Blob and, as a cheap second
+        copy, logs them as a single ``ODDS_SNAPSHOT`` INFO line in the GitHub
+        Actions log (retained for 90 days), so past matches can be re-predicted
+        later. Runs once per sport and run, not per provider. Never raises: a
+        failure here must not affect the predictions.
 
         Parameters
         ----------
@@ -546,12 +552,34 @@ class TipGenius:
             The name of the sport/league.
 
         """
+        # Process once; archive and log line then fail independently
+        fetched_at = datetime.now(tz=UTC)
         try:
             data = self.api_pipeline.process_api_data(
                 api_result=api_result,
                 named_teams=True,
                 additional_info=True,
             )
+        except Exception:
+            logger.warning(
+                "Could not process odds snapshot for %s", sport, exc_info=True
+            )
+            return
+
+        if self.storage_manager is not None:
+            try:
+                # Blob keeps the id column, only used to join odds files
+                rows = data.select(ODDS_ARCHIVE_COLUMNS).iter_rows()
+                self.storage_manager.store_odds(
+                    sport=sport,
+                    columns=ODDS_ARCHIVE_COLUMNS,
+                    matches=[list(row) for row in rows],
+                    fetched_at=fetched_at,
+                )
+            except Exception:
+                logger.warning("Could not archive odds for %s", sport, exc_info=True)
+
+        try:
             columns = [
                 "commence_time",
                 "home_team",
@@ -562,7 +590,7 @@ class TipGenius:
             ]
             snapshot = {
                 "sport": sport,
-                "fetched_at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
+                "fetched_at": fetched_at.isoformat(timespec="seconds"),
                 "columns": columns,
                 "matches": [list(row) for row in data.select(columns).iter_rows()],
             }
@@ -901,6 +929,7 @@ class TipGenius:
                 debug=self.debug,
                 write_to_kv=self.export_to_kv,
                 export_to_file=self.export_to_file,
+                write_to_blob=self.export_to_blob,
             )
             self.prediction_data.clear()
             self.predictions_per_provider.clear()
@@ -1136,6 +1165,9 @@ class TipGenius:
                 sys.exit(1)
 
         finally:
+            # Manifest and index list what reached Blob; never raises
+            if self.storage_manager is not None:
+                self.storage_manager.finalize_blob_archive()
             # In finally, so an export exiting first cannot skip it; gated on
             # completion, so an aborted run does not report unreached providers
             if combinations_completed:
@@ -1170,6 +1202,7 @@ if __name__ == "__main__":
         "store_llm_results": not in_cloud,
         "export_to_file": not in_cloud,
         "export_to_kv": True,
+        "export_to_blob": True,
     }
 
     for option, value in options.items():

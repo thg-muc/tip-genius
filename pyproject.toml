@@ -11,6 +11,7 @@ dependencies = [
     "python-slugify>=8.0.4",
     "PyYAML>=6.0.2",
     "requests>=2.33.0",
+    "vercel>=0.12.1",
 ]
 
 [dependency-groups]
@@ -27,7 +28,7 @@ markers = [
     "smoke: live smoke tests that hit external LLM APIs (incurs cost; gated by RUN_SMOKE=1)",
 ]
 addopts = "-m 'not smoke'"
-pythonpath = ["src/tip_genius"]
+pythonpath = ["src/tip_genius", "."]
 
 [tool.ruff]
 line-length = 88
@@ -77,6 +78,10 @@ ignore = [
     "RUF100",
     "ISC001"
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Test functions and fakes need no docstrings or type-checking-only imports
+"tests/**/*.py" = ["D101", "D102", "D103", "ARG", "TC001", "TC002", "TC003", "PLC0415"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
