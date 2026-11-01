@@ -47,7 +47,6 @@ minute.
 - 🎨 Modern UI with Tailwind CSS
 - 🔄 Automated prediction updates via GitHub Actions
 - 💾 Efficient data storage using Vercel KV (Redis)
-- 🗄️ Long-term archive of predictions and odds in a private Vercel Blob store
 - 🔢 Build-time version generation for deployment tracking
 
 ## Tech Stack
@@ -71,7 +70,6 @@ minute.
 
 - Vercel for hosting and serverless functions
 - Vercel KV Store for data persistence
-- Vercel Blob (private store) as the long-term archive of predictions and odds
 - GitHub for version control and CI/CD
 
 ### Dependencies

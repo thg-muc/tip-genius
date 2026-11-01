@@ -123,6 +123,7 @@ def test_odds_manifest_and_index(
     assert index["runs"] == [
         {
             "run_ts": "2026-11-03_03-00-05",
+            "source": "workflow",
             "manifest": "runs/2026-11-03_03-00-05.json",
             "odds": manifest["odds"],
             "predictions": manifest["predictions"],

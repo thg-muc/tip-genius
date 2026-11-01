@@ -165,10 +165,11 @@ Every non-debug workflow run archives its predictions and odds in the private Bl
 - **Layout** (flat, the leading timestamp sorts files chronologically):
   - `predictions/<YYYY-MM-DD_HH-MM-SS>_<base_key>.jsonl`: same timestamp and content as the timestamped KV key, one `{"name", "timestamp", "matches"}` line per league
   - `odds/<run_ts>_Match_Odds_<League-Key>.jsonl`: one file per league and run, `{"name", "timestamp", "columns", "matches"}` with columns `id, commence_time, home_team, away_team, odds_home, odds_draw, odds_away` (backfilled log-line odds have no `id`)
-  - `odds/reconstructed/<ts>_Match_Odds_Reconstructed.csv`: ESTIMATED odds from `utils/reconstruct_odds.py`, never mixed into `odds/`
+  - `odds/reconstructed/<ts>_Match_Odds_Reconstructed.csv`: ESTIMATED odds from `utils/reconstruct_odds.py`, never mixed into `odds/`; with several CSVs, the newest one (highest timestamp) is current
   - `runs/<run_ts>.json`: manifest per run with the odds and prediction pathnames actually written
   - `index.json`: every run (newest last) and the reconstructed files; the only file overwritten. Read it with `BlobArchiveReader` instead of `list` (an advanced operation)
 - **Join odds ↔ predictions** on `(home_team, away_team, kickoff)`; convert the predictions' `commence_time_str` (Europe/Berlin) to UTC first.
 - **Run timestamp**: `run_ts` is set once per run (`StorageManager.run_ts`) for odds files, manifest and index entry; prediction files reuse their KV key timestamp.
 - **Failures** only log a WARNING (pathname, HTTP status) after at most one retry and never affect the exit code or `export_results()`. Debug runs skip Blob with one INFO line.
+- **Backfill**: `utils/backfill_blob_archive.py` stops before the first live workflow run in `index.json`, so runs are never archived twice. Re-run `utils/reconstruct_odds.py` before the backfill. Never run the backfill or `--rebuild-index` near the cron (Tue/Fri 03:00 UTC): the index update is a read-modify-write.
 - **Limits** (Hobby): 2,000 advanced operations (uploads, lists) per month; a regular run needs ~12 uploads.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -265,3 +266,79 @@ def test_real_run_skips_files_missing_from_index(
     assert plan.items[0].pathname in fake_blob.heads
     index = json.loads(fake_blob.files["index.json"])
     assert plan.items[0].pathname in blob_archive.index_pathnames(index)
+
+
+def test_live_cutoff_and_until() -> None:
+    index = blob_archive.merge_index(
+        None,
+        [
+            {"run_ts": "2026-10-30_09-49-58", "source": "backfill"},
+            {"run_ts": "2026-11-03_03-01-30", "source": "workflow"},
+        ],
+    )
+    cutoff = bf.live_cutoff(index)
+    assert cutoff == datetime(2026, 11, 3, 2, 31, 30, tzinfo=UTC)
+    assert bf.live_cutoff(blob_archive.empty_index()) is None
+    earlier = datetime(2026, 9, 1, tzinfo=UTC)
+    assert bf.effective_until(None, cutoff) == cutoff
+    assert bf.effective_until(earlier, cutoff) == earlier
+    assert bf.effective_until(None, None) is None
+
+
+def test_backfill_after_go_live_skips_live_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Tue 03.11 was archived live (run_ts at StorageManager init); Actions
+    # started 03:00:05, KV keys at 03:10. None of it may be backfilled again.
+    index = blob_archive.merge_index(
+        None, [{"run_ts": "2026-11-03_03-01-30", "source": "workflow"}]
+    )
+    values = {
+        f"2026-10-30_09-55-00_{PRED_KEY}": kv_value("A", "B", "31.10.2026 15:30"),
+        f"2026-11-03_03-10-00_{PRED_KEY}": kv_value("C", "D", "07.11.2026 15:30"),
+    }
+    live_log = _item("2026-11-03_03-00-05", "odds", "Bundesliga-Germany")
+    live_log.source = "actions_log"
+    old_log = _item("2026-10-30_09-49-58", "odds", "Bundesliga-Germany")
+    old_log.source = "actions_log"
+    for item in (live_log, old_log):
+        item.body = json.dumps({"columns": ["odds_home"], "matches": []}).encode()
+    monkeypatch.setattr(bf, "load_kv_values", lambda since: values)
+    monkeypatch.setattr(bf, "make_processor", lambda: None)
+    monkeypatch.setattr(bf, "api_result_items", lambda *args: [])
+    monkeypatch.setattr(bf, "log_items", lambda repo: ([old_log, live_log], []))
+    args = argparse.Namespace(
+        since=SINCE,
+        until=bf.effective_until(None, bf.live_cutoff(index)),
+        data_dir=tmp_path,
+        skip_logs=False,
+        repo="o/r",
+    )
+    plan = bf.build_plan(args)
+    pathnames = {i.pathname for i in plan.items}
+    assert old_log.pathname in pathnames
+    assert f"predictions/2026-10-30_09-55-00_{PRED_KEY}.jsonl" in pathnames
+    assert live_log.pathname not in pathnames
+    assert f"predictions/2026-11-03_03-10-00_{PRED_KEY}.jsonl" not in pathnames
+    # Coverage check ignores matches only predicted in live runs
+    assert [f.home_team for f in plan.predicted] == ["A"]
+
+    uploader = bf.run_backfill(plan, index, dry_run=True, head_check=False)
+    # One backfill run (30.10), no second manifest for the live run
+    assert uploader.stats["manifest"]["uploads"] == 1
+
+
+def test_crash_partway_still_indexes_uploaded_files(
+    tmp_path: Path, fake_blob: FakeBlob
+) -> None:
+    plan = _plan(tmp_path)
+    fake_blob.fail_puts[plan.items[1].pathname] = [KeyboardInterrupt()]
+    with pytest.raises(KeyboardInterrupt):
+        bf.run_backfill(
+            plan, blob_archive.read_index(), dry_run=False, head_check=False
+        )
+    index = json.loads(fake_blob.files["index.json"])
+    indexed = blob_archive.index_pathnames(index)
+    assert plan.items[0].pathname in indexed
+    assert plan.items[1].pathname not in indexed
+    assert f"runs/{index['runs'][0]['run_ts']}.json" in fake_blob.files

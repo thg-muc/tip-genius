@@ -10,7 +10,7 @@ import pytest
 from lib import blob_archive
 from vercel.blob import sync as vercel_blob
 
-from .conftest import FakeBlob
+from .conftest import ALREADY_EXISTS, STORE_URL, FakeBlob
 
 TS = "2026-10-27_09-49-22"
 BASE_KEY = "Match_Predictions_Meta-Llama-Mid_FourPointsScoring_named_with-info"
@@ -120,6 +120,7 @@ def test_merge_index_sorts_and_deduplicates() -> None:
     ]
     assert merged["runs"][1] == {
         "run_ts": "2026-10-30_03-00-00",
+        "source": "workflow",
         "manifest": "runs/2026-10-30_03-00-00.json",
         "odds": {"A": "o1"},
         "predictions": {"P": "p1"},
@@ -161,6 +162,50 @@ def test_put_gives_up_after_one_retry(
         assert not blob_archive.put_with_retry("a", b"x", content_type="t")
     assert len(fake_blob.puts) == 2
     assert "Blob write failed for a (HTTP 503)" in caplog.text
+
+
+def test_put_already_exists_is_success_without_retry(
+    fake_blob: FakeBlob, caplog: pytest.LogCaptureFixture
+) -> None:
+    fake_blob.files["a"] = b"old"
+    with caplog.at_level(logging.WARNING):
+        assert blob_archive.put_with_retry("a", b"new", content_type="t")
+    assert len(fake_blob.puts) == 1
+    assert fake_blob.files["a"] == b"old"
+    assert caplog.text == ""
+
+
+def test_other_bad_request_is_not_already_exists() -> None:
+    assert not blob_archive.is_already_exists(
+        vercel_blob.BlobError("Invalid pathname", status_code=400)
+    )
+    assert blob_archive.is_already_exists(
+        vercel_blob.BlobError(ALREADY_EXISTS, status_code=400)
+    )
+
+
+def test_blob_exists_transient_failure_returns_false(fake_blob: FakeBlob) -> None:
+    fake_blob.files["a"] = b"x"
+    assert blob_archive.blob_exists("a")
+    fake_blob.fail_heads = vercel_blob.BlobServiceRateLimited(1)
+    assert not blob_archive.blob_exists("a")
+
+
+def test_fresh_index_read_bypasses_cache(fake_blob: FakeBlob) -> None:
+    assert blob_archive.update_index([{"run_ts": TS}])
+    assert blob_archive.read_index(fresh=True)["runs"][0]["run_ts"] == TS
+    assert fake_blob.gets[-1] == f"{STORE_URL}/index.json?etag=%22v1%22"
+
+
+def test_first_workflow_run() -> None:
+    entries = [
+        {"run_ts": "2026-11-06_03-01-00", "source": "workflow"},
+        {"run_ts": "2025-08-01_03-00-00", "source": "backfill"},
+        {"run_ts": "2026-11-03_03-01-30", "source": "workflow"},
+    ]
+    index = blob_archive.merge_index(None, entries)
+    assert blob_archive.first_workflow_run(index) == "2026-11-03_03-01-30"
+    assert blob_archive.first_workflow_run(blob_archive.empty_index()) is None
 
 
 def test_put_does_not_retry_auth_errors(fake_blob: FakeBlob) -> None:

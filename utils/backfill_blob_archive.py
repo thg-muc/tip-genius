@@ -24,16 +24,29 @@ Sources, and how their schemas differ (deliberately not hidden):
    runs as ``data/api_result``.
 4. ``data/reconstructed_odds.csv`` (built by ``utils/reconstruct_odds.py``,
    read only here) -> ``odds/reconstructed/<mtime>_Match_Odds_Reconstructed.csv``
-   plus a README marking them as ESTIMATED. Never mixed into ``odds/``. A
-   re-run of the reconstruction changes the mtime and archives a new version.
+   plus a README marking them as ESTIMATED. Never mixed into ``odds/``. Re-run
+   the reconstruction BEFORE the single backfill, so the CSV covers every
+   predicted match up to the first live run. A later re-run changes the mtime
+   and archives a new version; with several CSVs, the newest one (highest
+   timestamp, last in ``index.json`` ``reconstructed_odds``) is the current one.
 
 Runs are rebuilt by clustering all timestamps (gap <= 30 min, no league or
 provider twice per run); the earliest timestamp becomes the ``run_ts`` and each
 run gets ``runs/<run_ts>.json`` with ``"source": "backfill"``.
 
+Live runs: everything from the first run with ``"source": "workflow"`` in
+``index.json`` on (minus a 30 min margin) is skipped, because the workflow
+archived it already, under its own run timestamp. ``--until`` can only lower
+that bound.
+
 Idempotent: pathnames listed in ``index.json`` are skipped, and a real run
 HEAD-checks (a cheap simple operation) every remaining pathname before the
-upload. Uploads are throttled to <= 10/s (Hobby: 2,000 advanced ops/month).
+upload; a failed HEAD falls back to the write-once upload. Manifests and the
+index are written even if the run stops partway. Uploads are throttled to
+<= 10/s (Hobby: 2,000 advanced ops/month).
+
+Timing: the ``index.json`` update is a read-modify-write, so never run the
+backfill or ``--rebuild-index`` near the cron (Tue/Fri 03:00 UTC).
 
 Usage:
     uv run python utils/backfill_blob_archive.py --dry-run --data-dir /path/to/data
@@ -59,7 +72,7 @@ import subprocess
 import sys
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -134,6 +147,7 @@ class Fixture:
     kickoff: datetime  # UTC
     home_team: str
     away_team: str
+    last_stamp: datetime | None = None  # latest snapshot predicting this kickoff
 
     @property
     def join_key(self) -> tuple[str, str, datetime]:
@@ -280,7 +294,7 @@ def latest_fixtures(
             ):
                 superseded += 1
             else:
-                kept.append(fixture)
+                kept.append(replace(fixture, last_stamp=stamp))
     return sorted(kept, key=lambda f: (f.kickoff, f.league)), superseded
 
 
@@ -606,13 +620,26 @@ class Uploader:
 def run_backfill(
     plan: Plan, index: dict[str, Any], *, dry_run: bool, head_check: bool
 ) -> Uploader:
-    """Upload all files, then manifests, then merge the runs into the index."""
+    """Upload all files, then manifests, then merge the runs into the index.
+
+    Manifests and index are written in ``finally``, so everything uploaded so
+    far is indexed even if the run stops partway.
+    """
     uploader = Uploader(
         blob_archive.index_pathnames(index), dry_run=dry_run, head_check=head_check
     )
-    for item in plan.items:
-        uploader.upload(item)
+    try:
+        for item in plan.items:
+            uploader.upload(item)
+    finally:
+        write_manifests_and_index(plan, index, uploader, dry_run=dry_run)
+    return uploader
 
+
+def write_manifests_and_index(
+    plan: Plan, index: dict[str, Any], uploader: Uploader, *, dry_run: bool
+) -> None:
+    """Write manifests and merge the index for every archived file."""
     manifests = build_manifests(group_runs(plan.items), uploader.archived)
     entries = []
     for manifest in manifests:
@@ -650,7 +677,23 @@ def run_backfill(
             blob_archive.update_index(entries, reconstructed)
     else:
         stats["existing"] += 1
-    return uploader
+
+
+def live_cutoff(index: dict[str, Any]) -> datetime | None:
+    """Return where the backfill must stop: before the first live workflow run.
+
+    Runs from then on are archived by the workflow itself. Re-reading them
+    would duplicate them under another ``run_ts`` (the Actions start time,
+    not the workflow's run timestamp), so the cutoff keeps a RUN_GAP margin.
+    """
+    first = blob_archive.first_workflow_run(index)
+    return parse_ts(first) - RUN_GAP if first else None
+
+
+def effective_until(until: datetime | None, cutoff: datetime | None) -> datetime | None:
+    """Combine ``--until`` with the live-run cutoff (the earlier one wins)."""
+    bounds = [b for b in (until, cutoff) if b is not None]
+    return min(bounds) if bounds else None
 
 
 def rebuild_index() -> None:
@@ -747,7 +790,10 @@ def parse_args() -> argparse.Namespace:
         "--until",
         type=lambda s: datetime.fromisoformat(s).replace(tzinfo=UTC),
         default=None,
-        help="exclusive upper bound for run files, to split the backfill",
+        help=(
+            "exclusive upper bound for run files, to split the backfill; "
+            "always capped before the first live workflow run in index.json"
+        ),
     )
     parser.add_argument("--repo", default="thg-muc/tip-genius")
     parser.add_argument("--dry-run", action="store_true", help="count, upload nothing")
@@ -783,7 +829,17 @@ def build_plan(args: argparse.Namespace) -> Plan:
 
     run_files = preds + odds
     if args.until is not None:
-        run_files = [i for i in run_files if i.stamp is None or i.stamp < args.until]
+        kept = [i for i in run_files if i.stamp is None or i.stamp < args.until]
+        plan.notes.append(
+            f"{len(run_files) - len(kept)} run files at or after "
+            f"{args.until:%Y-%m-%d %H:%M} UTC skipped (--until / live runs)"
+        )
+        run_files = kept
+        plan.predicted = [
+            f
+            for f in plan.predicted
+            if f.last_stamp is None or f.last_stamp < args.until
+        ]
     recon, recon_keys = reconstructed_items(args.data_dir / "reconstructed_odds.csv")
     if not recon:
         plan.notes.append("reconstructed_odds.csv not found")
@@ -802,8 +858,14 @@ def main() -> None:
         return
     if not os.environ.get("BLOB_READ_WRITE_TOKEN"):
         sys.exit("BLOB_READ_WRITE_TOKEN is not set (check --env-file)")
+    index = blob_archive.read_index(fresh=True)
+    cutoff = live_cutoff(index)
+    args.until = effective_until(args.until, cutoff)
     plan = build_plan(args)
-    index = blob_archive.read_index()
+    if cutoff is not None:
+        plan.notes.append(
+            f"First live workflow run in index: stopping at {cutoff:%Y-%m-%d %H:%M} UTC"
+        )
     uploader = run_backfill(
         plan, index, dry_run=args.dry_run, head_check=args.head_check
     )

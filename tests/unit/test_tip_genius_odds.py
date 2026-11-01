@@ -78,6 +78,28 @@ def test_odds_logged_and_archived_once(
     assert len(fake_blob.puts) == 1
 
 
+def test_odds_archived_even_if_log_line_fails(
+    tip_genius: TipGenius,
+    fake_blob: FakeBlob,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    workflow_logger = logging.getLogger("tip_genius")
+    real_info = workflow_logger.info
+
+    def broken_info(msg: str, *args: Any, **kwargs: Any) -> None:
+        if msg.startswith("ODDS_SNAPSHOT"):
+            raise TypeError("not serializable")
+        real_info(msg, *args, **kwargs)
+
+    monkeypatch.setattr(workflow_logger, "info", broken_info)
+    tip_genius.storage_manager = StorageManager("x", write_to_blob=True)
+    with caplog.at_level(logging.WARNING):
+        tip_genius.log_odds_snapshot(api_result={}, sport="Bundesliga - Germany")
+    assert "Could not log odds snapshot" in caplog.text
+    assert len(fake_blob.files) == 1
+
+
 def test_odds_archive_failure_never_raises(
     tip_genius: TipGenius, fake_blob: FakeBlob
 ) -> None:

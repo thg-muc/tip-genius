@@ -552,13 +552,34 @@ class TipGenius:
             The name of the sport/league.
 
         """
+        # Process once; archive and log line then fail independently
+        fetched_at = datetime.now(tz=UTC)
         try:
             data = self.api_pipeline.process_api_data(
                 api_result=api_result,
                 named_teams=True,
                 additional_info=True,
             )
-            fetched_at = datetime.now(tz=UTC)
+        except Exception:
+            logger.warning(
+                "Could not process odds snapshot for %s", sport, exc_info=True
+            )
+            return
+
+        if self.storage_manager is not None:
+            try:
+                # Blob keeps the id column, only used to join odds files
+                rows = data.select(ODDS_ARCHIVE_COLUMNS).iter_rows()
+                self.storage_manager.store_odds(
+                    sport=sport,
+                    columns=ODDS_ARCHIVE_COLUMNS,
+                    matches=[list(row) for row in rows],
+                    fetched_at=fetched_at,
+                )
+            except Exception:
+                logger.warning("Could not archive odds for %s", sport, exc_info=True)
+
+        try:
             columns = [
                 "commence_time",
                 "home_team",
@@ -579,22 +600,6 @@ class TipGenius:
             )
         except Exception:
             logger.warning("Could not log odds snapshot for %s", sport, exc_info=True)
-            return
-
-        if self.storage_manager is None:
-            return
-        try:
-            # Blob keeps the id column, only used to join odds files
-            self.storage_manager.store_odds(
-                sport=sport,
-                columns=ODDS_ARCHIVE_COLUMNS,
-                matches=[
-                    list(row) for row in data.select(ODDS_ARCHIVE_COLUMNS).iter_rows()
-                ],
-                fetched_at=fetched_at,
-            )
-        except Exception:
-            logger.warning("Could not archive odds for %s", sport, exc_info=True)
 
     def _wait_before_retry(
         self,

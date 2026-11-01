@@ -8,8 +8,11 @@ The archive lives in a private Vercel Blob store and is laid out flat by type:
 - ``runs/<run_ts>.json`` (one manifest per workflow run)
 - ``index.json`` (every archived run, so readers never need ``list``)
 
-Every file is write-once except ``index.json``. The SDK reads the static
-``BLOB_READ_WRITE_TOKEN`` from the environment.
+Every file is write-once except ``index.json``. With several reconstructed
+CSVs, the newest one (highest timestamp, last in ``reconstructed_odds``) is the
+current one. The ``index.json`` read-modify-write is not atomic, so never run
+the backfill or ``--rebuild-index`` near the cron (Tue/Fri 03:00 UTC). The SDK
+reads the static ``BLOB_READ_WRITE_TOKEN`` from the environment.
 """
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2026
@@ -22,6 +25,7 @@ import logging
 import time
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 from vercel.blob import sync as vercel_blob
 
@@ -59,6 +63,21 @@ _NO_RETRY_ERRORS = (
     vercel_blob.BlobStoreNotFoundError,
     vercel_blob.BlobStoreSuspendedError,
 )
+
+
+def is_already_exists(error: Exception) -> bool:
+    """Tell whether a put was rejected because the pathname already exists.
+
+    The SDK has no dedicated error class for this: the API answers with a 400
+    (``bad_request``) whose message reads "This blob already exists, use
+    allowOverwrite ...", which the SDK raises as a plain ``BlobError``.
+    """
+    return (
+        isinstance(error, vercel_blob.BlobError)
+        and getattr(error, "status_code", None) in (400, 409)
+        and "already exists" in str(error).lower()
+    )
+
 
 # %% --------------------------------------------
 # * Pathnames
@@ -177,6 +196,7 @@ def index_entry(manifest: dict[str, Any], *, manifest_written: bool) -> dict[str
     run_ts = manifest["run_ts"]
     return {
         "run_ts": run_ts,
+        "source": manifest.get("source", "workflow"),
         "manifest": manifest_pathname(run_ts) if manifest_written else None,
         "odds": manifest["odds"],
         "predictions": manifest["predictions"],
@@ -197,7 +217,8 @@ def merge_index(
     """Merge run entries into an index, sorted by ``run_ts`` (newest last).
 
     Entries with the same ``run_ts`` are combined, so re-running a backfill or
-    retrying an index update never duplicates a run.
+    retrying an index update never duplicates a run. ``reconstructed_odds`` is
+    sorted too: with several CSVs, the last one (newest timestamp) is current.
     """
     merged = empty_index() if index is None else dict(index)
     runs: dict[str, dict[str, Any]] = {}
@@ -206,6 +227,7 @@ def merge_index(
             entry["run_ts"],
             {
                 "run_ts": entry["run_ts"],
+                "source": entry.get("source", "workflow"),
                 "manifest": None,
                 "odds": {},
                 "predictions": {},
@@ -222,6 +244,12 @@ def merge_index(
     )
     merged["updated_at"] = format_payload_ts(now or datetime.now(tz=UTC))
     return merged
+
+
+def first_workflow_run(index: dict[str, Any]) -> str | None:
+    """Return the ``run_ts`` of the first run archived live by the workflow."""
+    live = [r["run_ts"] for r in index.get("runs", []) if r.get("source") == "workflow"]
+    return min(live) if live else None
 
 
 def index_pathnames(index: dict[str, Any]) -> set[str]:
@@ -251,11 +279,13 @@ def put_with_retry(
     """Upload one file to the private store, with at most one retry.
 
     Never raises: a failure is logged as a WARNING with pathname and HTTP status.
+    A write-once put rejected because the pathname already exists counts as
+    success (the file is present) and is neither retried nor logged as WARNING.
 
     Returns
     -------
     bool
-        True if the file was written.
+        True if the file was written or already exists.
 
     """
     for attempt in (1, 2):
@@ -271,6 +301,9 @@ def put_with_retry(
             )
         except Exception as e:
             status = getattr(e, "status_code", None)
+            if not allow_overwrite and is_already_exists(e):
+                logger.debug("Blob %s already exists, not overwritten", pathname)
+                return True
             if attempt == 1 and not isinstance(e, _NO_RETRY_ERRORS):
                 wait = max(backoff, float(getattr(e, "retry_after", 0) or 0))
                 logger.info(
@@ -291,16 +324,35 @@ def put_with_retry(
 
 
 def blob_exists(pathname: str) -> bool:
-    """Check whether a pathname exists, using a cheap HEAD (simple operation)."""
+    """Check whether a pathname exists, using a cheap HEAD (simple operation).
+
+    A transient failure (rate limit, network) returns False, so the caller
+    attempts the write-once upload, which reports an existing file as success.
+    """
     try:
         vercel_blob.head_blob(pathname)
     except vercel_blob.BlobNotFoundError:
         return False
+    except Exception as e:
+        logger.info(
+            "HEAD failed for %s (HTTP %s), trying the upload: %s",
+            pathname,
+            getattr(e, "status_code", None),
+            e,
+        )
+        return False
     return True
 
 
-def read_index() -> dict[str, Any]:
+def read_index(*, fresh: bool = False) -> dict[str, Any]:
     """Read ``index.json``; return an empty index if it does not exist yet.
+
+    Parameters
+    ----------
+    fresh : bool, optional
+        Bypass the delivery cache: HEAD (uncached catalog API) gives the current
+        etag, and the download uses it as a query parameter, i.e. a new cache
+        key. Use this right before a read-modify-write of the index.
 
     Raises
     ------
@@ -310,7 +362,12 @@ def read_index() -> dict[str, Any]:
 
     """
     try:
-        result = vercel_blob.get_blob(INDEX_PATHNAME, access="private")
+        if fresh:
+            head = vercel_blob.head_blob(INDEX_PATHNAME)
+            target = f"{head.url}?etag={quote(head.etag, safe='')}"
+        else:
+            target = INDEX_PATHNAME
+        result = vercel_blob.get_blob(target, access="private")
     except vercel_blob.BlobNotFoundError:
         return empty_index()
     return json.loads(result.body)
@@ -324,9 +381,11 @@ def update_index(
 
     Never raises; a failure is logged as a WARNING. Runs can be re-added later
     from their manifests with ``utils/backfill_blob_archive.py --rebuild-index``.
+    The read-modify-write is not atomic: never run the backfill or
+    ``--rebuild-index`` near the cron (Tue/Fri 03:00 UTC).
     """
     try:
-        index = read_index()
+        index = read_index(fresh=True)
     except Exception as e:
         logger.warning(
             "Could not read %s (HTTP %s), index not updated: %s",
