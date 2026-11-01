@@ -577,7 +577,6 @@ def main() -> None:
     validate({k: r.odds for k, r in reconstructed.items()}, truth, "combined")
 
     rows = []
-
     for key, preds in sorted(by_fixture.items(), key=lambda i: current_kickoff(i[1])):
         league, home, away, season = key[:4]
         rec = reconstructed[key]
