@@ -30,14 +30,18 @@ Sources, and how their schemas differ (deliberately not hidden):
    and archives a new version; with several CSVs, the newest one (highest
    timestamp, last in ``index.json`` ``reconstructed_odds``) is the current one.
 
-Runs are rebuilt by clustering all timestamps (gap <= 30 min, no league or
+Other runs are rebuilt by clustering timestamps (gap <= 30 min, no league or
 provider twice per run); the earliest timestamp becomes the ``run_ts`` and each
 run gets ``runs/<run_ts>.json`` with ``"source": "backfill"``.
 
-Live runs: everything from the first run with ``"source": "workflow"`` in
-``index.json`` on (minus a 30 min margin) is skipped, because the workflow
-archived it already, under its own run timestamp. ``--until`` can only lower
-that bound.
+Live runs: each run with ``"source": "workflow"`` in ``index.json`` covers a
+window from 30 min before its ``run_ts`` to 4 h after it (runs take up to
+~2.5 h and write their KV keys at the end). Inside that window, files for a
+league or provider the run already lists are skipped; anything missing (e.g.
+after a failed Blob write) is uploaded and attached to the live run, with log
+odds named after its ``run_ts``. Before, between and after live runs
+everything stays backfillable. Runs from the Actions logs get the same kind of
+window (start to end), so their odds and KV predictions share one manifest.
 
 Idempotent: pathnames listed in ``index.json`` are skipped, and a real run
 HEAD-checks (a cheap simple operation) every remaining pathname before the
@@ -53,8 +57,9 @@ Usage:
     uv run python utils/backfill_blob_archive.py --env-file ... --data-dir ...
     uv run python utils/backfill_blob_archive.py --rebuild-index --env-file ...
 
-``--rebuild-index`` recreates ``index.json`` from all ``runs/*.json``
-manifests (one ``list`` call per 1,000 files) if an index update failed.
+``--rebuild-index`` re-adds all ``runs/*.json`` manifests (one ``list`` call per
+1,000 files) to ``index.json`` if an index update failed; it merges into the
+current index when that is readable, so nothing already indexed is lost.
 """
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2026
@@ -109,6 +114,8 @@ DEBUG_MARKER = "Debug mode is enabled"
 LOG_ODDS_SINCE = datetime(2026, 10, 30, 7, 49, tzinfo=UTC)
 WORKFLOW_FILE = "match-predictions.yaml"
 RUN_GAP = timedelta(minutes=30)
+# Workflow runs take up to ~2.5 h and write their KV keys at the end
+LIVE_RUN_SPAN = timedelta(hours=4)
 # Same pairing with another kickoff within this window = rescheduled match
 RESCHEDULE_WINDOW = timedelta(days=21)
 MIN_UPLOAD_INTERVAL = 0.1  # <= 10 uploads/s
@@ -137,6 +144,18 @@ class Item:
     stamp: datetime | None = None
     kind: str = ""  # "predictions" or "odds" for files that belong to a run
     key: str = ""  # provider key or league key
+    run_ts: str | None = None  # set when the run is known (live or Actions run)
+
+
+@dataclass
+class RunWindow:
+    """Time span of a known workflow run; run files inside belong to it."""
+
+    run_ts: str
+    start: datetime
+    end: datetime
+    live: bool = False  # archived live by the workflow (source=workflow)
+    present: set[tuple[str, str]] = field(default_factory=set)  # (kind, key)
 
 
 @dataclass
@@ -417,8 +436,12 @@ def parse_log_snapshots(log: str) -> list[dict[str, Any]]:
 
 def log_items(
     repo: str, run_fetcher: Callable[[str, str], str] | None = None
-) -> tuple[list[Item], list[str]]:
-    """Collect odds from ``ODDS_SNAPSHOT`` lines of recent workflow runs."""
+) -> tuple[list[Item], list[str], list[RunWindow]]:
+    """Collect odds from ``ODDS_SNAPSHOT`` lines of recent workflow runs.
+
+    Also returns each run's time window, so its KV predictions (written at the
+    end of the run) join the same run as its odds.
+    """
     fetch = run_fetcher or (
         lambda run_id, repo_: gh("run", "view", run_id, "--repo", repo_, "--log")
     )
@@ -434,10 +457,11 @@ def log_items(
             "--limit",
             "100",
             "--json",
-            "databaseId,startedAt,status,event",
+            "databaseId,startedAt,updatedAt,status,event",
         )
     )
     items: list[Item] = []
+    windows: list[RunWindow] = []
     for run in runs:
         started = parse_iso(run["startedAt"])
         if started < LOG_ODDS_SINCE or run["status"] != "completed":
@@ -447,6 +471,8 @@ def log_items(
             notes.append(f"Actions run {run['databaseId']}: debug mode, skipped")
             continue
         run_ts = blob_archive.format_run_ts(started)
+        ended = parse_iso(run.get("updatedAt") or run["startedAt"])
+        windows.append(RunWindow(run_ts, started, max(ended, started)))
         seen: set[str] = set()
         for snap in parse_log_snapshots(log):
             if snap["sport"] in seen:
@@ -467,9 +493,10 @@ def log_items(
                     stamp=started,
                     kind="odds",
                     key=blob_archive.league_key(snap["sport"]),
+                    run_ts=run_ts,
                 )
             )
-    return items, notes
+    return items, notes, windows
 
 
 def reconstructed_items(
@@ -516,14 +543,18 @@ def reconstructed_items(
 def group_runs(items: Iterable[Item]) -> dict[str, list[Item]]:
     """Cluster run files into runs keyed by ``run_ts`` (earliest timestamp).
 
-    A new run starts after a gap of more than RUN_GAP, or when a league or
-    provider would appear twice in the same run.
+    Files with a known ``run_ts`` (live or Actions runs) go to that run. For
+    the rest, a new run starts after a gap of more than RUN_GAP, or when a
+    league or provider would appear twice in the same run.
     """
     runs: dict[str, list[Item]] = {}
+    for item in items:
+        if item.kind and item.run_ts:
+            runs.setdefault(item.run_ts, []).append(item)
     current: list[Item] = []
     previous: datetime | None = None
     dated = sorted(
-        (i for i in items if i.kind and i.stamp is not None),
+        (i for i in items if i.kind and i.stamp is not None and not i.run_ts),
         key=lambda i: (i.stamp, i.pathname),
     )
     for item in dated:
@@ -679,25 +710,76 @@ def write_manifests_and_index(
         stats["existing"] += 1
 
 
-def live_cutoff(index: dict[str, Any]) -> datetime | None:
-    """Return where the backfill must stop: before the first live workflow run.
+def live_windows(index: dict[str, Any]) -> list[RunWindow]:
+    """Return the windows of runs the workflow archived live (source=workflow).
 
-    Runs from then on are archived by the workflow itself. Re-reading them
-    would duplicate them under another ``run_ts`` (the Actions start time,
-    not the workflow's run timestamp), so the cutoff keeps a RUN_GAP margin.
+    A live run's ``run_ts`` is set shortly after the Actions start (log odds
+    carry the start time) and its KV keys are written up to ~2.5 h later.
     """
-    first = blob_archive.first_workflow_run(index)
-    return parse_ts(first) - RUN_GAP if first else None
+    windows = []
+    for run in index.get("runs", []):
+        if run.get("source") != "workflow":
+            continue
+        run_start = parse_ts(run["run_ts"])
+        present = {("odds", k) for k in run.get("odds", {})}
+        present |= {("predictions", k) for k in run.get("predictions", {})}
+        windows.append(
+            RunWindow(
+                run["run_ts"],
+                run_start - RUN_GAP,
+                run_start + LIVE_RUN_SPAN,
+                live=True,
+                present=present,
+            )
+        )
+    return windows
 
 
-def effective_until(until: datetime | None, cutoff: datetime | None) -> datetime | None:
-    """Combine ``--until`` with the live-run cutoff (the earlier one wins)."""
-    bounds = [b for b in (until, cutoff) if b is not None]
-    return min(bounds) if bounds else None
+def assign_windows(
+    items: list[Item], windows: list[RunWindow]
+) -> tuple[list[Item], int]:
+    """Attach run files to known runs; drop what a live run already archived.
+
+    Inside a live run's window, a file whose league or provider the run
+    already lists is skipped (it would be a duplicate under another
+    timestamp). Anything else is kept and joins the live run, so a run whose
+    Blob write failed can still be completed from KV and the Actions log.
+    Live windows take precedence; earlier windows win on overlap.
+    """
+    ordered = sorted(windows, key=lambda w: (not w.live, w.start))
+    kept: list[Item] = []
+    skipped = 0
+    for item in items:
+        stamp = item.stamp
+        window = next(
+            (
+                w
+                for w in ordered
+                if item.kind and stamp is not None and w.start <= stamp <= w.end
+            ),
+            None,
+        )
+        if window is None:
+            kept.append(item)
+            continue
+        if window.live:
+            if (item.kind, item.key) in window.present:
+                skipped += 1
+                continue
+            if item.kind == "odds":
+                # Name it like the workflow would have (live run timestamp)
+                item.pathname = blob_archive.odds_pathname(window.run_ts, item.key)
+        item.run_ts = window.run_ts
+        kept.append(item)
+    return kept, skipped
 
 
 def rebuild_index() -> None:
-    """Recreate ``index.json`` from all run manifests (uses ``list``)."""
+    """Re-add all run manifests to ``index.json`` (uses ``list``).
+
+    Merges into the current index when it is readable, so runs indexed
+    without a manifest and files a manifest under-lists are kept.
+    """
     from vercel.blob import sync as vercel_blob  # noqa: PLC0415
 
     reader = blob_archive.BlobArchiveReader()
@@ -711,7 +793,13 @@ def rebuild_index() -> None:
         for b in vercel_blob.query_blobs(prefix="odds/reconstructed/", page_size=1000)
         if b.pathname.endswith(".csv")
     ]
-    merged = blob_archive.merge_index(None, entries, reconstructed)
+    try:
+        base: dict[str, Any] | None = blob_archive.read_index(fresh=True)
+    except Exception as e:
+        # Unreadable index: rebuild from the manifests alone
+        print(f"index.json not readable ({e}), rebuilding from manifests only")
+        base = None
+    merged = blob_archive.merge_index(base, entries, reconstructed)
     ok = blob_archive.put_with_retry(
         blob_archive.INDEX_PATHNAME,
         blob_archive.to_json(merged),
@@ -790,10 +878,7 @@ def parse_args() -> argparse.Namespace:
         "--until",
         type=lambda s: datetime.fromisoformat(s).replace(tzinfo=UTC),
         default=None,
-        help=(
-            "exclusive upper bound for run files, to split the backfill; "
-            "always capped before the first live workflow run in index.json"
-        ),
+        help="exclusive upper bound for run files, to split the backfill",
     )
     parser.add_argument("--repo", default="thg-muc/tip-genius")
     parser.add_argument("--dry-run", action="store_true", help="count, upload nothing")
@@ -807,32 +892,47 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def build_plan(args: argparse.Namespace) -> Plan:
+def build_plan(args: argparse.Namespace, index: dict[str, Any]) -> Plan:
     """Collect all sources into one plan."""
     plan = Plan()
     values = load_kv_values(args.since)
     preds, plan.predicted, plan.rescheduled = kv_items(values, args.since)
 
     odds = api_result_items(args.data_dir, args.since, make_processor())
+    live = live_windows(index)
+    windows = list(live)
     if args.skip_logs:
         plan.notes.append("Actions logs skipped (--skip-logs)")
     else:
         try:
-            logged, notes = log_items(args.repo)
+            logged, notes, action_windows = log_items(args.repo)
             odds += logged
             plan.notes += notes
+            windows += action_windows
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             plan.notes.append(f"Actions logs not read: {e}")
     for item in odds:
         payload = json.loads(item.body)
         plan.odds_keys |= odds_keys_from_rows(payload["columns"], payload["matches"])
 
-    run_files = preds + odds
+    run_files, skipped = assign_windows(preds + odds, windows)
+    if live:
+        plan.notes.append(
+            f"{len(live)} live workflow runs in index.json: {skipped} run files "
+            "already archived by them skipped, the rest attached to them"
+        )
+        # Their odds are in the live odds files, not in this plan
+        plan.predicted = [
+            f
+            for f in plan.predicted
+            if f.last_stamp is None
+            or not any(w.start <= f.last_stamp <= w.end for w in live)
+        ]
     if args.until is not None:
         kept = [i for i in run_files if i.stamp is None or i.stamp < args.until]
         plan.notes.append(
             f"{len(run_files) - len(kept)} run files at or after "
-            f"{args.until:%Y-%m-%d %H:%M} UTC skipped (--until / live runs)"
+            f"{args.until:%Y-%m-%d %H:%M} UTC skipped (--until)"
         )
         run_files = kept
         plan.predicted = [
@@ -859,13 +959,7 @@ def main() -> None:
     if not os.environ.get("BLOB_READ_WRITE_TOKEN"):
         sys.exit("BLOB_READ_WRITE_TOKEN is not set (check --env-file)")
     index = blob_archive.read_index(fresh=True)
-    cutoff = live_cutoff(index)
-    args.until = effective_until(args.until, cutoff)
-    plan = build_plan(args)
-    if cutoff is not None:
-        plan.notes.append(
-            f"First live workflow run in index: stopping at {cutoff:%Y-%m-%d %H:%M} UTC"
-        )
+    plan = build_plan(args, index)
     uploader = run_backfill(
         plan, index, dry_run=args.dry_run, head_check=args.head_check
     )

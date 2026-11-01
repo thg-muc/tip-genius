@@ -132,7 +132,9 @@ def test_log_items_skip_debug_and_old_runs(monkeypatch: pytest.MonkeyPatch) -> N
         "1": f"x ODDS_SNAPSHOT {json.dumps(snap)}\n",
         "2": f"Debug mode is enabled...\nx ODDS_SNAPSHOT {json.dumps(snap)}\n",
     }
-    items, notes = bf.log_items("o/r", run_fetcher=lambda run_id, _: logs[run_id])
+    items, notes, windows = bf.log_items(
+        "o/r", run_fetcher=lambda run_id, _: logs[run_id]
+    )
     assert [i.pathname for i in items] == [
         "odds/2026-11-03_03-00-05_Match_Odds_Bundesliga-Germany.jsonl"
     ]
@@ -140,6 +142,8 @@ def test_log_items_skip_debug_and_old_runs(monkeypatch: pytest.MonkeyPatch) -> N
     assert payload["timestamp"] == "2026-11-03 03:00:09"
     assert payload["columns"] == snap["columns"]  # no id in log-line odds
     assert notes == ["Actions run 2: debug mode, skipped"]
+    assert items[0].run_ts == "2026-11-03_03-00-05"
+    assert [(w.run_ts, w.live) for w in windows] == [("2026-11-03_03-00-05", False)]
 
 
 def test_api_result_items(tmp_path: Path) -> None:
@@ -268,64 +272,151 @@ def test_real_run_skips_files_missing_from_index(
     assert plan.items[0].pathname in blob_archive.index_pathnames(index)
 
 
-def test_live_cutoff_and_until() -> None:
-    index = blob_archive.merge_index(
+LIVE_TS = "2026-11-03_03-01-30"
+OTHER_KEY = "Match_Predictions_Google-Gemma_FourPointsScoring_named_with-info"
+
+
+def live_index(odds: dict[str, str], predictions: dict[str, str]) -> dict[str, Any]:
+    return blob_archive.merge_index(
         None,
         [
             {"run_ts": "2026-10-30_09-49-58", "source": "backfill"},
-            {"run_ts": "2026-11-03_03-01-30", "source": "workflow"},
+            {
+                "run_ts": LIVE_TS,
+                "source": "workflow",
+                "manifest": f"runs/{LIVE_TS}.json",
+                "odds": odds,
+                "predictions": predictions,
+            },
         ],
     )
-    cutoff = bf.live_cutoff(index)
-    assert cutoff == datetime(2026, 11, 3, 2, 31, 30, tzinfo=UTC)
-    assert bf.live_cutoff(blob_archive.empty_index()) is None
-    earlier = datetime(2026, 9, 1, tzinfo=UTC)
-    assert bf.effective_until(None, cutoff) == cutoff
-    assert bf.effective_until(earlier, cutoff) == earlier
-    assert bf.effective_until(None, None) is None
 
 
-def test_backfill_after_go_live_skips_live_run(
+def test_live_windows_skip_archived_and_attach_missing() -> None:
+    index = live_index(
+        {"Bundesliga-Germany": f"odds/{LIVE_TS}_Match_Odds_Bundesliga-Germany.jsonl"},
+        {bf.blob_archive.provider_key(PRED_KEY): "predictions/x.jsonl"},
+    )
+    windows = bf.live_windows(index)
+    assert [(w.run_ts, w.live) for w in windows] == [(LIVE_TS, True)]
+
+    archived_odds = _item("2026-11-03_03-00-05", "odds", "Bundesliga-Germany")
+    missing_odds = _item("2026-11-03_03-00-05", "odds", "LaLiga-Spain")
+    archived_pred = _item(
+        "2026-11-03_05-10-00", "predictions", bf.blob_archive.provider_key(PRED_KEY)
+    )
+    missing_pred = _item(
+        "2026-11-03_05-10-00", "predictions", bf.blob_archive.provider_key(OTHER_KEY)
+    )
+    before = _item("2026-10-30_09-55-00", "predictions", "P")
+    between = _item("2026-11-04_12-00-00", "predictions", "P")
+    kept, skipped = bf.assign_windows(
+        [archived_odds, missing_odds, archived_pred, missing_pred, before, between],
+        windows,
+    )
+    assert skipped == 2
+    assert kept == [missing_odds, missing_pred, before, between]
+    assert missing_odds.pathname == f"odds/{LIVE_TS}_Match_Odds_LaLiga-Spain.jsonl"
+    assert missing_odds.run_ts == missing_pred.run_ts == LIVE_TS
+    assert before.run_ts is None
+    assert between.run_ts is None
+
+
+def test_actions_window_joins_odds_and_predictions() -> None:
+    window = bf.RunWindow(
+        "2026-10-30_09-49-58",
+        bf.parse_ts("2026-10-30_09-49-58"),
+        bf.parse_ts("2026-10-30_11-54-58"),
+    )
+    odds = _item("2026-10-30_09-49-58", "odds", "Bundesliga-Germany")
+    odds.run_ts = window.run_ts
+    pred = _item("2026-10-30_11-50-00", "predictions", "P")
+    kept, skipped = bf.assign_windows([odds, pred], [window])
+    assert skipped == 0
+    assert list(bf.group_runs(kept)) == ["2026-10-30_09-49-58"]
+
+
+def test_failed_live_run_is_completed_by_backfill(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Tue 03.11 was archived live (run_ts at StorageManager init); Actions
-    # started 03:00:05, KV keys at 03:10. None of it may be backfilled again.
-    index = blob_archive.merge_index(
-        None, [{"run_ts": "2026-11-03_03-01-30", "source": "workflow"}]
+    # Tue 03.11 archived its odds live, but its prediction writes failed:
+    # the backfill must add them to that run, not drop or duplicate them.
+    index = live_index(
+        {"Bundesliga-Germany": f"odds/{LIVE_TS}_Match_Odds_Bundesliga-Germany.jsonl"},
+        {},
     )
     values = {
         f"2026-10-30_09-55-00_{PRED_KEY}": kv_value("A", "B", "31.10.2026 15:30"),
-        f"2026-11-03_03-10-00_{PRED_KEY}": kv_value("C", "D", "07.11.2026 15:30"),
+        f"2026-11-03_05-10-00_{PRED_KEY}": kv_value("C", "D", "07.11.2026 15:30"),
     }
     live_log = _item("2026-11-03_03-00-05", "odds", "Bundesliga-Germany")
     live_log.source = "actions_log"
-    old_log = _item("2026-10-30_09-49-58", "odds", "Bundesliga-Germany")
-    old_log.source = "actions_log"
-    for item in (live_log, old_log):
-        item.body = json.dumps({"columns": ["odds_home"], "matches": []}).encode()
+    live_log.body = json.dumps({"columns": ["odds_home"], "matches": []}).encode()
     monkeypatch.setattr(bf, "load_kv_values", lambda since: values)
     monkeypatch.setattr(bf, "make_processor", lambda: None)
     monkeypatch.setattr(bf, "api_result_items", lambda *args: [])
-    monkeypatch.setattr(bf, "log_items", lambda repo: ([old_log, live_log], []))
+    monkeypatch.setattr(bf, "log_items", lambda repo: ([live_log], [], []))
     args = argparse.Namespace(
-        since=SINCE,
-        until=bf.effective_until(None, bf.live_cutoff(index)),
-        data_dir=tmp_path,
-        skip_logs=False,
-        repo="o/r",
+        since=SINCE, until=None, data_dir=tmp_path, skip_logs=False, repo="o/r"
     )
-    plan = bf.build_plan(args)
+    plan = bf.build_plan(args, index)
     pathnames = {i.pathname for i in plan.items}
-    assert old_log.pathname in pathnames
+    assert live_log.pathname not in pathnames  # already archived live
+    live_pred = f"predictions/2026-11-03_05-10-00_{PRED_KEY}.jsonl"
+    assert live_pred in pathnames
     assert f"predictions/2026-10-30_09-55-00_{PRED_KEY}.jsonl" in pathnames
-    assert live_log.pathname not in pathnames
-    assert f"predictions/2026-11-03_03-10-00_{PRED_KEY}.jsonl" not in pathnames
-    # Coverage check ignores matches only predicted in live runs
+    # Coverage check ignores matches predicted in live runs
     assert [f.home_team for f in plan.predicted] == ["A"]
 
     uploader = bf.run_backfill(plan, index, dry_run=True, head_check=False)
-    # One backfill run (30.10), no second manifest for the live run
+    runs = bf.group_runs(plan.items)
+    assert set(runs) == {LIVE_TS, "2026-10-30_09-55-00"}
+    assert [i.pathname for i in runs[LIVE_TS]] == [live_pred]
+    # New manifest for 30.10; the live run's manifest exists (write-once), its
+    # index entry gains the prediction through merge_index
     assert uploader.stats["manifest"]["uploads"] == 1
+    assert uploader.stats["manifest"]["existing"] == 1
+
+
+def test_rebuild_index_keeps_entries_without_manifest(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = blob_archive.build_manifest(
+        LIVE_TS, {"L": "odds/l.jsonl"}, {}, source="workflow"
+    )
+    fake_blob.files[f"runs/{LIVE_TS}.json"] = blob_archive.to_json(manifest)
+    index = blob_archive.merge_index(
+        None,
+        [
+            # indexed without a manifest
+            {"run_ts": "2026-10-30_09-55-00", "predictions": {"P": "p.jsonl"}},
+            # a later rerun added a file the (write-once) manifest misses
+            {"run_ts": LIVE_TS, "source": "workflow", "predictions": {"P": "q"}},
+        ],
+    )
+    fake_blob.files["index.json"] = blob_archive.to_json(index)
+    monkeypatch.setattr(blob_archive.vercel_blob, "query_blobs", fake_blob.query_blobs)
+    bf.rebuild_index()
+    rebuilt = json.loads(fake_blob.files["index.json"])
+    assert blob_archive.index_pathnames(rebuilt) == {
+        "p.jsonl",
+        "q",
+        "odds/l.jsonl",
+        f"runs/{LIVE_TS}.json",
+    }
+
+
+def test_rebuild_index_from_manifests_if_index_unreadable(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = blob_archive.build_manifest(LIVE_TS, {"L": "odds/l.jsonl"}, {})
+    fake_blob.files[f"runs/{LIVE_TS}.json"] = blob_archive.to_json(manifest)
+    fake_blob.files["index.json"] = b"{}"
+    fake_blob.fail_heads = blob_archive.vercel_blob.BlobServiceNotAvailable("down")
+    monkeypatch.setattr(blob_archive.vercel_blob, "query_blobs", fake_blob.query_blobs)
+    bf.rebuild_index()
+    rebuilt = json.loads(fake_blob.files["index.json"])
+    assert [r["run_ts"] for r in rebuilt["runs"]] == [LIVE_TS]
 
 
 def test_crash_partway_still_indexes_uploaded_files(

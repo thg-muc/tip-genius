@@ -197,17 +197,6 @@ def test_fresh_index_read_bypasses_cache(fake_blob: FakeBlob) -> None:
     assert fake_blob.gets[-1] == f"{STORE_URL}/index.json?etag=%22v1%22"
 
 
-def test_first_workflow_run() -> None:
-    entries = [
-        {"run_ts": "2026-11-06_03-01-00", "source": "workflow"},
-        {"run_ts": "2025-08-01_03-00-00", "source": "backfill"},
-        {"run_ts": "2026-11-03_03-01-30", "source": "workflow"},
-    ]
-    index = blob_archive.merge_index(None, entries)
-    assert blob_archive.first_workflow_run(index) == "2026-11-03_03-01-30"
-    assert blob_archive.first_workflow_run(blob_archive.empty_index()) is None
-
-
 def test_put_does_not_retry_auth_errors(fake_blob: FakeBlob) -> None:
     fake_blob.fail_puts["a"] = [vercel_blob.BlobAccessError()]
     assert not blob_archive.put_with_retry("a", b"x", content_type="t")

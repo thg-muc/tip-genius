@@ -246,12 +246,6 @@ def merge_index(
     return merged
 
 
-def first_workflow_run(index: dict[str, Any]) -> str | None:
-    """Return the ``run_ts`` of the first run archived live by the workflow."""
-    live = [r["run_ts"] for r in index.get("runs", []) if r.get("source") == "workflow"]
-    return min(live) if live else None
-
-
 def index_pathnames(index: dict[str, Any]) -> set[str]:
     """Return every pathname an index refers to."""
     pathnames = set(index.get("reconstructed_odds", []))

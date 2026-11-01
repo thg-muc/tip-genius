@@ -23,6 +23,11 @@ class _Result:
 
 
 @dataclass
+class _Listed:
+    pathname: str
+
+
+@dataclass
 class _Head:
     url: str
     etag: str
@@ -63,6 +68,9 @@ class FakeBlob:
         if pathname not in self.files:
             raise vercel_blob.BlobNotFoundError
         return _Head(f"{STORE_URL}/{pathname}", f'"v{self.versions.get(pathname, 1)}"')
+
+    def query_blobs(self, *, prefix: str, page_size: int) -> list[_Listed]:
+        return [_Listed(p) for p in sorted(self.files) if p.startswith(prefix)]
 
     def get_blob(self, url_or_pathname: str, *, access: str) -> _Result:
         assert access == "private"
