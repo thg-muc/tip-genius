@@ -161,7 +161,7 @@ Pinned to `^3.4` — v4 introduces breaking changes (new `@source` directive, co
 
 Every non-debug workflow run archives its predictions and odds in the private Blob store `tip-genius-archive` as an additional, write-once copy. KV keys, values and timing are unchanged; KV stays the frontend's live store.
 
-- **Token**: `BLOB_READ_WRITE_TOKEN` (name configured as `blob_token_env_name` in `cfg/vercel_config.yaml`, read by the `vercel` SDK). GitHub has it in the Production environment only, so manual (Preview) runs skip Blob with a warning. Switch: `export_to_blob` in `tip_genius.py`.
+- **Token**: `BLOB_READ_WRITE_TOKEN` (name configured as `blob_token_env_name` in `cfg/vercel_config.yaml`, read by the `vercel` SDK). The GitHub secret is set in both environments (Production for the cron, Preview for manual `workflow_dispatch` runs), so manual runs are archived too; debug runs (`DEBUG_MODE=TRUE`) skip Blob in code. Switch: `export_to_blob` in `tip_genius.py`.
 - **Layout** (flat, the leading timestamp sorts files chronologically):
   - `predictions/<YYYY-MM-DD_HH-MM-SS>_<base_key>.jsonl`: same timestamp and content as the timestamped KV key, one `{"name", "timestamp", "matches"}` line per league
   - `odds/<run_ts>_Match_Odds_<League-Key>.jsonl`: one file per league and run, `{"name", "timestamp", "columns", "matches"}` with columns `id, commence_time, home_team, away_team, odds_home, odds_draw, odds_away` (backfilled log-line odds have no `id`)

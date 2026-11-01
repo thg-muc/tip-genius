@@ -71,7 +71,7 @@ jobs:
           # Vercel KV storage credentials
           KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
           KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
-          # Vercel Blob archive (Production environment only)
+          # Vercel Blob archive (Production and Preview; debug runs skip it in code)
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           # Debug Configuration
           DEBUG_MODE: ${{ vars.DEBUG_MODE }}
