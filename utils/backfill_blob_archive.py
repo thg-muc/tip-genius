@@ -778,7 +778,9 @@ def rebuild_index() -> None:
     """Re-add all run manifests to ``index.json`` (uses ``list``).
 
     Merges into the current index when it is readable, so runs indexed
-    without a manifest and files a manifest under-lists are kept.
+    without a manifest and files a manifest under-lists are kept. A corrupt
+    index (invalid JSON) is rebuilt from the manifests alone; any other read
+    error (rate limit, network) aborts without touching ``index.json``.
     """
     from vercel.blob import sync as vercel_blob  # noqa: PLC0415
 
@@ -795,10 +797,13 @@ def rebuild_index() -> None:
     ]
     try:
         base: dict[str, Any] | None = blob_archive.read_index(fresh=True)
-    except Exception as e:
-        # Unreadable index: rebuild from the manifests alone
-        print(f"index.json not readable ({e}), rebuilding from manifests only")
+    except json.JSONDecodeError as e:
+        # Corrupt index: rebuild from the manifests alone
+        print(f"index.json is not valid JSON ({e}), rebuilding from manifests only")
         base = None
+    except Exception as e:
+        # Transient failure: overwriting now would drop entries, so stop
+        sys.exit(f"Could not read index.json ({e}); index left unchanged, retry later")
     merged = blob_archive.merge_index(base, entries, reconstructed)
     ok = blob_archive.put_with_retry(
         blob_archive.INDEX_PATHNAME,
