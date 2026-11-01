@@ -11,10 +11,16 @@ are used where they exist and to validate the reconstruction. The result is a
 CSV with one row per backtest fixture that ``utils/eval_providers.py`` can
 read with ``--odds-csv``. KV is only read.
 
+With ``--all-predicted`` the CSV covers every predicted fixture instead,
+including those without a known result (knockout ties, play-offs, rescheduled
+matches) and those only predicted after kickoff (flagged ``after_kickoff``,
+earliest snapshot used). This is the input for the Blob archive backfill.
+
 Usage::
 
     uv run python utils/reconstruct_odds.py --env-file /path/to/.env.local \
         --data-dir /path/to/data --out /path/to/data/reconstructed_odds.csv
+    uv run python utils/reconstruct_odds.py --all-predicted  # archive input
 """
 
 # * Author(s): Thomas Glanzer
@@ -36,6 +42,7 @@ import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from pathlib import Path
 from statistics import median
 
@@ -271,6 +278,70 @@ def combine(per_provider: list[dict[str, float]]) -> Reconstructed:
 # * True odds from local files
 
 
+# A pairing can meet twice per season in UEFA competitions (league phase and
+# knockout); domestic repeats of a pairing within a season are reschedules
+REPEAT_LEAGUE_MARKER = "UEFA"
+LEG_GAP = timedelta(days=7)
+
+
+def fixture_legs(predictions: list[Prediction]) -> dict[tuple, list[datetime]]:
+    """Cluster each pairing's kickoffs into legs (UEFA only, gap > LEG_GAP)."""
+    kickoffs: dict[tuple, set[datetime]] = defaultdict(set)
+    for p in predictions:
+        kickoffs[p.league, p.home, p.away, season_of(p.kickoff)].add(p.kickoff)
+    legs: dict[tuple, list[datetime]] = {}
+    for pairing, times in kickoffs.items():
+        ordered = sorted(times)
+        starts = [ordered[0]]
+        if REPEAT_LEAGUE_MARKER in pairing[0]:
+            starts += [b for a, b in pairwise(ordered) if b - a > LEG_GAP]
+        legs[pairing] = starts
+    return legs
+
+
+def fixture_key(pred: Prediction, legs: dict[tuple, list[datetime]]) -> tuple:
+    """Key a prediction by fixture; earlier legs of a repeat pairing get a date.
+
+    The last leg keeps the plain ``(league, home, away, season)`` key, so
+    logged and hand-read odds (keyed that way) still apply to it.
+    """
+    pairing = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
+    starts = legs[pairing]
+    leg = max(i for i, start in enumerate(starts) if start <= pred.kickoff)
+    if leg == len(starts) - 1:
+        return pairing
+    return (*pairing, starts[leg].date().isoformat())
+
+
+def all_predicted(
+    predictions: list[Prediction], legs: dict[tuple, list[datetime]]
+) -> list[Prediction]:
+    """Keep one snapshot per provider and fixture, also without a pre-kickoff one.
+
+    Like ``last_before_kickoff`` (rescheduled kickoffs collapse into one
+    fixture, the newest snapshot's kickoff wins), but repeat legs stay apart,
+    and fixtures a provider only predicted after kickoff fall back to its
+    earliest snapshot.
+    """
+    groups: dict[tuple, list[Prediction]] = defaultdict(list)
+    for pred in predictions:
+        groups[pred.provider, *fixture_key(pred, legs)].append(pred)
+    selected = []
+    for group in groups.values():
+        latest_kickoff = max(group, key=lambda p: p.snapshot).kickoff
+        valid = [p for p in group if p.snapshot < min(p.kickoff, latest_kickoff)]
+        if valid:
+            selected.append(max(valid, key=lambda p: p.snapshot))
+        else:
+            selected.append(min(group, key=lambda p: p.snapshot))
+    return selected
+
+
+def current_kickoff(preds: list[Prediction]) -> datetime:
+    """Return a fixture's current kickoff (the one in its newest snapshot)."""
+    return max(preds, key=lambda p: p.snapshot).kickoff
+
+
 def sport_names() -> dict[str, str]:
     """Map Odds API sport keys to the league names used in snapshots."""
     path = REPO_ROOT / "src" / "tip_genius" / "cfg" / "api_config.yaml"
@@ -443,6 +514,11 @@ def main() -> None:
         default=DEFAULT_FROM_SEASON,
         help="first season to include, e.g. 2024/25 (default %(default)s)",
     )
+    parser.add_argument(
+        "--all-predicted",
+        action="store_true",
+        help="cover every predicted fixture, not only backtest fixtures with a result",
+    )
     args = parser.parse_args()
     load_dotenv(args.env_file)
 
@@ -450,21 +526,36 @@ def main() -> None:
     first_kv = min(stamp for stamp, _ in snapshots)
     snapshots |= load_local_snapshots(args.data_dir / "match_predictions", first_kv)
     now = datetime.now(tz=UTC)
-    selected = [
-        p
-        for p in last_before_kickoff(flatten(snapshots))
-        if p.kickoff < now - timedelta(hours=3)
-        and season_of(p.kickoff) >= args.from_season
-    ]
-    cache = HttpCache(Path(tempfile.gettempdir()) / "tip-genius-eval-cache")
-    matched = match_results(selected, load_results(cache, selected))
-    selected = [p for p in selected if (p.league, p.home, p.away, p.kickoff) in matched]
+    legs: dict[tuple, list[datetime]] = {}
+    if args.all_predicted:
+        predictions = flatten(snapshots)
+        legs = fixture_legs(predictions)
+        selected = [
+            p
+            for p in all_predicted(predictions, legs)
+            if season_of(p.kickoff) >= args.from_season
+        ]
+    else:
+        selected = [
+            p
+            for p in last_before_kickoff(flatten(snapshots))
+            if p.kickoff < now - timedelta(hours=3)
+            and season_of(p.kickoff) >= args.from_season
+        ]
+        cache = HttpCache(Path(tempfile.gettempdir()) / "tip-genius-eval-cache")
+        matched = match_results(selected, load_results(cache, selected))
+        selected = [
+            p for p in selected if (p.league, p.home, p.away, p.kickoff) in matched
+        ]
 
     by_fixture: dict[tuple, list[Prediction]] = defaultdict(list)
     for pred in selected:
-        by_fixture[pred.league, pred.home, pred.away, season_of(pred.kickoff)].append(
-            pred
+        key = (
+            fixture_key(pred, legs)
+            if legs
+            else (pred.league, pred.home, pred.away, season_of(pred.kickoff))
         )
+        by_fixture[key].append(pred)
     truth = load_true_odds(args.data_dir)
     validate_same_run(args.data_dir)
 
@@ -486,9 +577,10 @@ def main() -> None:
     validate({k: r.odds for k, r in reconstructed.items()}, truth, "combined")
 
     rows = []
-    for key, preds in sorted(by_fixture.items(), key=lambda item: item[1][0].kickoff):
-        league, home, away, season = key
+    for key, preds in sorted(by_fixture.items(), key=lambda i: current_kickoff(i[1])):
+        league, home, away, season = key[:4]
         rec = reconstructed[key]
+        after_kickoff = all(p.snapshot >= p.kickoff for p in preds)
         if key in truth:
             odds, sources, source, flags = truth[key][1], {}, "logged", []
         elif key in MANUAL_ODDS and not all(rec.odds.values()):
@@ -505,7 +597,8 @@ def main() -> None:
             {
                 "league": league,
                 "season": season,
-                "kickoff_utc": preds[0].kickoff.isoformat(),
+                # The newest snapshot carries the fixture's current kickoff
+                "kickoff_utc": current_kickoff(preds).isoformat(),
                 "home_team": home,
                 "away_team": away,
                 "odds_home": odds.get("home") or "",
@@ -515,7 +608,7 @@ def main() -> None:
                 "n_draw": sources.get("draw", ""),
                 "n_away": sources.get("away", ""),
                 "source": source,
-                "flags": ";".join(flags),
+                "flags": ";".join([*flags, *(["after_kickoff"] * after_kickoff)]),
             }
         )
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -530,7 +623,8 @@ def main() -> None:
     flagged = [r for r in full if r["flags"]]
     print("\n=== Coverage ===")
     print(
-        f"Backtest fixtures: {len(rows)}, with logged odds: {len(rows) - len(missing)}"
+        f"{'Predicted' if args.all_predicted else 'Backtest'} fixtures: {len(rows)}, "
+        f"with logged odds: {len(rows) - len(missing)}"
     )
     print(
         f"Without logged odds: {len(missing)}; now with all 3 odds: {len(full)} "
