@@ -85,6 +85,18 @@ first, or call `LLMManager.get_prediction()` directly.
 - `lib/storage_manager.py`: Manages data persistence to Vercel KV and file system
 - `lib/team_matching.py`: Fuzzy matching for team logos and names
 
+### Utility Scripts (`utils/`)
+
+A collection of standalone helper scripts that are run by hand, once or occasionally. Nothing in `src/`, `api/` or the workflows imports them, so they are not part of production. Keep every script listed here with what it does and when it is useful; add new ones to this table.
+
+| Script                  | Purpose                                                                                                                                                                                                                                                   | When to use                                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `eval_providers.py`     | Backtests every LLM provider's past predictions against real results (Kicktipp four-points scoring) using KV snapshots (read-only) and openligadb/ESPN scores; includes reliability and per-matchday tables and an odds-favourite baseline (`--odds-csv`) | Choosing or reviewing the default provider, after adding or changing a provider                                         |
+| `reconstruct_odds.py`   | Rebuilds missing pre-match 1X2 odds from the LLMs' reasoning texts (median across providers, validated against true odds in `data/`); writes `data/reconstructed_odds.csv`                                                                                | One-off: covers 2025/26 up to 30.10.2026, before odds were logged/archived. Only needed again if archived odds are lost |
+| `process_team_logos.py` | Downloads all team logos from the football-logos repository and stores them with the flat naming used by the frontend (`--overwrite`, `--output-dir`)                                                                                                     | New season or new leagues/teams                                                                                         |
+| `rename_team_logos.py`  | `purify_image_filename()` makes logo filenames URL-friendly; used by `process_team_logos.py`, also runnable standalone to rename files                                                                                                                    | Fixing logo filenames by hand                                                                                           |
+| `eval_team_matching.py` | Checks how well `TeamLogoMatcher` maps team names from `data/llm_data_test/*.csv` to logo files, listing unmatched teams with their top 5 candidates                                                                                                      | After changing `lib/team_matching.py` or adding logos                                                                   |
+
 ### LLM Provider Changes
 
 When adding or changing an LLM provider, review the full integration path:
