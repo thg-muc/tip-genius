@@ -406,7 +406,19 @@ def test_rebuild_index_keeps_entries_without_manifest(
     }
 
 
-def test_rebuild_index_from_manifests_if_index_unreadable(
+def test_rebuild_index_from_manifests_if_index_corrupt(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = blob_archive.build_manifest(LIVE_TS, {"L": "odds/l.jsonl"}, {})
+    fake_blob.files[f"runs/{LIVE_TS}.json"] = blob_archive.to_json(manifest)
+    fake_blob.files["index.json"] = b"{not json"
+    monkeypatch.setattr(blob_archive.vercel_blob, "query_blobs", fake_blob.query_blobs)
+    bf.rebuild_index()
+    rebuilt = json.loads(fake_blob.files["index.json"])
+    assert [r["run_ts"] for r in rebuilt["runs"]] == [LIVE_TS]
+
+
+def test_rebuild_index_aborts_on_transient_read_error(
     fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manifest = blob_archive.build_manifest(LIVE_TS, {"L": "odds/l.jsonl"}, {})
@@ -414,9 +426,9 @@ def test_rebuild_index_from_manifests_if_index_unreadable(
     fake_blob.files["index.json"] = b"{}"
     fake_blob.fail_heads = blob_archive.vercel_blob.BlobServiceNotAvailable("down")
     monkeypatch.setattr(blob_archive.vercel_blob, "query_blobs", fake_blob.query_blobs)
-    bf.rebuild_index()
-    rebuilt = json.loads(fake_blob.files["index.json"])
-    assert [r["run_ts"] for r in rebuilt["runs"]] == [LIVE_TS]
+    with pytest.raises(SystemExit):
+        bf.rebuild_index()
+    assert fake_blob.files["index.json"] == b"{}"
 
 
 def test_crash_partway_still_indexes_uploaded_files(
