@@ -38,6 +38,9 @@ uv run pre-commit install --hook-type commit-msg
 cd src/tip_genius && DEBUG_MODE=TRUE uv run python tip_genius.py
 # Logs written to src/tip_genius/logs/ — load .env.local from repo root
 
+# Unit tests (no network; Blob, KV and HTTP mocked; also run by the workflow)
+uv run pytest tests/unit
+
 # Smoke tests (live LLM calls — costs real money, run on demand only)
 RUN_SMOKE=1 uv run pytest tests/smoke -m smoke -v
 ```
@@ -82,20 +85,22 @@ first, or call `LLMManager.get_prediction()` directly.
 - `tip_genius.py`: Main workflow orchestrator and TipGenius class
 - `lib/llm_manager.py`: Handles multiple LLM providers (Mistral, OpenAI, Google Gemini, etc.)
 - `lib/api_data.py`: Fetches and processes odds data from external APIs
-- `lib/storage_manager.py`: Manages data persistence to Vercel KV and file system
+- `lib/storage_manager.py`: Manages data persistence to Vercel KV, the file system and the Vercel Blob archive
+- `lib/blob_archive.py`: Blob archive pathnames, payloads, manifest/index helpers and `BlobArchiveReader`
 - `lib/team_matching.py`: Fuzzy matching for team logos and names
 
 ### Utility Scripts (`utils/`)
 
 A collection of standalone helper scripts that are run by hand, once or occasionally. Nothing in `src/`, `api/` or the workflows imports them, so they are not part of production. Keep every script listed here with what it does and when it is useful; add new ones to this table.
 
-| Script                  | Purpose                                                                                                                                                                                                                                                   | When to use                                                                                                             |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `eval_providers.py`     | Backtests every LLM provider's past predictions against real results (Kicktipp four-points scoring) using KV snapshots (read-only) and openligadb/ESPN scores; includes reliability and per-matchday tables and an odds-favourite baseline (`--odds-csv`) | Choosing or reviewing the default provider, after adding or changing a provider                                         |
-| `reconstruct_odds.py`   | Rebuilds missing pre-match 1X2 odds from the LLMs' reasoning texts (median across providers, validated against true odds in `data/`); writes `data/reconstructed_odds.csv`                                                                                | One-off: covers 2025/26 up to 30.10.2026, before odds were logged/archived. Only needed again if archived odds are lost |
-| `process_team_logos.py` | Downloads all team logos from the football-logos repository and stores them with the flat naming used by the frontend (`--overwrite`, `--output-dir`)                                                                                                     | New season or new leagues/teams                                                                                         |
-| `rename_team_logos.py`  | `purify_image_filename()` makes logo filenames URL-friendly; used by `process_team_logos.py`, also runnable standalone to rename files                                                                                                                    | Fixing logo filenames by hand                                                                                           |
-| `eval_team_matching.py` | Checks how well `TeamLogoMatcher` maps team names from `data/llm_data_test/*.csv` to logo files, listing unmatched teams with their top 5 candidates                                                                                                      | After changing `lib/team_matching.py` or adding logos                                                                   |
+| Script                     | Purpose                                                                                                                                                                                                                                                                                                                                                                            | When to use                                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `eval_providers.py`        | Backtests every LLM provider's past predictions against real results (Kicktipp four-points scoring) using KV snapshots (read-only) and openligadb/ESPN scores; includes reliability and per-matchday tables and an odds-favourite baseline (`--odds-csv`)                                                                                                                          | Choosing or reviewing the default provider, after adding or changing a provider                                         |
+| `reconstruct_odds.py`      | Rebuilds missing pre-match 1X2 odds from the LLMs' reasoning texts (median across providers, validated against true odds in `data/`); writes `data/reconstructed_odds.csv`                                                                                                                                                                                                         | One-off: covers 2025/26 up to 30.10.2026, before odds were logged/archived. Only needed again if archived odds are lost |
+| `backfill_blob_archive.py` | Copies history into the Blob archive: KV prediction snapshots (read-only), `ODDS_SNAPSHOT` lines from Actions logs, local `data/api_result` odds and `data/reconstructed_odds.csv` (as estimated), plus run manifests and `index.json`; idempotent, `--dry-run` reports counts, sizes and predicted matches without odds; `--rebuild-index` recreates the index from the manifests | One-off backfill (season 2025/26 onwards) on the maintainer's Mac; `--rebuild-index` after a failed index update        |
+| `process_team_logos.py`    | Downloads all team logos from the football-logos repository and stores them with the flat naming used by the frontend (`--overwrite`, `--output-dir`)                                                                                                                                                                                                                              | New season or new leagues/teams                                                                                         |
+| `rename_team_logos.py`     | `purify_image_filename()` makes logo filenames URL-friendly; used by `process_team_logos.py`, also runnable standalone to rename files                                                                                                                                                                                                                                             | Fixing logo filenames by hand                                                                                           |
+| `eval_team_matching.py`    | Checks how well `TeamLogoMatcher` maps team names from `data/llm_data_test/*.csv` to logo files, listing unmatched teams with their top 5 candidates                                                                                                                                                                                                                               | After changing `lib/team_matching.py` or adding logos                                                                   |
 
 ### LLM Provider Changes
 
@@ -128,6 +133,8 @@ KV_REST_API_URL=your_vercel_kv_url
 KV_REST_API_READ_ONLY_TOKEN=your_vercel_kv_readonly_token
 KV_DEFAULT_KEY=Match_Predictions_Deepseek-Chat_FourPointsScoring_named_with-info
 
+BLOB_READ_WRITE_TOKEN=your_vercel_blob_rw_token
+
 DEBUG_MODE=TRUE/FALSE
 DEBUG_PROCESSING_LIMIT=5
 DEBUG_LOG_FILE=TRUE/FALSE
@@ -148,4 +155,20 @@ Pinned to `^3.4` — v4 introduces breaking changes (new `@source` directive, co
 - **Provider keys select the request/response shape**: a key starting with `anthropic` uses the native Anthropic Messages format, `google` uses the Gemini format, everything else uses the OpenAI-compatible format. Name OpenRouter-hosted models `openrouter-*` regardless of who made the model, or the wrong parser is used.
 - **Retiring a frontend provider**: removing it from `LLM_PROVIDERS` in `public/js/main.js` is enough — `resolveLlmProvider` migrates users whose stored selection is gone.
 - **Dead provider detection**: `_get_dead_providers` flags any provider with zero valid predictions and the workflow exits 1, after the export has been attempted. The report names the dead and healthy providers and points at the job log — it deliberately makes no claim about what reached storage, since the export can fail or partially fail. Partial failures and weeks without fixtures do not trigger it. A total odds API failure is reported separately by `_odds_api_unavailable`.
-- **Odds snapshot logging (stopgap)**: `log_odds_snapshot` in `tip_genius.py` writes one `ODDS_SNAPSHOT {json}` INFO line per league and run with the bookmaker odds fed to the LLMs, so past matches can be re-predicted (e.g. to backfill a new provider). GitHub keeps Actions logs for 90 days only, so extract the lines before then; durable storage is planned separately.
+- **Odds snapshot logging**: `log_odds_snapshot` in `tip_genius.py` archives the bookmaker odds fed to the LLMs in Blob (see below) and also writes one `ODDS_SNAPSHOT {json}` INFO line per league and run as a cheap second copy. GitHub keeps Actions logs for 90 days only; the log line is to be removed once Blob has run reliably for a few weeks.
+
+## Vercel Blob Archive
+
+Every non-debug workflow run archives its predictions and odds in the private Blob store `tip-genius-archive` as an additional, write-once copy. KV keys, values and timing are unchanged; KV stays the frontend's live store.
+
+- **Token**: `BLOB_READ_WRITE_TOKEN` (name configured as `blob_token_env_name` in `cfg/vercel_config.yaml`, read by the `vercel` SDK). GitHub has it in the Production environment only, so manual (Preview) runs skip Blob with a warning. Switch: `export_to_blob` in `tip_genius.py`.
+- **Layout** (flat, the leading timestamp sorts files chronologically):
+  - `predictions/<YYYY-MM-DD_HH-MM-SS>_<base_key>.jsonl`: same timestamp and content as the timestamped KV key, one `{"name", "timestamp", "matches"}` line per league
+  - `odds/<run_ts>_Match_Odds_<League-Key>.jsonl`: one file per league and run, `{"name", "timestamp", "columns", "matches"}` with columns `id, commence_time, home_team, away_team, odds_home, odds_draw, odds_away` (backfilled log-line odds have no `id`)
+  - `odds/reconstructed/<ts>_Match_Odds_Reconstructed.csv`: ESTIMATED odds from `utils/reconstruct_odds.py`, never mixed into `odds/`
+  - `runs/<run_ts>.json`: manifest per run with the odds and prediction pathnames actually written
+  - `index.json`: every run (newest last) and the reconstructed files; the only file overwritten. Read it with `BlobArchiveReader` instead of `list` (an advanced operation)
+- **Join odds ↔ predictions** on `(home_team, away_team, kickoff)`; convert the predictions' `commence_time_str` (Europe/Berlin) to UTC first.
+- **Run timestamp**: `run_ts` is set once per run (`StorageManager.run_ts`) for odds files, manifest and index entry; prediction files reuse their KV key timestamp.
+- **Failures** only log a WARNING (pathname, HTTP status) after at most one retry and never affect the exit code or `export_results()`. Debug runs skip Blob with one INFO line.
+- **Limits** (Hobby): 2,000 advanced operations (uploads, lists) per month; a regular run needs ~12 uploads.

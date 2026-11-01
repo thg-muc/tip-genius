@@ -47,6 +47,7 @@ minute.
 - 🎨 Modern UI with Tailwind CSS
 - 🔄 Automated prediction updates via GitHub Actions
 - 💾 Efficient data storage using Vercel KV (Redis)
+- 🗄️ Long-term archive of predictions and odds in a private Vercel Blob store
 - 🔢 Build-time version generation for deployment tracking
 
 ## Tech Stack
@@ -70,6 +71,7 @@ minute.
 
 - Vercel for hosting and serverless functions
 - Vercel KV Store for data persistence
+- Vercel Blob (private store) as the long-term archive of predictions and odds
 - GitHub for version control and CI/CD
 
 ### Dependencies
@@ -156,7 +158,7 @@ uv run pre-commit install
 uv run pre-commit install --hook-type commit-msg
 ```
 
-`npm test` is currently a placeholder and exits with an error; there is no dedicated automated test suite yet.
+Unit tests (no network, Blob and KV mocked) run with `uv run pytest tests/unit`; the prediction workflow runs them too. `npm test` is a placeholder and exits with an error.
 
 ### Generated Files
 
@@ -170,6 +172,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
 1. **Project Configuration**:
    - Create a new project in Vercel and link to your GitHub repository
    - Set up a Vercel KV store (Redis) for data persistence
+   - Optionally set up a private Vercel Blob store for the long-term archive (provides `BLOB_READ_WRITE_TOKEN`)
    - Configure all environment variables in project settings
 
 2. **CI/CD Pipeline**:
@@ -180,7 +183,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
    - The workflow runs repository quality checks before executing the prediction update job
 
 3. **Environment Configuration**:
-   - GitHub Actions uses repository secrets for API and KV credentials
+   - GitHub Actions uses repository secrets for API and KV credentials, and `BLOB_READ_WRITE_TOKEN` (Production environment only) for the Blob archive
    - GitHub Actions uses repository variables for debug controls such as `DEBUG_MODE` and `DEBUG_PROCESSING_LIMIT`
    - Vercel needs the API route variables used by `api/predictions.js`: `KV_REST_API_URL`, `KV_REST_API_READ_ONLY_TOKEN`, and `KV_DEFAULT_KEY`
 
@@ -240,7 +243,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
    Then edit `.env.local` with your actual credentials and local debug settings. The example file includes the full set of supported variables, including `DEBUG_PROCESSING_LIMIT`.
 
    For deployment:
-   - Add API and KV credentials to GitHub Actions repository secrets
+   - Add API and KV credentials to GitHub Actions repository secrets, and `BLOB_READ_WRITE_TOKEN` to the Production environment for the Blob archive
    - Add debug controls such as `DEBUG_MODE` and `DEBUG_PROCESSING_LIMIT` to GitHub Actions repository variables
    - Add the API route variables required by Vercel (`KV_REST_API_URL`, `KV_REST_API_READ_ONLY_TOKEN`, `KV_DEFAULT_KEY`) to Vercel Environment Variables
 

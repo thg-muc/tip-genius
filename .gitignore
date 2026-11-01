@@ -23,8 +23,11 @@ wheels/
 *.egg
 MANIFEST
 
+# Environment files (keep this exact pattern, the Vercel CLI checks for it)
+.env*
+!.env.example
+
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -56,8 +59,6 @@ data/
 dev*
 *_bak*
 TODO.*
-.env.local
-.env*.local
 *.local.*
 public/version.json
 
