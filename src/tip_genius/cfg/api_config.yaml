@@ -14,6 +14,16 @@ odds_api:
     UEFA Champions League: soccer_uefa_champs_league
     UEFA Europa League: soccer_uefa_europa_league
 
+  # The API's sport_title per sport (appended to the prompt with additional_info).
+  # The live workflow takes it from the API response; these values are only used
+  # to rebuild past prompts (utils/backfill_llm_predictions.py) and must match it.
+  # Checked against the stored data/api_result responses (2024-2025)
+  sport_titles:
+    Premier League - England: EPL
+    La Liga - Spain: La Liga - Spain
+    Bundesliga - Germany: Bundesliga - Germany
+    UEFA Champions League: UEFA Champions League
+
   # Define the Bookmakers to be used for Odds API (in order of priority)
   bookmaker_priority:
     - tipico_de

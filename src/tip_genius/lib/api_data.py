@@ -27,6 +27,72 @@ ODDS_CONFIG_FILE = Path(__file__).parents[1] / "cfg" / "api_config.yaml"
 logger = logging.getLogger(__name__)
 
 # %% --------------------------------------------
+# * Prompt
+
+
+def build_odds_summary(  # noqa: PLR0913
+    *,
+    home_team: str,
+    away_team: str,
+    odds_home: float,
+    odds_away: float,
+    odds_draw: float,
+    sport_title: str,
+    named_teams: bool,
+    additional_info: bool,
+) -> str:
+    """Build the per-match user prompt sent to the LLMs.
+
+    Shared by ``OddsAPI.process_api_data`` and ``utils/backfill_llm_predictions.py``
+    so a backfilled prompt is byte-identical to the live one. Odds are formatted
+    with ``str(float)``, exactly as the workflow always has.
+
+    Parameters
+    ----------
+    home_team, away_team : str
+        Team names as the Odds API returns them.
+    odds_home, odds_away, odds_draw : float
+        Decimal odds of the prioritized bookmaker (0.0 if none was found).
+    sport_title : str
+        The Odds API ``sport_title`` (e.g. ``EPL``), not the league name.
+    named_teams : bool
+        Whether to name the teams or anonymize them as home/away.
+    additional_info : bool
+        Whether to append the sport title.
+
+    Returns
+    -------
+    str
+        The prompt, e.g. ``"Arsenal: 1.5, Chelsea: 5.0, draw: 4.2, EPL"``.
+
+    """
+    if named_teams:
+        summary = (
+            f"{home_team}: {odds_home}, {away_team}: {odds_away}, draw: {odds_draw}"
+        )
+    else:
+        summary = f"home: {odds_home}, away: {odds_away}, draw: {odds_draw}"
+    if additional_info:
+        summary = f"{summary}, {sport_title}"
+    return summary
+
+
+def prediction_columns() -> list[pl.Expr]:
+    """Return the empty result columns ``TipGenius.predict_results`` fills in.
+
+    Shared with ``utils/backfill_llm_predictions.py`` so both build frames
+    with the same dtypes.
+    """
+    return [
+        pl.lit("").alias("reasoning"),
+        pl.lit(0).alias("prediction_home"),
+        pl.lit(0).alias("prediction_away"),
+        pl.lit("").alias("outlook"),
+        pl.lit(0).alias("validity"),
+    ]
+
+
+# %% --------------------------------------------
 # * Class Definitions
 
 
@@ -228,11 +294,7 @@ class OddsAPI(BaseAPI):
             pl.lit(0.0).alias("odds_home"),
             pl.lit(0.0).alias("odds_away"),
             pl.lit(0.0).alias("odds_draw"),
-            pl.lit("").alias("reasoning"),
-            pl.lit(0).alias("prediction_home"),
-            pl.lit(0).alias("prediction_away"),
-            pl.lit("").alias("outlook"),
-            pl.lit(0).alias("validity"),
+            *prediction_columns(),
         )
 
         # Iterate over each row to process odds and generate predictions
@@ -287,24 +349,16 @@ class OddsAPI(BaseAPI):
                     odds_home, odds_away, odds_draw = odds_tuple
                     break
 
-            # Add the processed odds to the DataFrame
-            if named_teams:
-                home_team = data[i, "home_team"]
-                away_team = data[i, "away_team"]
-                odds_summary = (
-                    f"{home_team}: {odds_home}, {away_team}: {odds_away}, "
-                    f"draw: {odds_draw}"
-                )
-            else:
-                odds_summary = (
-                    f"home: {odds_home}, away: {odds_away}, draw: {odds_draw}"
-                )
-
-            # Add additional information if specified
-            if additional_info:
-                odds_summary = f"{odds_summary}, {data[i, 'sport_title']}"
-
-            data[i, "odds_summary"] = odds_summary
+            data[i, "odds_summary"] = build_odds_summary(
+                home_team=data[i, "home_team"],
+                away_team=data[i, "away_team"],
+                odds_home=odds_home,
+                odds_away=odds_away,
+                odds_draw=odds_draw,
+                sport_title=data[i, "sport_title"],
+                named_teams=named_teams,
+                additional_info=additional_info,
+            )
             data[i, "odds_home"] = odds_home
             data[i, "odds_away"] = odds_away
             data[i, "odds_draw"] = odds_draw

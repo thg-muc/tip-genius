@@ -3,10 +3,16 @@
 The archive lives in a private Vercel Blob store and is laid out flat by type:
 
 - ``predictions/<YYYY-MM-DD_HH-MM-SS>_<base_key>.jsonl``
+- ``predictions/backfill/<run_ts>_<base_key>.jsonl`` (predictions generated
+  later for a past run, each line marked with a ``backfill`` object)
 - ``odds/<YYYY-MM-DD_HH-MM-SS>_Match_Odds_<League-Key>.jsonl``
 - ``odds/reconstructed/<YYYY-MM-DD_HH-MM-SS>_Match_Odds_Reconstructed.csv``
 - ``runs/<run_ts>.json`` (one manifest per workflow run)
 - ``index.json`` (every archived run, so readers never need ``list``)
+
+Backfilled predictions are listed in ``index.json`` under
+``backfill_predictions`` (``{run_ts: {provider_key: pathname}}``), never in
+``runs``, so readers cannot mistake them for live pre-match predictions.
 
 Every file is write-once except ``index.json``. With several reconstructed
 CSVs, the newest one (highest timestamp, last in ``reconstructed_odds``) is the
@@ -38,6 +44,9 @@ RUN_TS_FORMAT = "%Y-%m-%d_%H-%M-%S"
 PAYLOAD_TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 INDEX_PATHNAME = "index.json"
 PREDICTIONS_PREFIX = "Match_Predictions_"
+BACKFILL_PREFIX = "predictions/backfill/"
+BACKFILL_KEY = "backfill_predictions"
+ODDS_SOURCES = ("logged", "reconstructed")
 ODDS_COLUMNS = [
     "id",
     "commence_time",
@@ -54,6 +63,9 @@ CSV_CONTENT_TYPE = "text/csv"
 INDEX_CACHE_MAX_AGE = 60
 RETRY_BACKOFF_SECONDS = 2.0
 MAX_RETRY_WAIT_SECONDS = 10.0
+# Backfill index updates are read back; a fresh read can lag behind a write
+INDEX_VERIFY_ATTEMPTS = 4
+INDEX_VERIFY_WAIT_SECONDS = 30.0
 
 # Errors where a retry cannot help
 _NO_RETRY_ERRORS = (
@@ -108,6 +120,24 @@ def predictions_pathname(timestamp: str, base_key: str) -> str:
     return f"predictions/{timestamp}_{base_key}.jsonl"
 
 
+def backfill_predictions_pathname(run_ts: str, base_key: str) -> str:
+    """Return the pathname of a backfilled prediction file of a past run."""
+    return f"{BACKFILL_PREFIX}{run_ts}_{base_key}.jsonl"
+
+
+def parse_backfill_pathname(pathname: str) -> tuple[str, str] | None:
+    """Return ``(run_ts, provider_key)`` of a backfill pathname, else None."""
+    if not pathname.startswith(BACKFILL_PREFIX) or not pathname.endswith(".jsonl"):
+        return None
+    name = pathname.removeprefix(BACKFILL_PREFIX).removesuffix(".jsonl")
+    run_ts, _, key = name.partition(f"_{PREDICTIONS_PREFIX}")
+    try:
+        datetime.strptime(run_ts, RUN_TS_FORMAT)  # noqa: DTZ007
+    except ValueError:
+        return None
+    return (run_ts, key) if key else None
+
+
 def odds_pathname(timestamp: str, sport: str) -> str:
     """Return the pathname of the odds file of one league and run."""
     return f"odds/{timestamp}_Match_Odds_{league_key(sport)}.jsonl"
@@ -150,6 +180,62 @@ def build_prediction_payload(
         {"name": sport, "timestamp": timestamp, "matches": matches}
         for sport, matches in prediction_data.items()
     ]
+
+
+def combine_odds_sources(sources: list[str]) -> str:
+    """Summarize per-match odds sources as ``logged``, ``reconstructed`` or ``mixed``.
+
+    Raises
+    ------
+    ValueError
+        If ``sources`` is empty or contains an unknown source.
+
+    """
+    unknown = set(sources) - set(ODDS_SOURCES)
+    if not sources or unknown:
+        msg = f"Expected odds sources from {ODDS_SOURCES}, got {sorted(set(sources))}"
+        raise ValueError(msg)
+    distinct = set(sources)
+    return distinct.pop() if len(distinct) == 1 else "mixed"
+
+
+def build_backfill_payload(
+    prediction_data: dict[str, list[dict[str, Any]]],
+    timestamp: str,
+    *,
+    odds_sources: dict[str, str],
+    generated_at: str,
+    script: str,
+) -> list[dict[str, Any]]:
+    """Build a backfill prediction payload: live lines plus a ``backfill`` marker.
+
+    Parameters
+    ----------
+    prediction_data : dict[str, list[dict[str, Any]]]
+        Matches per league, with the same fields as live prediction files.
+    timestamp : str
+        Payload timestamp of the original run (``YYYY-MM-DD HH:MM:SS``, UTC).
+    odds_sources : dict[str, str]
+        ``logged``, ``reconstructed`` or ``mixed`` per league.
+    generated_at : str
+        When the predictions were actually generated (UTC, payload format).
+    script : str
+        Name of the script that generated them.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        One ``{"name", "timestamp", "matches", "backfill"}`` entry per league.
+
+    """
+    payload = build_prediction_payload(prediction_data, timestamp)
+    for entry in payload:
+        entry["backfill"] = {
+            "generated_at": generated_at,
+            "odds_source": odds_sources[entry["name"]],
+            "script": script,
+        }
+    return payload
 
 
 def build_odds_payload(
@@ -246,9 +332,47 @@ def merge_index(
     return merged
 
 
+def merge_backfill_index(
+    index: dict[str, Any] | None,
+    entries: dict[str, dict[str, str]],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Merge backfill files into ``backfill_predictions`` (``runs`` untouched).
+
+    Parameters
+    ----------
+    index : dict[str, Any] | None
+        The current index (None for a new one).
+    entries : dict[str, dict[str, str]]
+        ``{run_ts: {provider_key: pathname}}``.
+    now : datetime | None, optional
+        Time for ``updated_at``, by default the current time.
+
+    Returns
+    -------
+    dict[str, Any]
+        The merged index; runs and provider keys are sorted.
+
+    """
+    merged = empty_index() if index is None else dict(index)
+    backfill: dict[str, dict[str, str]] = {
+        run_ts: dict(files) for run_ts, files in merged.get(BACKFILL_KEY, {}).items()
+    }
+    for run_ts, files in entries.items():
+        backfill.setdefault(run_ts, {}).update(files)
+    merged[BACKFILL_KEY] = {
+        run_ts: dict(sorted(files.items()))
+        for run_ts, files in sorted(backfill.items())
+    }
+    merged["updated_at"] = format_payload_ts(now or datetime.now(tz=UTC))
+    return merged
+
+
 def index_pathnames(index: dict[str, Any]) -> set[str]:
     """Return every pathname an index refers to."""
     pathnames = set(index.get("reconstructed_odds", []))
+    for files in index.get(BACKFILL_KEY, {}).values():
+        pathnames.update(files.values())
     for run in index.get("runs", []):
         if run.get("manifest"):
             pathnames.add(run["manifest"])
@@ -398,6 +522,96 @@ def update_index(
     )
 
 
+def _read_index_quietly() -> dict[str, Any] | None:
+    """Read ``index.json`` fresh; log and return None on failure."""
+    try:
+        return read_index(fresh=True)
+    except Exception as e:
+        logger.warning(
+            "Could not read %s (HTTP %s): %s",
+            INDEX_PATHNAME,
+            getattr(e, "status_code", None),
+            e,
+        )
+        return None
+
+
+def update_backfill_index(
+    entries: dict[str, dict[str, str]],
+    *,
+    expected: set[str] | None = None,
+    attempts: int = INDEX_VERIFY_ATTEMPTS,
+    wait: float = INDEX_VERIFY_WAIT_SECONDS,
+) -> bool:
+    """Add backfill files to ``index.json`` under ``backfill_predictions``, verified.
+
+    A fresh read can return a stale index shortly after another write
+    (observed 04.11.2026, cause unconfirmed). So each attempt reads the index,
+    treats it as stale if it lacks any pathname in ``expected`` (what the
+    caller saw earlier, so a stale read never overwrites newer entries), puts
+    the merge and reads it back; only an index containing ``entries`` and
+    ``expected`` counts as success. Between attempts it waits ``wait`` seconds.
+
+    Never raises; a failure is logged as a WARNING. Lost entries can be re-added
+    with ``utils/backfill_blob_archive.py --rebuild-index``. Same timing rule as
+    ``update_index``: never run near the cron (Tue/Fri 03:00 UTC).
+
+    Returns
+    -------
+    bool
+        True once a read-back shows every entry.
+
+    """
+    wanted = {path for files in entries.values() for path in files.values()}
+    required = wanted | (expected or set())
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            time.sleep(wait)
+        index = _read_index_quietly()
+        if index is None:
+            continue
+        stale = (expected or set()) - index_pathnames(index)
+        if stale:
+            logger.warning(
+                "%s looks stale (attempt %d/%d): %d known files missing, not "
+                "overwriting",
+                INDEX_PATHNAME,
+                attempt,
+                attempts,
+                len(stale),
+            )
+            continue
+        if not required - index_pathnames(index):
+            return True  # already indexed
+        if not put_with_retry(
+            INDEX_PATHNAME,
+            to_json(merge_backfill_index(index, entries)),
+            content_type=JSON_CONTENT_TYPE,
+            allow_overwrite=True,
+            cache_control_max_age=INDEX_CACHE_MAX_AGE,
+        ):
+            continue
+        check = _read_index_quietly()
+        missing = required - index_pathnames(check) if check is not None else required
+        if not missing:
+            logger.info("Indexed %d backfill files (verified)", len(wanted))
+            return True
+        logger.warning(
+            "%s read-back misses %d of %d backfill files (attempt %d/%d), re-merging",
+            INDEX_PATHNAME,
+            len(missing),
+            len(required),
+            attempt,
+            attempts,
+        )
+    logger.warning(
+        "Backfill index update NOT verified after %d attempts; re-run the "
+        "script or backfill_blob_archive.py --rebuild-index",
+        attempts,
+    )
+    return False
+
+
 class BlobArchiveReader:
     """Read the archive through ``index.json``, without calling ``list``.
 
@@ -422,6 +636,14 @@ class BlobArchiveReader:
     def runs(self) -> list[dict[str, Any]]:
         """Return all archived runs, oldest first."""
         return self.load_index()["runs"]
+
+    def backfill_predictions(self) -> dict[str, dict[str, str]]:
+        """Return backfilled prediction files, ``{run_ts: {provider_key: path}}``.
+
+        These were generated after the fact for past runs; never treat them as
+        live pre-match predictions.
+        """
+        return self.load_index().get(BACKFILL_KEY, {})
 
     def fetch_bytes(self, pathname: str) -> bytes:
         """Download one archived file."""
