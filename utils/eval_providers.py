@@ -15,10 +15,17 @@ A reliability table shows how many offered matches each provider actually
 predicted. The workflow drops failed or invalid LLM answers, so they show up
 as gaps in the snapshots.
 
+``--include-backfill`` also reads the predictions that
+``utils/backfill_llm_predictions.py`` generated after the fact for past runs
+(Blob ``backfill_predictions``, needs ``BLOB_READ_WRITE_TOKEN``) and prints
+them in separate "incl. backfill" tables. The live ranking above them never
+contains backfilled predictions.
+
 Usage::
 
     uv run python utils/eval_providers.py --env-file /path/to/.env.local
     uv run python utils/eval_providers.py --league Bundesliga --season 2026/27
+    uv run python utils/eval_providers.py --env-file ... --include-backfill
 """
 
 # * Author(s): Thomas Glanzer
@@ -36,6 +43,7 @@ import json
 import logging
 import os
 import re
+import sys
 import tempfile
 import unicodedata
 from collections import defaultdict
@@ -320,6 +328,30 @@ def load_local_snapshots(
         lines = path.read_text().splitlines()
         snapshots[stamp, match[2]] = [json.loads(line) for line in lines if line]
     logger.info("Loaded %d local snapshots from %s", len(snapshots), directory)
+    return snapshots
+
+
+def load_backfill_snapshots() -> dict[tuple[datetime, str], list[dict]]:
+    """Load backfilled predictions from the Blob archive (``backfill_predictions``).
+
+    Keyed like KV snapshots by the original run's timestamp. These were
+    generated after the fact; keep them out of the live ranking.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "src" / "tip_genius"))
+    from lib import blob_archive  # noqa: PLC0415
+
+    reader = blob_archive.BlobArchiveReader()
+    snapshots: dict[tuple[datetime, str], list[dict]] = {}
+    for files in reader.backfill_predictions().values():
+        for pathname in files.values():
+            match = KEY_PATTERN.match(
+                pathname.removeprefix(blob_archive.BACKFILL_PREFIX)
+            )
+            if not match:
+                continue
+            stamp = datetime.strptime(match[1], "%Y-%m-%d_%H-%M-%S").replace(tzinfo=UTC)
+            snapshots[stamp, match[2]] = reader.fetch_jsonl(pathname)
+    logger.info("Loaded %d backfill snapshots from Blob", len(snapshots))
     return snapshots
 
 
@@ -693,6 +725,24 @@ def print_head_to_head(rows: list[Row], label: str) -> None:
         )
 
 
+def print_backfill_report(rows: list[Row], season: str, providers: set[str]) -> None:
+    """Print the "incl. backfill" tables, separate from the live ranking."""
+    names = ", ".join(sorted(providers)) or "none"
+    print(
+        "\n##### incl. backfill: live predictions plus predictions generated "
+        f"after the fact for past runs ({names}); not a live result #####"
+    )
+    season_rows = [r for r in rows if season_of(r.kickoff) == season]
+    label = f"Season {season}, all leagues (incl. backfill)"
+    print_table(label, aggregate(season_rows))
+    for league in sorted({r.league for r in season_rows}):
+        league_rows = [r for r in season_rows if r.league == league]
+        print_table(
+            f"Season {season}, {league} (incl. backfill)", aggregate(league_rows)
+        )
+    print_head_to_head(season_rows, label)
+
+
 # %% --------------------------------------------
 # * Reliability
 
@@ -913,6 +963,12 @@ def parse_args() -> argparse.Namespace:
         f"{ODDS_BASELINE} baseline",
     )
     parser.add_argument(
+        "--include-backfill",
+        action="store_true",
+        help="also score backfilled predictions from Blob in separate "
+        "'incl. backfill' tables (needs BLOB_READ_WRITE_TOKEN)",
+    )
+    parser.add_argument(
         "--show-unmatched",
         action="store_true",
         help="list past fixtures without a matched result",
@@ -928,10 +984,7 @@ def main() -> None:
     first_kv = min(stamp for stamp, _ in snapshots)
     snapshots |= load_local_snapshots(args.local_dir, before=first_kv)
 
-    raw = [p for p in flatten(snapshots) if season_of(p.kickoff) >= args.from_season]
-    if args.league:
-        wanted = args.league.lower()
-        raw = [p for p in raw if wanted in p.league.lower()]
+    raw = select(flatten(snapshots), args)
     predictions = last_before_kickoff(raw)
     now = datetime.now(tz=UTC)
     past = [p for p in predictions if p.kickoff < now - timedelta(hours=3)]
@@ -957,6 +1010,30 @@ def main() -> None:
     rows = build_rows(raw + baseline, past + baseline, matched)
     print_report(rows, args.season, args.from_season)
     print_reliability_report(raw, predictions, args.season, args.from_season)
+
+    if args.include_backfill:
+        backfill = select(flatten(load_backfill_snapshots()), args)
+        raw_all = raw + backfill
+        past_all = [
+            p
+            for p in last_before_kickoff(raw_all)
+            if p.kickoff < now - timedelta(hours=3)
+        ]
+        matched_all = match_results(past_all, load_results(cache, past_all))
+        baseline_all = odds_baseline(args.odds_csv, past_all) if args.odds_csv else []
+        rows_all = build_rows(
+            raw_all + baseline_all, past_all + baseline_all, matched_all
+        )
+        print_backfill_report(rows_all, args.season, {p.provider for p in backfill})
+
+
+def select(predictions: list[Prediction], args: argparse.Namespace) -> list[Prediction]:
+    """Keep predictions from ``--from-season`` on and, if given, ``--league``."""
+    kept = [p for p in predictions if season_of(p.kickoff) >= args.from_season]
+    if args.league:
+        wanted = args.league.lower()
+        kept = [p for p in kept if wanted in p.league.lower()]
+    return kept
 
 
 if __name__ == "__main__":

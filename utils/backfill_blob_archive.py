@@ -57,9 +57,11 @@ Usage:
     uv run python utils/backfill_blob_archive.py --env-file ... --data-dir ...
     uv run python utils/backfill_blob_archive.py --rebuild-index --env-file ...
 
-``--rebuild-index`` re-adds all ``runs/*.json`` manifests (one ``list`` call per
-1,000 files) to ``index.json`` if an index update failed; it merges into the
-current index when that is readable, so nothing already indexed is lost.
+``--rebuild-index`` re-adds all ``runs/*.json`` manifests and all
+``predictions/backfill/`` files of ``utils/backfill_llm_predictions.py`` (one
+``list`` call per prefix and 1,000 files) to ``index.json`` if an index update
+failed; it merges into the current index when that is readable, so nothing
+already indexed is lost.
 """
 # * Author(s): Thomas Glanzer
 # * Creation : Nov 2026
@@ -795,6 +797,12 @@ def rebuild_index() -> None:
         for b in vercel_blob.query_blobs(prefix="odds/reconstructed/", page_size=1000)
         if b.pathname.endswith(".csv")
     ]
+    backfill: dict[str, dict[str, str]] = {}
+    for b in vercel_blob.query_blobs(
+        prefix=blob_archive.BACKFILL_PREFIX, page_size=1000
+    ):
+        if parsed := blob_archive.parse_backfill_pathname(b.pathname):
+            backfill.setdefault(parsed[0], {})[parsed[1]] = b.pathname
     try:
         base: dict[str, Any] | None = blob_archive.read_index(fresh=True)
     except json.JSONDecodeError as e:
@@ -805,6 +813,8 @@ def rebuild_index() -> None:
         # Transient failure: overwriting now would drop entries, so stop
         sys.exit(f"Could not read index.json ({e}); index left unchanged, retry later")
     merged = blob_archive.merge_index(base, entries, reconstructed)
+    if backfill:
+        merged = blob_archive.merge_backfill_index(merged, backfill)
     ok = blob_archive.put_with_retry(
         blob_archive.INDEX_PATHNAME,
         blob_archive.to_json(merged),
@@ -812,7 +822,11 @@ def rebuild_index() -> None:
         allow_overwrite=True,
         cache_control_max_age=blob_archive.INDEX_CACHE_MAX_AGE,
     )
-    print(f"Rebuilt index from {len(entries)} manifests: {'ok' if ok else 'FAILED'}")
+    print(
+        f"Rebuilt index from {len(entries)} manifests and "
+        f"{sum(map(len, backfill.values()))} backfill prediction files: "
+        f"{'ok' if ok else 'FAILED'}"
+    )
 
 
 # %% --------------------------------------------

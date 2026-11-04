@@ -242,3 +242,127 @@ def test_reader_uses_index_not_list(fake_blob: FakeBlob) -> None:
 def test_reader_empty_store(fake_blob: FakeBlob) -> None:
     assert blob_archive.BlobArchiveReader().runs() == []
     assert fake_blob.files == {}
+
+
+# %% Backfilled predictions
+
+BACKFILL_KEY = "Match_Predictions_Mistral-Ministral_FourPointsScoring_named_with-info"
+BACKFILL_PATH = (
+    "predictions/backfill/2026-09-11_09-37-34_Match_Predictions_Mistral-Ministral_"
+    "FourPointsScoring_named_with-info.jsonl"
+)
+
+
+def test_backfill_pathname_round_trip() -> None:
+    path = blob_archive.backfill_predictions_pathname(
+        "2026-09-11_09-37-34", BACKFILL_KEY
+    )
+    assert path == BACKFILL_PATH
+    assert blob_archive.parse_backfill_pathname(path) == (
+        "2026-09-11_09-37-34",
+        "Mistral-Ministral_FourPointsScoring_named_with-info",
+    )
+    assert blob_archive.parse_backfill_pathname("predictions/x.jsonl") is None
+    assert (
+        blob_archive.parse_backfill_pathname("predictions/backfill/bad.jsonl") is None
+    )
+
+
+def test_combine_odds_sources() -> None:
+    assert blob_archive.combine_odds_sources(["logged", "logged"]) == "logged"
+    assert blob_archive.combine_odds_sources(["reconstructed"]) == "reconstructed"
+    assert blob_archive.combine_odds_sources(["logged", "reconstructed"]) == "mixed"
+    with pytest.raises(ValueError, match="odds sources"):
+        blob_archive.combine_odds_sources([])
+    with pytest.raises(ValueError, match="odds sources"):
+        blob_archive.combine_odds_sources(["guessed"])
+
+
+def test_backfill_payload_has_marker_and_live_fields() -> None:
+    match = {"home_team": "Arsenal", "prediction_home": 2}
+    payload = blob_archive.build_backfill_payload(
+        {"Premier League - England": [match]},
+        "2026-09-11 09:37:34",
+        odds_sources={"Premier League - England": "reconstructed"},
+        generated_at="2026-11-04 12:00:00",
+        script="backfill_llm_predictions.py",
+    )
+    assert payload == [
+        {
+            "name": "Premier League - England",
+            "timestamp": "2026-09-11 09:37:34",
+            "matches": [match],
+            "backfill": {
+                "generated_at": "2026-11-04 12:00:00",
+                "odds_source": "reconstructed",
+                "script": "backfill_llm_predictions.py",
+            },
+        }
+    ]
+
+
+def test_merge_backfill_index_keeps_runs_and_is_idempotent() -> None:
+    index = blob_archive.merge_index(
+        None,
+        [
+            {
+                "run_ts": TS,
+                "source": "workflow",
+                "manifest": "runs/x.json",
+                "odds": {},
+                "predictions": {"A": "predictions/a.jsonl"},
+            }
+        ],
+        ["odds/reconstructed/r.csv"],
+    )
+    entry = {"2026-09-11_09-37-34": {"Mistral-Ministral_X": BACKFILL_PATH}}
+    merged = blob_archive.merge_backfill_index(index, entry)
+    again = blob_archive.merge_backfill_index(merged, entry)
+    other = blob_archive.merge_backfill_index(
+        again, {"2026-09-11_09-37-34": {"Nvidia-Nemotron_X": "predictions/backfill/n"}}
+    )
+
+    assert merged["runs"] == index["runs"]
+    assert merged["reconstructed_odds"] == index["reconstructed_odds"]
+    assert again["backfill_predictions"] == entry
+    assert other["backfill_predictions"]["2026-09-11_09-37-34"] == {
+        "Mistral-Ministral_X": BACKFILL_PATH,
+        "Nvidia-Nemotron_X": "predictions/backfill/n",
+    }
+    # Backfill files are never listed as run predictions
+    assert all(
+        not p.startswith("predictions/backfill/")
+        for run in other["runs"]
+        for p in run["predictions"].values()
+    )
+    assert BACKFILL_PATH in blob_archive.index_pathnames(other)
+
+
+def test_live_index_update_preserves_backfill_entries() -> None:
+    index = blob_archive.merge_backfill_index(None, {"2026-09-11_09-37-34": {"K": "p"}})
+    merged = blob_archive.merge_index(
+        index, [{"run_ts": TS, "odds": {}, "predictions": {}}]
+    )
+    assert merged["backfill_predictions"] == {"2026-09-11_09-37-34": {"K": "p"}}
+
+
+def test_update_backfill_index_and_reader(fake_blob: FakeBlob) -> None:
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(
+        blob_archive.empty_index()
+    )
+    entry = {"2026-09-11_09-37-34": {"Mistral-Ministral_X": BACKFILL_PATH}}
+    assert blob_archive.update_backfill_index(entry)
+    index = json.loads(fake_blob.files[blob_archive.INDEX_PATHNAME])
+    assert index["backfill_predictions"] == entry
+    assert index["runs"] == []
+    reader = blob_archive.BlobArchiveReader()
+    assert reader.backfill_predictions() == entry
+
+
+def test_update_backfill_index_keeps_index_on_read_error(
+    fake_blob: FakeBlob,
+) -> None:
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = b"{}"
+    fake_blob.fail_heads = vercel_blob.BlobError("rate limited", status_code=429)
+    assert not blob_archive.update_backfill_index({"r": {"k": "p"}})
+    assert fake_blob.files[blob_archive.INDEX_PATHNAME] == b"{}"

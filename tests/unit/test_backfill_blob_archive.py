@@ -418,6 +418,22 @@ def test_rebuild_index_from_manifests_if_index_corrupt(
     assert [r["run_ts"] for r in rebuilt["runs"]] == [LIVE_TS]
 
 
+def test_rebuild_index_restores_backfill_predictions(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = blob_archive.backfill_predictions_pathname("2026-09-11_09-37-34", PRED_KEY)
+    fake_blob.files[path] = b"{}\n"
+    fake_blob.files["predictions/backfill/README.txt"] = b"not a prediction"
+    fake_blob.files["index.json"] = b"{not json"
+    monkeypatch.setattr(blob_archive.vercel_blob, "query_blobs", fake_blob.query_blobs)
+    bf.rebuild_index()
+    rebuilt = json.loads(fake_blob.files["index.json"])
+    assert rebuilt["backfill_predictions"] == {
+        "2026-09-11_09-37-34": {blob_archive.provider_key(PRED_KEY): path}
+    }
+    assert rebuilt["runs"] == []
+
+
 def test_rebuild_index_aborts_on_transient_read_error(
     fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
 ) -> None:
