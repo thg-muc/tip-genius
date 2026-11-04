@@ -96,6 +96,18 @@ def test_other_seasons_are_ignored() -> None:
     assert plan.tasks == []
 
 
+def test_match_moved_earlier_ignores_stale_offers() -> None:
+    # R1 and R2 listed 20.09; the last run moved it to 10.09, before R2 ran
+    stale = plan_for(
+        [
+            offer(R1, "Bayern", "Köln", "20.09.2026 15:30"),
+            offer(R2, "Bayern", "Köln", "20.09.2026 15:30"),
+            offer("2026-09-30_10-00-00", "Bayern", "Köln", "10.09.2026 15:30"),
+        ]
+    )
+    assert [t.offer.run_ts for t in stale.tasks] == [R1]
+
+
 def test_rescheduled_kickoff_collapses_and_uses_run_offer() -> None:
     plan = plan_for(
         [
@@ -234,6 +246,7 @@ class FakePredictor:
     def __init__(self, fail: set[str] | None = None) -> None:
         self.calls: list[tuple[str, list[str]]] = []
         self.fail = fail or set()
+        self.abandoned: set[str] = set()
 
     def __call__(self, data: pl.DataFrame, provider: str) -> pl.DataFrame:
         self.calls.append((provider, data["odds_summary"].to_list()))
@@ -254,6 +267,7 @@ def run_plan(
     *,
     execute: bool = True,
     max_calls: int | None = None,
+    now: datetime = datetime(2026, 11, 4, 12, 0, tzinfo=UTC),  # a Wednesday
 ) -> dict[tuple[str, str], bl.Outcome]:
     return bl.execute_plan(
         plan,
@@ -264,7 +278,7 @@ def run_plan(
         max_calls=max_calls,
         sleep=0.0,
         predict_factory=lambda: predictor,
-        now=lambda: datetime(2026, 11, 4, 12, 0, tzinfo=UTC),
+        now=lambda: now,
     )
 
 
@@ -399,6 +413,58 @@ def test_max_calls_stops_before_exceeding(
     assert [provider for provider, _ in predictor.calls] == [MINISTRAL]
     assert outcomes[R2, NEMOTRON].status == "skipped"
     assert path_of(NEMOTRON) not in fake_blob.files
+
+
+def test_max_calls_stops_at_first_file_over_the_limit(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    plan = make_plan()
+    # A later one-fixture file would fit the remaining budget, but the run stops
+    plan.tasks.append(
+        bl.Task(
+            MINISTRAL,
+            offer("2026-09-18_08-40-09", "Mainz", "Bremen", "19.09.2026 15:30"),
+            bl.Odds(2.0, 3.4, 3.6, "reconstructed"),
+        )
+    )
+    predictor = FakePredictor()
+    outcomes = run_plan(plan, live_index, predictor, max_calls=3)
+    assert [provider for provider, _ in predictor.calls] == [MINISTRAL]
+    assert outcomes["2026-09-18_08-40-09", MINISTRAL].status == "skipped"
+
+
+def test_cron_window_stops_execution(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    tuesday = datetime(2026, 11, 3, 9, 0, tzinfo=UTC)
+    assert bl.near_cron(tuesday)
+    assert not bl.near_cron(datetime(2026, 11, 3, 18, 0, tzinfo=UTC))
+    assert not bl.near_cron(datetime(2026, 11, 4, 9, 0, tzinfo=UTC))
+    predictor = FakePredictor()
+    outcomes = run_plan(make_plan(), live_index, predictor, now=tuesday)
+    assert predictor.calls == []
+    assert {o.status for o in outcomes.values()} == {"skipped"}
+
+
+def test_failed_head_check_skips_instead_of_paying_twice(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    fake_blob.fail_heads = blob_archive.vercel_blob.BlobError("rate", status_code=429)
+    predictor = FakePredictor()
+    outcomes = run_plan(make_plan(), live_index, predictor)
+    assert predictor.calls == []
+    assert {o.status for o in outcomes.values()} == {"skipped"}
+
+
+def test_abandoned_provider_is_skipped(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    predictor = FakePredictor()
+    predictor.abandoned.add(MINISTRAL)
+    outcomes = run_plan(make_plan(), live_index, predictor, max_calls=2)
+    assert outcomes[R2, MINISTRAL].status == "skipped"
+    # Its rows do not use up the budget
+    assert outcomes[R2, NEMOTRON].status == "written"
 
 
 def test_no_valid_prediction_writes_no_file(

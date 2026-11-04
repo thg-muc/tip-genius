@@ -37,9 +37,10 @@ How a run is rebuilt:
 ``--dry-run`` (the default) makes no LLM calls and writes nothing; it prints
 the fixtures per run and provider and the number of LLM calls. ``--execute``
 calls the LLMs (real API spend) and writes to Blob; ``--max-calls`` caps the
-number of predicted fixtures (each takes 1 to 4 requests). Never run with
-``--execute`` near the cron (Tue/Fri 03:00 UTC): the index update is a
-read-modify-write.
+number of predicted fixtures (each takes 1 to 4 requests); the run stops at
+the first file that would exceed it. ``--execute`` refuses to start, and stops
+between files, on Tue/Fri 02:00-17:00 UTC: the cron (03:00 UTC, often started
+hours late) also updates ``index.json``, a read-modify-write.
 
 Usage:
     uv run python utils/backfill_llm_predictions.py --env-file /path/.env.local
@@ -55,7 +56,6 @@ from __future__ import annotations
 import argparse
 import csv
 import io
-import json
 import logging
 import os
 import sys
@@ -65,7 +65,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 from zoneinfo import ZoneInfo
 
 import polars as pl
@@ -107,6 +107,10 @@ LEG_GAP = timedelta(days=7)
 # Reconstructed odds with another kickoff of the same pairing (reschedules)
 ODDS_KICKOFF_TOLERANCE = timedelta(days=21)
 DEFAULT_SLEEP = 1.0
+# Tue/Fri, from shortly before the 03:00 UTC cron until delayed runs are done
+CRON_WEEKDAYS = {1, 4}
+CRON_WINDOW_START = 2
+CRON_WINDOW_END = 17
 # Columns of a live prediction entry, in the order the workflow writes them
 MATCH_COLUMNS = [
     "commence_time_str",
@@ -292,15 +296,15 @@ def load_sport_titles(config_path: Path) -> dict[str, str]:
         return yaml.safe_load(f)["odds_api"]["sport_titles"]
 
 
-class CachedReader:
-    """Read archived files through ``BlobArchiveReader`` with a disk cache.
+class CachedReader(blob_archive.BlobArchiveReader):
+    """``BlobArchiveReader`` with a disk cache for downloaded files.
 
     Archived run files are write-once, so a cached copy never goes stale.
     """
 
     def __init__(self, cache_dir: Path | None) -> None:
         """Initialize; ``cache_dir`` None disables the cache."""
-        self.reader = blob_archive.BlobArchiveReader()
+        super().__init__()
         self.cache_dir = cache_dir
 
     def fetch_bytes(self, pathname: str) -> bytes:
@@ -308,16 +312,11 @@ class CachedReader:
         cached = self.cache_dir / pathname if self.cache_dir else None
         if cached is not None and cached.is_file():
             return cached.read_bytes()
-        body = self.reader.fetch_bytes(pathname)
+        body = super().fetch_bytes(pathname)
         if cached is not None:
             cached.parent.mkdir(parents=True, exist_ok=True)
             cached.write_bytes(body)
         return body
-
-    def fetch_jsonl(self, pathname: str) -> list[dict[str, Any]]:
-        """Download a JSONL file, one dict per line."""
-        lines = self.fetch_bytes(pathname).decode("utf-8").splitlines()
-        return [json.loads(line) for line in lines if line.strip()]
 
 
 # %% --------------------------------------------
@@ -422,7 +421,12 @@ def plan_tasks(
     for fixture in fixtures:
         if season_of(fixture.kickoff) != season:
             continue
-        pre_kickoff = [o for o in fixture.offers if o.run_start < o.kickoff]
+        # As eval_providers.last_before_kickoff: before the offered and the
+        # final kickoff (a match moved earlier makes later offers stale)
+        final_kickoff = fixture.kickoff
+        pre_kickoff = [
+            o for o in fixture.offers if o.run_start < min(o.kickoff, final_kickoff)
+        ]
         for provider in providers:
             if any(o.provider == provider for o in pre_kickoff):
                 continue
@@ -576,20 +580,72 @@ def valid_matches(data: pl.DataFrame, tasks: list[Task]) -> list[dict[str, Any]]
     return matches
 
 
-def make_predictor(
-    options: PromptOptions,
-) -> Callable[[pl.DataFrame, str], pl.DataFrame]:
-    """Return a predictor running the workflow's own ``predict_results``."""
-    # The odds key is only needed to fetch odds, never to predict
-    os.environ.setdefault("ODDS_API_KEY", "unused-for-backfill")
-    tip_genius = TipGenius(api_pipeline=OddsAPI())
+class Predictor(Protocol):
+    """Predicts one league frame for one provider."""
 
-    def predict(data: pl.DataFrame, provider: str) -> pl.DataFrame:
-        return tip_genius.predict_results(
-            data=data, llm_provider=provider, prediction_type=options.prediction_type
+    @property
+    def abandoned(self) -> set[str]:
+        """Providers given up on after sustained API errors."""
+        ...
+
+    def __call__(self, data: pl.DataFrame, provider: str) -> pl.DataFrame:
+        """Return the frame with the prediction columns filled in."""
+        ...
+
+
+class WorkflowPredictor:
+    """Runs the workflow's own ``TipGenius.predict_results``."""
+
+    def __init__(self, prediction_type: str) -> None:
+        """Create the TipGenius instance (no odds fetch, no storage)."""
+        # The odds key is only needed to fetch odds, never to predict
+        os.environ.setdefault("ODDS_API_KEY", "unused-for-backfill")
+        # TipGenius would write debug log files into ./logs when the env file
+        # enables DEBUG_MODE; this script logs to the console only
+        os.environ["DEBUG_LOG_FILE"] = "FALSE"
+        self.prediction_type = prediction_type
+        self.tip_genius = TipGenius(api_pipeline=OddsAPI())
+        # TipGenius resets the root logger; keep per-download lines quiet
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    @property
+    def abandoned(self) -> set[str]:
+        """Providers TipGenius gave up on after sustained API errors."""
+        return self.tip_genius.abandoned_providers
+
+    def __call__(self, data: pl.DataFrame, provider: str) -> pl.DataFrame:
+        """Predict one league frame for one provider."""
+        return self.tip_genius.predict_results(
+            data=data, llm_provider=provider, prediction_type=self.prediction_type
         )
 
-    return predict
+
+def near_cron(moment: datetime) -> bool:
+    """Whether ``moment`` falls into the workflow window (Tue/Fri, UTC).
+
+    The cron fires at 03:00 UTC, but GitHub often starts it hours late (runs
+    in the index start up to ~16:00 UTC), so the whole window is avoided.
+    """
+    return moment.astimezone(UTC).weekday() in CRON_WEEKDAYS and (
+        CRON_WINDOW_START <= moment.astimezone(UTC).hour < CRON_WINDOW_END
+    )
+
+
+def exists_in_blob(pathname: str) -> bool | None:
+    """HEAD one pathname: True/False, or None if the check itself failed."""
+    try:
+        blob_archive.vercel_blob.head_blob(pathname)
+    except blob_archive.vercel_blob.BlobNotFoundError:
+        return False
+    except Exception as e:
+        logger.warning(
+            "HEAD failed for %s (HTTP %s): %s",
+            pathname,
+            getattr(e, "status_code", None),
+            e,
+        )
+        return None
+    return True
 
 
 # %% --------------------------------------------
@@ -601,7 +657,7 @@ def predict_file(
     provider: str,
     sport_titles: dict[str, str],
     options: PromptOptions,
-    predict: Callable[[pl.DataFrame, str], pl.DataFrame],
+    predict: Predictor,
 ) -> tuple[dict[str, list[dict[str, Any]]], dict[str, str], list[Task]]:
     """Predict one run's tasks per league.
 
@@ -641,19 +697,24 @@ def execute_plan(  # noqa: C901, PLR0913
     execute: bool,
     max_calls: int | None,
     sleep: float,
-    predict_factory: Callable[[], Callable[[pl.DataFrame, str], pl.DataFrame]],
+    predict_factory: Callable[[], Predictor],
     now: Callable[[], datetime] = lambda: datetime.now(tz=UTC),
 ) -> dict[tuple[str, str], Outcome]:
     """Predict and archive every planned file, or only count in dry-run mode.
 
     Files already listed in ``backfill_predictions`` are skipped. In a real
     run, a file already present in Blob (index update failed earlier) is only
-    indexed, without new LLM calls.
+    indexed, without new LLM calls; if that HEAD check fails, the file is
+    skipped rather than paid for twice. Once a file would exceed
+    ``max_calls``, or the cron window starts, no further file is predicted
+    (still-pending files show as skipped). Files of a provider TipGenius
+    abandoned after API errors are skipped too.
     """
     indexed = blob_archive.index_pathnames(index)
     outcomes: dict[tuple[str, str], Outcome] = {}
-    predict: Callable[[pl.DataFrame, str], pl.DataFrame] | None = None
+    predict: Predictor | None = None
     calls = 0
+    stopped = False
     for (run_ts, provider), tasks in plan.by_file().items():
         base_key = options.base_key(provider)
         pathname = blob_archive.backfill_predictions_pathname(run_ts, base_key)
@@ -665,15 +726,29 @@ def execute_plan(  # noqa: C901, PLR0913
             continue
         if not execute:
             continue
-        if blob_archive.blob_exists(pathname):
+        if stopped:
+            outcome.status = "skipped"
+            continue
+        exists = exists_in_blob(pathname)
+        if exists:
             ok = blob_archive.update_backfill_index(entry)
             outcome.status = "indexed" if ok else "failed"
             continue
-        if max_calls is not None and calls + len(tasks) > max_calls:
+        if exists is None:
+            outcome.status = "skipped"
+            continue
+        if (max_calls is not None and calls + len(tasks) > max_calls) or near_cron(
+            now()
+        ):
+            logger.warning("Stopping before %s / %s (limit or cron)", run_ts, provider)
+            stopped = True
             outcome.status = "skipped"
             continue
         if predict is None:
             predict = predict_factory()
+        if provider in predict.abandoned:
+            outcome.status = "skipped"
+            continue
         calls += len(tasks)
         prediction_data, odds_sources, failed = predict_file(
             tasks, provider, sport_titles, options, predict
@@ -849,7 +924,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-calls",
         type=int,
-        help="stop before a file would exceed this many predicted fixtures",
+        help="stop before the first file that would exceed this many predicted "
+        "fixtures (each takes 1 to 4 requests)",
     )
     parser.add_argument(
         "--sleep",
@@ -900,6 +976,8 @@ def main() -> None:
     missing_titles = {t.offer.league for t in plan.tasks} - set(sport_titles)
     if missing_titles:
         sys.exit(f"No sport_titles entry in api_config.yaml for {missing_titles}")
+    if args.execute and near_cron(datetime.now(tz=UTC)):
+        sys.exit("Not running --execute on Tue/Fri 02:00-17:00 UTC (cron window)")
 
     outcomes = execute_plan(
         plan,
@@ -909,7 +987,7 @@ def main() -> None:
         execute=args.execute,
         max_calls=args.max_calls,
         sleep=args.sleep if args.execute else 0.0,
-        predict_factory=lambda: make_predictor(options),
+        predict_factory=lambda: WorkflowPredictor(options.prediction_type),
     )
     print_report(
         plan,
