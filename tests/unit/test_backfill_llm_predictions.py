@@ -467,6 +467,22 @@ def test_abandoned_provider_is_skipped(
     assert outcomes[R2, NEMOTRON].status == "written"
 
 
+def test_file_with_mid_file_abandonment_is_not_written(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    class Abandoning(FakePredictor):
+        def __call__(self, data: pl.DataFrame, provider: str) -> pl.DataFrame:
+            result = super().__call__(data, provider)
+            if provider == MINISTRAL:
+                self.abandoned.add(provider)
+            return result
+
+    outcomes = run_plan(make_plan(), live_index, Abandoning())
+    assert outcomes[R2, MINISTRAL].status == "failed"
+    assert path_of(MINISTRAL) not in fake_blob.files
+    assert outcomes[R2, NEMOTRON].status == "written"
+
+
 def test_no_valid_prediction_writes_no_file(
     fake_blob: FakeBlob, live_index: dict[str, Any]
 ) -> None:

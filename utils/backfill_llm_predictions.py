@@ -708,7 +708,8 @@ def execute_plan(  # noqa: C901, PLR0913
     skipped rather than paid for twice. Once a file would exceed
     ``max_calls``, or the cron window starts, no further file is predicted
     (still-pending files show as skipped). Files of a provider TipGenius
-    abandoned after API errors are skipped too.
+    abandoned after API errors are skipped too; the file during which it was
+    abandoned is not written, so a re-run can complete it.
     """
     indexed = blob_archive.index_pathnames(index)
     outcomes: dict[tuple[str, str], Outcome] = {}
@@ -755,7 +756,12 @@ def execute_plan(  # noqa: C901, PLR0913
         )
         outcome.failed = failed
         outcome.predicted = len(tasks) - len(failed)
-        if not prediction_data:
+        if provider in predict.abandoned:
+            # Outage mid-file: files are write-once, so a partial file could
+            # never be completed; drop it and let a re-run redo the whole file
+            outcome.status = "failed"
+            logger.warning("%s abandoned during %s, file not written", provider, run_ts)
+        elif not prediction_data:
             outcome.status = "failed"
             logger.warning("No valid prediction for %s / %s", run_ts, provider)
         else:
