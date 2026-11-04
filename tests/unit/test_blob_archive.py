@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 import pytest
 from lib import blob_archive
@@ -366,3 +367,79 @@ def test_update_backfill_index_keeps_index_on_read_error(
     fake_blob.fail_heads = vercel_blob.BlobError("rate limited", status_code=429)
     assert not blob_archive.update_backfill_index({"r": {"k": "p"}})
     assert fake_blob.files[blob_archive.INDEX_PATHNAME] == b"{}"
+
+
+class StaleReads:
+    """Serve the given stale indexes first, then the real ``read_index``."""
+
+    def __init__(self, stale: list[dict], real: Any) -> None:
+        self.stale = list(stale)
+        self.real = real
+        self.calls = 0
+
+    def __call__(self, *, fresh: bool = False) -> dict:
+        self.calls += 1
+        if self.stale:
+            return self.stale.pop(0)
+        return self.real(fresh=fresh)
+
+
+def test_backfill_index_skips_stale_read_and_never_drops_runs(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live = blob_archive.merge_index(
+        None, [{"run_ts": TS, "predictions": {"A": "predictions/a.jsonl"}}]
+    )
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(live)
+    # First fresh read returns the old, empty index (observed 04.11.2026)
+    reads = StaleReads([blob_archive.empty_index()], blob_archive.read_index)
+    monkeypatch.setattr(blob_archive, "read_index", reads)
+    entry = {"2026-09-11_09-37-34": {"K": BACKFILL_PATH}}
+
+    ok = blob_archive.update_backfill_index(
+        entry, expected=blob_archive.index_pathnames(live), wait=0
+    )
+    index = json.loads(fake_blob.files[blob_archive.INDEX_PATHNAME])
+    assert ok
+    assert index["runs"] == live["runs"]
+    assert index["backfill_predictions"] == entry
+    # Only one index put: the stale read was never written back
+    assert [p["pathname"] for p in fake_blob.puts] == [blob_archive.INDEX_PATHNAME]
+
+
+def test_backfill_index_re_merges_when_read_back_misses_entries(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(
+        blob_archive.empty_index()
+    )
+    real = blob_archive.read_index
+    # attempt 1: real read, put, stale read-back; attempt 2 succeeds
+    reads = StaleReads([], real)
+    sequence = iter([None, blob_archive.empty_index()])
+
+    def read(*, fresh: bool = False) -> dict:
+        reads.calls += 1
+        value = next(sequence, None)
+        return real(fresh=fresh) if value is None else value
+
+    monkeypatch.setattr(blob_archive, "read_index", read)
+    entry = {"2026-09-11_09-37-34": {"K": BACKFILL_PATH}}
+    assert blob_archive.update_backfill_index(entry, wait=0)
+    index_puts = [p for p in fake_blob.puts if p["pathname"] == "index.json"]
+    assert len(index_puts) == 1  # attempt 2 found the entry already present
+    assert reads.calls == 3
+
+
+def test_backfill_index_gives_up_after_bounded_attempts(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch, caplog: Any
+) -> None:
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = b"{}"
+    monkeypatch.setattr(
+        blob_archive, "read_index", lambda **_: blob_archive.empty_index()
+    )
+    with caplog.at_level(logging.WARNING):
+        ok = blob_archive.update_backfill_index({"r": {"k": "p"}}, attempts=3, wait=0)
+    assert not ok
+    assert len([p for p in fake_blob.puts if p["pathname"] == "index.json"]) == 3
+    assert "NOT verified after 3 attempts" in caplog.text

@@ -30,8 +30,10 @@ How a run is rebuilt:
    through ``TipGenius.predict_results`` with today's ``llm_config.yaml``, so
    retries, validation and the consistency check are the live ones. Only valid
    predictions are archived; each JSONL line carries a ``backfill`` marker.
-6. Each written file is added to ``index.json`` under ``backfill_predictions``
-   right away (separate from ``runs``). Files listed there or already present
+6. Written files are added to ``index.json`` under ``backfill_predictions``
+   (separate from ``runs``) in one write at the end of the run, also after a
+   crash; the write is read back and retried, because a fresh read can lag
+   behind a recent write. Files listed there or already present
    in Blob are skipped, so an interrupted run can simply be restarted.
 
 ``--dry-run`` (the default) makes no LLM calls and writes nothing; it prints
@@ -211,7 +213,7 @@ class Plan:
 class Outcome:
     """Result of one ``(run_ts, provider)`` file."""
 
-    status: str  # planned, archived, indexed, written, failed, skipped
+    status: str  # planned, archived, indexed, written, unindexed, failed, skipped
     rows: int = 0
     predicted: int = 0
     failed: list[Task] = field(default_factory=list)
@@ -702,17 +704,60 @@ def execute_plan(  # noqa: C901, PLR0913
 ) -> dict[tuple[str, str], Outcome]:
     """Predict and archive every planned file, or only count in dry-run mode.
 
-    Files already listed in ``backfill_predictions`` are skipped. In a real
-    run, a file already present in Blob (index update failed earlier) is only
-    indexed, without new LLM calls; if that HEAD check fails, the file is
-    skipped rather than paid for twice. Once a file would exceed
-    ``max_calls``, or the cron window starts, no further file is predicted
-    (still-pending files show as skipped). Files of a provider TipGenius
-    abandoned after API errors are skipped too; the file during which it was
-    abandoned is not written, so a re-run can complete it.
+    Files already listed in ``backfill_predictions`` are skipped. Written files
+    are indexed together at the end (in ``finally``) with a verified,
+    stale-read-safe update; if that fails they show as ``unindexed`` and the
+    next run indexes them. In a real run, a file already present in Blob
+    (index update failed earlier) is only indexed, without new LLM calls; if
+    that HEAD check fails, the file is skipped rather than paid for twice.
+    Once a file would exceed ``max_calls``, or the cron window starts, no
+    further file is predicted (still-pending files show as skipped). Files of
+    a provider TipGenius abandoned after API errors are skipped too; the file
+    during which it was abandoned is not written, so a re-run can complete it.
     """
     indexed = blob_archive.index_pathnames(index)
     outcomes: dict[tuple[str, str], Outcome] = {}
+    pending: dict[str, dict[str, str]] = {}
+    try:
+        _run_files(
+            plan,
+            options,
+            sport_titles,
+            indexed,
+            outcomes,
+            pending,
+            execute=execute,
+            max_calls=max_calls,
+            sleep=sleep,
+            predict_factory=predict_factory,
+            now=now,
+        )
+    finally:
+        # One verified index write per run, also after a crash or Ctrl-C
+        if pending and not blob_archive.update_backfill_index(
+            pending, expected=indexed
+        ):
+            for outcome in outcomes.values():
+                if outcome.status in {"written", "indexed"}:
+                    outcome.status = "unindexed"
+    return outcomes
+
+
+def _run_files(  # noqa: C901, PLR0913
+    plan: Plan,
+    options: PromptOptions,
+    sport_titles: dict[str, str],
+    indexed: set[str],
+    outcomes: dict[tuple[str, str], Outcome],
+    pending: dict[str, dict[str, str]],
+    *,
+    execute: bool,
+    max_calls: int | None,
+    sleep: float,
+    predict_factory: Callable[[], Predictor],
+    now: Callable[[], datetime],
+) -> None:
+    """Predict and upload file by file; collect index entries in ``pending``."""
     predict: Predictor | None = None
     calls = 0
     stopped = False
@@ -721,7 +766,7 @@ def execute_plan(  # noqa: C901, PLR0913
         pathname = blob_archive.backfill_predictions_pathname(run_ts, base_key)
         outcome = Outcome("planned", rows=len(tasks), pathname=pathname)
         outcomes[run_ts, provider] = outcome
-        entry = {run_ts: {options.provider_key(provider): pathname}}
+        key = options.provider_key(provider)
         if pathname in indexed:
             outcome.status = "archived"
             continue
@@ -732,8 +777,8 @@ def execute_plan(  # noqa: C901, PLR0913
             continue
         exists = exists_in_blob(pathname)
         if exists:
-            ok = blob_archive.update_backfill_index(entry)
-            outcome.status = "indexed" if ok else "failed"
+            pending.setdefault(run_ts, {})[key] = pathname
+            outcome.status = "indexed"
             continue
         if exists is None:
             outcome.status = "skipped"
@@ -777,17 +822,13 @@ def execute_plan(  # noqa: C901, PLR0913
                 blob_archive.to_jsonl(payload),
                 content_type=blob_archive.JSONL_CONTENT_TYPE,
             )
-            ok = written and blob_archive.update_backfill_index(entry)
-            outcome.status = "written" if ok else "failed"
-            if written and not ok:
-                logger.warning(
-                    "%s written but not indexed; re-run this script or "
-                    "backfill_blob_archive.py --rebuild-index",
-                    pathname,
-                )
+            if written:
+                pending.setdefault(run_ts, {})[key] = pathname
+                outcome.status = "written"
+            else:
+                outcome.status = "failed"
         if sleep > 0:
             time.sleep(sleep)
-    return outcomes
 
 
 # %% --------------------------------------------
@@ -836,7 +877,7 @@ def print_report(
                 statuses += f"{'no odds':>28}"
                 continue
             text = f"{outcome.rows} {outcome.status}"
-            if outcome.status in {"written", "failed"} and execute:
+            if outcome.status in {"written", "failed", "unindexed"} and execute:
                 text = f"{outcome.predicted}/{outcome.rows} {outcome.status}"
             statuses += f"{text:>28}"
         print(f"{run_ts:<21}{cells}{statuses}")
@@ -891,7 +932,7 @@ def print_report(
                 f"{task.offer.home_team} - {task.offer.away_team}  ({task.provider})"
             )
         for (run_ts, provider), o in sorted(outcomes.items()):
-            if o.status in {"failed", "skipped"} and not o.failed:
+            if o.status in {"failed", "skipped", "unindexed"} and not o.failed:
                 print(f"  {run_ts} {provider}: {o.status} ({o.rows} fixtures)")
 
 

@@ -381,6 +381,40 @@ def test_execute_writes_marked_files_and_indexes_them_apart(
     }
 
 
+def test_index_written_once_per_run(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    run_plan(make_plan(), live_index, FakePredictor())
+    index_puts = [p for p in fake_blob.puts if p["pathname"] == "index.json"]
+    assert len(index_puts) == 1
+
+
+def test_crash_still_indexes_files_written_so_far(
+    fake_blob: FakeBlob, live_index: dict[str, Any]
+) -> None:
+    class Crashing(FakePredictor):
+        def __call__(self, data: pl.DataFrame, provider: str) -> pl.DataFrame:
+            if provider == NEMOTRON:
+                raise KeyboardInterrupt
+            return super().__call__(data, provider)
+
+    with pytest.raises(KeyboardInterrupt):
+        run_plan(make_plan(), live_index, Crashing())
+    index = json.loads(fake_blob.files[blob_archive.INDEX_PATHNAME])
+    assert index["backfill_predictions"] == {
+        R2: {OPTIONS.provider_key(MINISTRAL): path_of(MINISTRAL)}
+    }
+
+
+def test_unverified_index_marks_files_unindexed(
+    fake_blob: FakeBlob, live_index: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(blob_archive, "update_backfill_index", lambda *_, **__: False)
+    outcomes = run_plan(make_plan(), live_index, FakePredictor())
+    assert {o.status for o in outcomes.values()} == {"unindexed"}
+    assert path_of(MINISTRAL) in fake_blob.files
+
+
 def test_rerun_skips_archived_files(
     fake_blob: FakeBlob, live_index: dict[str, Any]
 ) -> None:

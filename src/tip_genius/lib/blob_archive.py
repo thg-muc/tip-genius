@@ -63,6 +63,9 @@ CSV_CONTENT_TYPE = "text/csv"
 INDEX_CACHE_MAX_AGE = 60
 RETRY_BACKOFF_SECONDS = 2.0
 MAX_RETRY_WAIT_SECONDS = 10.0
+# Backfill index updates are read back; a fresh read can lag behind a write
+INDEX_VERIFY_ATTEMPTS = 4
+INDEX_VERIFY_WAIT_SECONDS = 30.0
 
 # Errors where a retry cannot help
 _NO_RETRY_ERRORS = (
@@ -519,31 +522,94 @@ def update_index(
     )
 
 
-def update_backfill_index(entries: dict[str, dict[str, str]]) -> bool:
-    """Add backfill files to ``index.json`` under ``backfill_predictions``.
-
-    Never raises; a failure is logged as a WARNING. Lost entries can be re-added
-    with ``utils/backfill_blob_archive.py --rebuild-index``. Same timing rule as
-    ``update_index``: never run near the cron (Tue/Fri 03:00 UTC).
-    """
+def _read_index_quietly() -> dict[str, Any] | None:
+    """Read ``index.json`` fresh; log and return None on failure."""
     try:
-        index = read_index(fresh=True)
+        return read_index(fresh=True)
     except Exception as e:
         logger.warning(
-            "Could not read %s (HTTP %s), backfill not indexed: %s",
+            "Could not read %s (HTTP %s): %s",
             INDEX_PATHNAME,
             getattr(e, "status_code", None),
             e,
         )
-        return False
-    merged = merge_backfill_index(index, entries)
-    return put_with_retry(
-        INDEX_PATHNAME,
-        to_json(merged),
-        content_type=JSON_CONTENT_TYPE,
-        allow_overwrite=True,
-        cache_control_max_age=INDEX_CACHE_MAX_AGE,
+        return None
+
+
+def update_backfill_index(
+    entries: dict[str, dict[str, str]],
+    *,
+    expected: set[str] | None = None,
+    attempts: int = INDEX_VERIFY_ATTEMPTS,
+    wait: float = INDEX_VERIFY_WAIT_SECONDS,
+) -> bool:
+    """Add backfill files to ``index.json`` under ``backfill_predictions``, verified.
+
+    A fresh read can return a stale index shortly after another write
+    (observed 04.11.2026, cause unconfirmed). So each attempt reads the index,
+    treats it as stale if it lacks any pathname in ``expected`` (what the
+    caller saw earlier, so a stale read never overwrites newer entries), puts
+    the merge and reads it back; only an index containing ``entries`` and
+    ``expected`` counts as success. Between attempts it waits ``wait`` seconds.
+
+    Never raises; a failure is logged as a WARNING. Lost entries can be re-added
+    with ``utils/backfill_blob_archive.py --rebuild-index``. Same timing rule as
+    ``update_index``: never run near the cron (Tue/Fri 03:00 UTC).
+
+    Returns
+    -------
+    bool
+        True once a read-back shows every entry.
+
+    """
+    wanted = {path for files in entries.values() for path in files.values()}
+    required = wanted | (expected or set())
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            time.sleep(wait)
+        index = _read_index_quietly()
+        if index is None:
+            continue
+        stale = (expected or set()) - index_pathnames(index)
+        if stale:
+            logger.warning(
+                "%s looks stale (attempt %d/%d): %d known files missing, not "
+                "overwriting",
+                INDEX_PATHNAME,
+                attempt,
+                attempts,
+                len(stale),
+            )
+            continue
+        if not required - index_pathnames(index):
+            return True  # already indexed
+        if not put_with_retry(
+            INDEX_PATHNAME,
+            to_json(merge_backfill_index(index, entries)),
+            content_type=JSON_CONTENT_TYPE,
+            allow_overwrite=True,
+            cache_control_max_age=INDEX_CACHE_MAX_AGE,
+        ):
+            continue
+        check = _read_index_quietly()
+        missing = required - index_pathnames(check) if check is not None else required
+        if not missing:
+            logger.info("Indexed %d backfill files (verified)", len(wanted))
+            return True
+        logger.warning(
+            "%s read-back misses %d of %d backfill files (attempt %d/%d), re-merging",
+            INDEX_PATHNAME,
+            len(missing),
+            len(required),
+            attempt,
+            attempts,
+        )
+    logger.warning(
+        "Backfill index update NOT verified after %d attempts; re-run the "
+        "script or backfill_blob_archive.py --rebuild-index",
+        attempts,
     )
+    return False
 
 
 class BlobArchiveReader:
