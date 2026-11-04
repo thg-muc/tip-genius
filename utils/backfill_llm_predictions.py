@@ -317,7 +317,10 @@ class CachedReader(blob_archive.BlobArchiveReader):
         body = super().fetch_bytes(pathname)
         if cached is not None:
             cached.parent.mkdir(parents=True, exist_ok=True)
-            cached.write_bytes(body)
+            # Write then rename, so an interrupted run never leaves a partial file
+            tmp = cached.with_name(f"{cached.name}.tmp")
+            tmp.write_bytes(body)
+            tmp.replace(cached)
         return body
 
 

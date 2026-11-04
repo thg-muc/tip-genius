@@ -342,7 +342,9 @@ def load_backfill_snapshots() -> dict[tuple[datetime, str], list[dict]]:
 
     reader = blob_archive.BlobArchiveReader()
     snapshots: dict[tuple[datetime, str], list[dict]] = {}
-    for files in reader.backfill_predictions().values():
+    # Fresh read: a cached index can lag behind a backfill that just ran
+    backfill = blob_archive.read_index(fresh=True).get(blob_archive.BACKFILL_KEY, {})
+    for files in backfill.values():
         for pathname in files.values():
             match = KEY_PATTERN.match(
                 pathname.removeprefix(blob_archive.BACKFILL_PREFIX)
