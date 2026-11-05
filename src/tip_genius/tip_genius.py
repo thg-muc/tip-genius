@@ -956,6 +956,9 @@ class TipGenius:
                         full_path,
                     )
 
+            # Archive finished results before new odds/predictions; never raises
+            self.storage_manager.update_results_archive()
+
             sports_list = config["sports_list"]
             llm_provider_options = config["llm_provider_options"]
             prediction_type_options = config["prediction_type_options"]

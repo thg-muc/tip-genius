@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 import yaml
-from lib import blob_archive
+from lib import blob_archive, results_archive
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -84,6 +84,8 @@ class StorageManager:
         # Pathnames actually written to Blob during this run, for the manifest
         self.blob_odds: dict[str, str] = {}
         self.blob_predictions: dict[str, str] = {}
+        # Results index entries verified by this run's results step
+        self.blob_results: dict[str, dict[str, Any]] = {}
 
         # Initialize environment configuration
         self.kv_initialized = self._initialize_kv_config()
@@ -306,6 +308,36 @@ class StorageManager:
             return True
         return False
 
+    def update_results_archive(self, now: datetime | None = None) -> bool:
+        """Add the current season's missing match results to the Blob archive.
+
+        Runs before the new odds and predictions are fetched. Never raises and
+        never affects the exit code: a failure only logs a WARNING, and the
+        next run picks up every missing result again (gap detection).
+
+        Returns
+        -------
+        bool
+            True if the update went through completely.
+
+        """
+        if not self.blob_initialized:
+            return False
+        moment = now or datetime.now(tz=UTC)
+        try:
+            report = results_archive.update_results_archive(
+                {results_archive.season_of(moment)},
+                now=moment,
+                attempts=results_archive.CRON_ATTEMPTS,
+                wait=results_archive.CRON_WAIT_SECONDS,
+            )
+        except Exception:
+            logger.warning("Could not update the Blob results archive", exc_info=True)
+            return False
+        if report.index_updated:
+            self.blob_results = report.index_entries
+        return report.ok
+
     def finalize_blob_archive(self) -> None:
         """Write the run manifest and add the run to ``index.json``.
 
@@ -325,7 +357,7 @@ class StorageManager:
             entry = blob_archive.index_entry(
                 manifest, manifest_written=manifest_written
             )
-            if blob_archive.update_index([entry]):
+            if blob_archive.update_index([entry], results=self.blob_results):
                 logger.info(
                     "Archived run %s in Vercel Blob: %d odds, %d prediction files",
                     self.run_ts,

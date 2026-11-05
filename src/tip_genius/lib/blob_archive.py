@@ -8,16 +8,20 @@ The archive lives in a private Vercel Blob store and is laid out flat by type:
 - ``odds/<YYYY-MM-DD_HH-MM-SS>_Match_Odds_<League-Key>.jsonl``
 - ``odds/reconstructed/<YYYY-MM-DD_HH-MM-SS>_Match_Odds_Reconstructed.csv``
 - ``runs/<run_ts>.json`` (one manifest per workflow run)
+- ``results/<season>_<League-Key>.csv`` (final 90-minute scores, see
+  ``lib.results_archive``; rewritten in place when rows are added)
 - ``index.json`` (every archived run, so readers never need ``list``)
 
 Backfilled predictions are listed in ``index.json`` under
 ``backfill_predictions`` (``{run_ts: {provider_key: pathname}}``), never in
 ``runs``, so readers cannot mistake them for live pre-match predictions.
 
-Every file is write-once except ``index.json``. With several reconstructed
-CSVs, the newest one (highest timestamp, last in ``reconstructed_odds``) is the
-current one. The ``index.json`` read-modify-write is not atomic, so never run
-the backfill or ``--rebuild-index`` near the cron (Tue/Fri 03:00 UTC). The SDK
+Every file is write-once except ``index.json`` and the results CSVs, which are
+listed under ``results`` (``{pathname: {"rows", "updated_at"}}``). With
+several reconstructed CSVs, the newest one (highest timestamp, last in
+``reconstructed_odds``) is the current one. The ``index.json``
+read-modify-write is not atomic, so never run the backfill or
+``--rebuild-index`` near the cron (Tue/Fri 03:00 UTC). The SDK
 reads the static ``BLOB_READ_WRITE_TOKEN`` from the environment.
 """
 # * Author(s): Thomas Glanzer
@@ -30,10 +34,14 @@ import json
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from vercel.blob import sync as vercel_blob
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +54,7 @@ INDEX_PATHNAME = "index.json"
 PREDICTIONS_PREFIX = "Match_Predictions_"
 BACKFILL_PREFIX = "predictions/backfill/"
 BACKFILL_KEY = "backfill_predictions"
+RESULTS_KEY = "results"
 ODDS_SOURCES = ("logged", "reconstructed")
 ODDS_COLUMNS = [
     "id",
@@ -66,6 +75,11 @@ MAX_RETRY_WAIT_SECONDS = 10.0
 # Backfill index updates are read back; a fresh read can lag behind a write
 INDEX_VERIFY_ATTEMPTS = 4
 INDEX_VERIFY_WAIT_SECONDS = 30.0
+
+# Tue/Fri, from shortly before the 03:00 UTC cron until delayed runs are done
+CRON_WEEKDAYS = {1, 4}
+CRON_WINDOW_START = 2
+CRON_WINDOW_END = 17
 
 # Errors where a retry cannot help
 _NO_RETRY_ERRORS = (
@@ -88,6 +102,19 @@ def is_already_exists(error: Exception) -> bool:
         isinstance(error, vercel_blob.BlobError)
         and getattr(error, "status_code", None) in (400, 409)
         and "already exists" in str(error).lower()
+    )
+
+
+def near_cron(moment: datetime) -> bool:
+    """Whether ``moment`` falls into the workflow window (Tue/Fri, UTC).
+
+    The cron fires at 03:00 UTC, but GitHub often starts it hours late (runs
+    in the index start up to ~16:00 UTC), so manual scripts that write the
+    index avoid the whole window.
+    """
+    utc = moment.astimezone(UTC)
+    return utc.weekday() in CRON_WEEKDAYS and (
+        CRON_WINDOW_START <= utc.hour < CRON_WINDOW_END
     )
 
 
@@ -368,9 +395,36 @@ def merge_backfill_index(
     return merged
 
 
+def merge_results_index(
+    index: dict[str, Any] | None,
+    entries: dict[str, dict[str, Any]],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Merge results files into ``results`` (``{pathname: {rows, updated_at}}``).
+
+    Per pathname the entry with the newer ``updated_at`` wins (ties go to
+    ``entries``), so carrying entries over into an index read that lags
+    behind never replaces a newer row count with an older one.
+    """
+    merged = empty_index() if index is None else dict(index)
+    results: dict[str, dict[str, Any]] = {
+        path: dict(entry) for path, entry in merged.get(RESULTS_KEY, {}).items()
+    }
+    for path, entry in entries.items():
+        current = results.get(path)
+        if current is None or str(entry.get("updated_at") or "") >= str(
+            current.get("updated_at") or ""
+        ):
+            results[path] = dict(entry)
+    merged[RESULTS_KEY] = dict(sorted(results.items()))
+    merged["updated_at"] = format_payload_ts(now or datetime.now(tz=UTC))
+    return merged
+
+
 def index_pathnames(index: dict[str, Any]) -> set[str]:
     """Return every pathname an index refers to."""
     pathnames = set(index.get("reconstructed_odds", []))
+    pathnames.update(index.get(RESULTS_KEY, {}))
     for files in index.get(BACKFILL_KEY, {}).values():
         pathnames.update(files.values())
     for run in index.get("runs", []):
@@ -462,15 +516,36 @@ def blob_exists(pathname: str) -> bool:
     return True
 
 
+def read_fresh(pathname: str) -> bytes | None:
+    """Download a file bypassing the delivery cache; None if it does not exist.
+
+    HEAD (uncached catalog API) gives the current etag, and the download uses
+    it as a query parameter, i.e. a new cache key. Use this for files that are
+    overwritten in place (``index.json``, the results CSVs), which the CDN can
+    otherwise serve stale for up to a month.
+
+    Raises
+    ------
+    vercel_blob.BlobError
+        For any failure other than a missing file.
+
+    """
+    try:
+        head = vercel_blob.head_blob(pathname)
+        target = f"{head.url}?etag={quote(head.etag, safe='')}"
+        return vercel_blob.get_blob(target, access="private").body
+    except vercel_blob.BlobNotFoundError:
+        return None
+
+
 def read_index(*, fresh: bool = False) -> dict[str, Any]:
     """Read ``index.json``; return an empty index if it does not exist yet.
 
     Parameters
     ----------
     fresh : bool, optional
-        Bypass the delivery cache: HEAD (uncached catalog API) gives the current
-        etag, and the download uses it as a query parameter, i.e. a new cache
-        key. Use this right before a read-modify-write of the index.
+        Bypass the delivery cache (see ``read_fresh``). Use this right before
+        a read-modify-write of the index.
 
     Raises
     ------
@@ -479,23 +554,26 @@ def read_index(*, fresh: bool = False) -> dict[str, Any]:
         an index they could not read.
 
     """
-    try:
-        if fresh:
-            head = vercel_blob.head_blob(INDEX_PATHNAME)
-            target = f"{head.url}?etag={quote(head.etag, safe='')}"
-        else:
-            target = INDEX_PATHNAME
-        result = vercel_blob.get_blob(target, access="private")
-    except vercel_blob.BlobNotFoundError:
-        return empty_index()
-    return json.loads(result.body)
+    if fresh:
+        body = read_fresh(INDEX_PATHNAME)
+    else:
+        try:
+            body = vercel_blob.get_blob(INDEX_PATHNAME, access="private").body
+        except vercel_blob.BlobNotFoundError:
+            body = None
+    return empty_index() if body is None else json.loads(body)
 
 
 def update_index(
     entries: list[dict[str, Any]],
     reconstructed: list[str] | None = None,
+    results: dict[str, dict[str, Any]] | None = None,
 ) -> bool:
-    """Append run entries to ``index.json`` (the only overwritten file).
+    """Append run entries to ``index.json``.
+
+    ``results`` (``{pathname: {rows, updated_at}}``, e.g. what this run's
+    results step verified) is merged in as well, so an index read that lags
+    behind that step does not drop its entries.
 
     Never raises; a failure is logged as a WARNING. Runs can be re-added later
     from their manifests with ``utils/backfill_blob_archive.py --rebuild-index``.
@@ -513,6 +591,8 @@ def update_index(
         )
         return False
     merged = merge_index(index, entries, reconstructed)
+    if results:
+        merged = merge_results_index(merged, results)
     return put_with_retry(
         INDEX_PATHNAME,
         to_json(merged),
@@ -534,6 +614,62 @@ def _read_index_quietly() -> dict[str, Any] | None:
             e,
         )
         return None
+
+
+def _verified_index_update(
+    merge: Callable[[dict[str, Any]], dict[str, Any]],
+    missing: Callable[[dict[str, Any]], int],
+    stale: Callable[[dict[str, Any]], int],
+    *,
+    label: str,
+    attempts: int,
+    wait: float,
+) -> bool:
+    """Read-modify-write ``index.json`` with a stale guard and a read-back check.
+
+    Each attempt reads the index fresh; ``stale(index)`` counts what the caller
+    saw earlier but the read lacks (then nothing is written, as a stale read
+    would overwrite newer entries). Otherwise it puts ``merge(index)`` and
+    reads back; success needs ``missing(read_back) == 0``. Between attempts it
+    waits ``wait`` seconds. Never raises.
+    """
+    for attempt in range(1, attempts + 1):
+        if attempt > 1:
+            time.sleep(wait)
+        index = _read_index_quietly()
+        if index is None:
+            continue
+        if lagging := stale(index):
+            logger.warning(
+                "%s looks stale (attempt %d/%d): %d known files missing, not "
+                "overwriting",
+                INDEX_PATHNAME,
+                attempt,
+                attempts,
+                lagging,
+            )
+            continue
+        if not missing(index):
+            return True  # already indexed
+        if not put_with_retry(
+            INDEX_PATHNAME,
+            to_json(merge(index)),
+            content_type=JSON_CONTENT_TYPE,
+            allow_overwrite=True,
+            cache_control_max_age=INDEX_CACHE_MAX_AGE,
+        ):
+            continue
+        check = _read_index_quietly()
+        if check is not None and not missing(check):
+            return True
+        logger.warning(
+            "%s read-back misses %s (attempt %d/%d), re-merging",
+            INDEX_PATHNAME,
+            label,
+            attempt,
+            attempts,
+        )
+    return False
 
 
 def update_backfill_index(
@@ -563,53 +699,78 @@ def update_backfill_index(
 
     """
     wanted = {path for files in entries.values() for path in files.values()}
-    required = wanted | (expected or set())
-    for attempt in range(1, attempts + 1):
-        if attempt > 1:
-            time.sleep(wait)
-        index = _read_index_quietly()
-        if index is None:
-            continue
-        stale = (expected or set()) - index_pathnames(index)
-        if stale:
-            logger.warning(
-                "%s looks stale (attempt %d/%d): %d known files missing, not "
-                "overwriting",
-                INDEX_PATHNAME,
-                attempt,
-                attempts,
-                len(stale),
-            )
-            continue
-        if not required - index_pathnames(index):
-            return True  # already indexed
-        if not put_with_retry(
-            INDEX_PATHNAME,
-            to_json(merge_backfill_index(index, entries)),
-            content_type=JSON_CONTENT_TYPE,
-            allow_overwrite=True,
-            cache_control_max_age=INDEX_CACHE_MAX_AGE,
-        ):
-            continue
-        check = _read_index_quietly()
-        missing = required - index_pathnames(check) if check is not None else required
-        if not missing:
-            logger.info("Indexed %d backfill files (verified)", len(wanted))
-            return True
+    known = expected or set()
+    ok = _verified_index_update(
+        lambda index: merge_backfill_index(index, entries),
+        lambda index: len((wanted | known) - index_pathnames(index)),
+        lambda index: len(known - index_pathnames(index)),
+        label=f"{len(wanted)} backfill files",
+        attempts=attempts,
+        wait=wait,
+    )
+    if ok:
+        logger.info("Indexed %d backfill files (verified)", len(wanted))
+    else:
         logger.warning(
-            "%s read-back misses %d of %d backfill files (attempt %d/%d), re-merging",
-            INDEX_PATHNAME,
-            len(missing),
-            len(required),
-            attempt,
+            "Backfill index update NOT verified after %d attempts; re-run the "
+            "script or backfill_blob_archive.py --rebuild-index",
             attempts,
         )
-    logger.warning(
-        "Backfill index update NOT verified after %d attempts; re-run the "
-        "script or backfill_blob_archive.py --rebuild-index",
-        attempts,
+    return ok
+
+
+def update_results_index(
+    entries: dict[str, dict[str, Any]],
+    *,
+    expected: dict[str, Any] | None = None,
+    attempts: int = INDEX_VERIFY_ATTEMPTS,
+    wait: float = INDEX_VERIFY_WAIT_SECONDS,
+) -> bool:
+    """Set ``results`` entries in ``index.json`` (``{path: {rows, updated_at}}``).
+
+    ``expected`` is the index the caller read earlier: a read that lacks any of
+    its pathnames, or lists fewer rows for a results file than it did, is
+    stale and never overwritten. Success needs a read-back showing every entry
+    with its row count. Never raises; a failure is logged as a WARNING (the
+    next run re-adds the entries, since it compares the CSVs to the index).
+    """
+    known = index_pathnames(expected) if expected else set()
+    known_rows = {
+        path: int(entry.get("rows", 0))
+        for path, entry in (expected or {}).get(RESULTS_KEY, {}).items()
+    }
+
+    def stale(index: dict[str, Any]) -> int:
+        current = index.get(RESULTS_KEY, {})
+        lower = {
+            path
+            for path, rows in known_rows.items()
+            if path not in entries and int(current.get(path, {}).get("rows", 0)) < rows
+        }
+        return len((known - index_pathnames(index)) | lower)
+
+    def missing(index: dict[str, Any]) -> int:
+        current = index.get(RESULTS_KEY, {})
+        return sum(
+            current.get(path, {}).get("rows") != entry["rows"]
+            for path, entry in entries.items()
+        )
+
+    ok = _verified_index_update(
+        lambda index: merge_results_index(index, entries),
+        missing,
+        stale,
+        label=f"{len(entries)} results files",
+        attempts=attempts,
+        wait=wait,
     )
-    return False
+    if not ok:
+        logger.warning(
+            "Results index update NOT verified after %d attempts; the next run "
+            "re-adds the entries",
+            attempts,
+        )
+    return ok
 
 
 class BlobArchiveReader:
@@ -657,3 +818,30 @@ class BlobArchiveReader:
         """Download a prediction or odds file, one dict per league."""
         lines = self.fetch_bytes(pathname).decode("utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
+
+
+class CachedArchiveReader(BlobArchiveReader):
+    """``BlobArchiveReader`` with a disk cache for downloaded files.
+
+    Only for write-once files (run files, predictions, odds): a cached copy
+    never goes stale. Never use it for ``index.json`` or the results CSVs.
+    """
+
+    def __init__(self, cache_dir: Path | None) -> None:
+        """Initialize; ``cache_dir`` None disables the cache."""
+        super().__init__()
+        self.cache_dir = cache_dir
+
+    def fetch_bytes(self, pathname: str) -> bytes:
+        """Download one file, or read it from the cache."""
+        cached = self.cache_dir / pathname if self.cache_dir else None
+        if cached is not None and cached.is_file():
+            return cached.read_bytes()
+        body = super().fetch_bytes(pathname)
+        if cached is not None:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            # Write then rename, so an interrupted run never leaves a partial file
+            tmp = cached.with_name(f"{cached.name}.tmp")
+            tmp.write_bytes(body)
+            tmp.replace(cached)
+        return body
