@@ -49,23 +49,13 @@ from lib import blob_archive, results_archive  # noqa: E402
 REPO_ROOT = Path(__file__).parents[1]
 DEFAULT_CACHE_DIR = Path(tempfile.gettempdir()) / "tip-genius-results-cache"
 PAST_SEASONS = 2
-# Workflow window (Tue/Fri, UTC): runs start 03:00, manual reruns until ~16:00
-CRON_WEEKDAYS = {1, 4}
-CRON_WINDOW_START = 2
-CRON_WINDOW_END = 17
 
 
 # %% --------------------------------------------
 # * Helpers
 
 
-def near_cron(moment: datetime) -> bool:
-    """Whether ``moment`` falls into the workflow window (Tue/Fri, UTC)."""
-    utc = moment.astimezone(UTC)
-    return (
-        utc.weekday() in CRON_WEEKDAYS
-        and CRON_WINDOW_START <= utc.hour < CRON_WINDOW_END
-    )
+near_cron = blob_archive.near_cron
 
 
 def default_seasons(now: datetime) -> list[str]:
@@ -75,28 +65,6 @@ def default_seasons(now: datetime) -> list[str]:
         f"{year}/{(year + 1) % 100:02d}"
         for year in range(start - PAST_SEASONS, start + 1)
     ]
-
-
-class CachedReader(blob_archive.BlobArchiveReader):
-    """``BlobArchiveReader`` with a disk cache (prediction files are write-once)."""
-
-    def __init__(self, cache_dir: Path | None) -> None:
-        """Initialize; ``cache_dir`` None disables the cache."""
-        super().__init__()
-        self.cache_dir = cache_dir
-
-    def fetch_bytes(self, pathname: str) -> bytes:
-        """Download one file, or read it from the cache."""
-        cached = self.cache_dir / pathname if self.cache_dir else None
-        if cached is not None and cached.is_file():
-            return cached.read_bytes()
-        body = super().fetch_bytes(pathname)
-        if cached is not None:
-            cached.parent.mkdir(parents=True, exist_ok=True)
-            tmp = cached.with_name(f"{cached.name}.tmp")
-            tmp.write_bytes(body)
-            tmp.replace(cached)
-        return body
 
 
 # %% --------------------------------------------
@@ -202,7 +170,7 @@ def main() -> None:
     seasons = {args.rebuild} if args.rebuild else set(args.seasons or [])
     seasons = seasons or set(default_seasons(now))
 
-    reader = CachedReader(args.cache_dir / "blob")
+    reader = blob_archive.CachedArchiveReader(args.cache_dir / "blob")
     report = results_archive.update_results_archive(
         seasons,
         now=now,

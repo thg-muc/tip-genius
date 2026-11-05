@@ -82,6 +82,11 @@ RESULT_COLUMNS = [
 ]
 # A match counts as finished this long after kickoff
 RESULT_DELAY = timedelta(hours=3)
+# The workflow step retries stale reads briefly; a skipped file heals next run
+CRON_ATTEMPTS = 2
+CRON_WAIT_SECONDS = 15.0
+# Unmatched fixtures older than this are logged at DEBUG only
+UNMATCHED_LOG_WINDOW = timedelta(days=14)
 # Runs this long before a season start can already list its first fixtures
 RUN_LOOKBACK = timedelta(days=30)
 
@@ -472,47 +477,61 @@ def espn_results(
             logger.warning("ESPN request failed for %s %s: %s", league, day, exc)
             continue
         for event in data.get("events", []):  # type: ignore[union-attr]
-            status = event["status"]["type"]
-            name = status.get("name", "")
-            if not status.get("completed") or any(v in name for v in ESPN_VOID_STATUS):
-                continue
-            comp = event["competitions"][0]
-            teams = {c["homeAway"]: c for c in comp["competitors"]}
-            if "home" not in teams or "away" not in teams:
-                continue
-            if any(tag in name for tag in ("AET", "PEN")):
-                home_goals = espn_regular_time(teams["home"])
-                away_goals = espn_regular_time(teams["away"])
-                if home_goals is None or away_goals is None:
-                    regular = espn_summary_regular_time(
-                        cache, code, str(event.get("id", ""))
-                    )
-                    if regular is None:
-                        logger.warning(
-                            "No 90-minute score for %s event %s (%s), skipped",
-                            league,
-                            event.get("id"),
-                            name,
-                        )
-                        continue
-                    home_goals, away_goals = regular
-            else:
-                home_goals = int(teams["home"]["score"])
-                away_goals = int(teams["away"]["score"])
-            results.append(
-                Result(
+            try:
+                result = _espn_event_result(cache, league, code, event)
+            except (KeyError, IndexError, TypeError, ValueError) as exc:
+                logger.warning(
+                    "Skipping malformed ESPN event %s (%s): %r",
+                    event.get("id") if isinstance(event, dict) else None,
                     league,
-                    datetime.fromisoformat(event["date"]),
-                    teams["home"]["team"]["displayName"],
-                    teams["away"]["team"]["displayName"],
-                    home_goals,
-                    away_goals,
-                    status=name,
-                    source="espn",
-                    source_id=str(event.get("id", "")),
+                    exc,
                 )
-            )
+                continue
+            if result is not None:
+                results.append(result)
     return results
+
+
+def _espn_event_result(
+    cache: HttpCache, league: str, code: str, event: dict
+) -> Result | None:
+    """Turn one ESPN scoreboard event into a result; None if not final."""
+    status = event["status"]["type"]
+    name = status.get("name", "")
+    if not status.get("completed") or any(v in name for v in ESPN_VOID_STATUS):
+        return None
+    comp = event["competitions"][0]
+    teams = {c["homeAway"]: c for c in comp["competitors"]}
+    if "home" not in teams or "away" not in teams:
+        return None
+    if any(tag in name for tag in ("AET", "PEN")):
+        home_goals = espn_regular_time(teams["home"])
+        away_goals = espn_regular_time(teams["away"])
+        if home_goals is None or away_goals is None:
+            regular = espn_summary_regular_time(cache, code, str(event.get("id", "")))
+            if regular is None:
+                logger.warning(
+                    "No 90-minute score for %s event %s (%s), skipped",
+                    league,
+                    event.get("id"),
+                    name,
+                )
+                return None
+            home_goals, away_goals = regular
+    else:
+        home_goals = int(teams["home"]["score"])
+        away_goals = int(teams["away"]["score"])
+    return Result(
+        league,
+        datetime.fromisoformat(event["date"]),
+        teams["home"]["team"]["displayName"],
+        teams["away"]["team"]["displayName"],
+        home_goals,
+        away_goals,
+        status=name,
+        source="espn",
+        source_id=str(event.get("id", "")),
+    )
 
 
 def fetch_results(
@@ -825,13 +844,16 @@ class ArchiveReport:
     index_updated: bool | None = None
     # Full content per file after this update (also in a dry-run)
     contents: dict[str, list[dict[str, str]]] = field(default_factory=dict)
+    # Set when the update stopped before looking at any file
+    aborted: str | None = None
 
     @property
     def ok(self) -> bool:
         """Whether every file and the index update went through."""
         bad = {"stale", "write-failed", "shrink-refused"}
         return (
-            not any(f.status in bad for f in self.files)
+            self.aborted is None
+            and not any(f.status in bad for f in self.files)
             and self.index_updated is not False
         )
 
@@ -892,9 +914,8 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
     fixtures, report.unread = collect_fixtures(paths, fetch_jsonl, seasons)
     if report.unread and rebuild:
         # A rebuild from an incomplete set of predictions would drop rows
-        logger.warning(
-            "%d prediction files unreadable, not rebuilding", len(report.unread)
-        )
+        report.aborted = f"{len(report.unread)} prediction files unreadable"
+        logger.warning("%s, not rebuilding", report.aborted)
         return report
     logger.info(
         "Results archive: %d prediction files, %d fixtures in %s",
@@ -948,8 +969,11 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
         (f for f in leftover if f not in aliases),
         key=lambda f: (f.league, f.kickoff, f.home),
     )
+    recent = now - UNMATCHED_LOG_WINDOW
     for fixture in report.unmatched:
-        logger.info(
+        # Older ones (relegation playoffs, abandoned games) recur every run
+        logger.log(
+            logging.INFO if fixture.kickoff >= recent else logging.DEBUG,
             "No result matched: %s %s %s - %s",
             fixture.league,
             format_kickoff(fixture.kickoff),

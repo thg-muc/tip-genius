@@ -109,10 +109,6 @@ LEG_GAP = timedelta(days=7)
 # Reconstructed odds with another kickoff of the same pairing (reschedules)
 ODDS_KICKOFF_TOLERANCE = timedelta(days=21)
 DEFAULT_SLEEP = 1.0
-# Tue/Fri, from shortly before the 03:00 UTC cron until delayed runs are done
-CRON_WEEKDAYS = {1, 4}
-CRON_WINDOW_START = 2
-CRON_WINDOW_END = 17
 # Columns of a live prediction entry, in the order the workflow writes them
 MATCH_COLUMNS = [
     "commence_time_str",
@@ -298,30 +294,8 @@ def load_sport_titles(config_path: Path) -> dict[str, str]:
         return yaml.safe_load(f)["odds_api"]["sport_titles"]
 
 
-class CachedReader(blob_archive.BlobArchiveReader):
-    """``BlobArchiveReader`` with a disk cache for downloaded files.
-
-    Archived run files are write-once, so a cached copy never goes stale.
-    """
-
-    def __init__(self, cache_dir: Path | None) -> None:
-        """Initialize; ``cache_dir`` None disables the cache."""
-        super().__init__()
-        self.cache_dir = cache_dir
-
-    def fetch_bytes(self, pathname: str) -> bytes:
-        """Download one file, or read it from the cache."""
-        cached = self.cache_dir / pathname if self.cache_dir else None
-        if cached is not None and cached.is_file():
-            return cached.read_bytes()
-        body = super().fetch_bytes(pathname)
-        if cached is not None:
-            cached.parent.mkdir(parents=True, exist_ok=True)
-            # Write then rename, so an interrupted run never leaves a partial file
-            tmp = cached.with_name(f"{cached.name}.tmp")
-            tmp.write_bytes(body)
-            tmp.replace(cached)
-        return body
+# Shared with utils/backfill_results.py
+CachedReader = blob_archive.CachedArchiveReader
 
 
 # %% --------------------------------------------
@@ -625,15 +599,7 @@ class WorkflowPredictor:
         )
 
 
-def near_cron(moment: datetime) -> bool:
-    """Whether ``moment`` falls into the workflow window (Tue/Fri, UTC).
-
-    The cron fires at 03:00 UTC, but GitHub often starts it hours late (runs
-    in the index start up to ~16:00 UTC), so the whole window is avoided.
-    """
-    return moment.astimezone(UTC).weekday() in CRON_WEEKDAYS and (
-        CRON_WINDOW_START <= moment.astimezone(UTC).hour < CRON_WINDOW_END
-    )
+near_cron = blob_archive.near_cron
 
 
 def exists_in_blob(pathname: str) -> bool | None:

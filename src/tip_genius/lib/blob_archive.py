@@ -41,6 +41,7 @@ from vercel.blob import sync as vercel_blob
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,11 @@ MAX_RETRY_WAIT_SECONDS = 10.0
 INDEX_VERIFY_ATTEMPTS = 4
 INDEX_VERIFY_WAIT_SECONDS = 30.0
 
+# Tue/Fri, from shortly before the 03:00 UTC cron until delayed runs are done
+CRON_WEEKDAYS = {1, 4}
+CRON_WINDOW_START = 2
+CRON_WINDOW_END = 17
+
 # Errors where a retry cannot help
 _NO_RETRY_ERRORS = (
     vercel_blob.BlobAccessError,
@@ -96,6 +102,19 @@ def is_already_exists(error: Exception) -> bool:
         isinstance(error, vercel_blob.BlobError)
         and getattr(error, "status_code", None) in (400, 409)
         and "already exists" in str(error).lower()
+    )
+
+
+def near_cron(moment: datetime) -> bool:
+    """Whether ``moment`` falls into the workflow window (Tue/Fri, UTC).
+
+    The cron fires at 03:00 UTC, but GitHub often starts it hours late (runs
+    in the index start up to ~16:00 UTC), so manual scripts that write the
+    index avoid the whole window.
+    """
+    utc = moment.astimezone(UTC)
+    return utc.weekday() in CRON_WEEKDAYS and (
+        CRON_WINDOW_START <= utc.hour < CRON_WINDOW_END
     )
 
 
@@ -650,9 +669,6 @@ def _verified_index_update(
             attempt,
             attempts,
         )
-    logger.warning(
-        "Index update for %s NOT verified after %d attempts", label, attempts
-    )
     return False
 
 
@@ -740,7 +756,7 @@ def update_results_index(
             for path, entry in entries.items()
         )
 
-    return _verified_index_update(
+    ok = _verified_index_update(
         lambda index: merge_results_index(index, entries),
         missing,
         stale,
@@ -748,6 +764,13 @@ def update_results_index(
         attempts=attempts,
         wait=wait,
     )
+    if not ok:
+        logger.warning(
+            "Results index update NOT verified after %d attempts; the next run "
+            "re-adds the entries",
+            attempts,
+        )
+    return ok
 
 
 class BlobArchiveReader:
@@ -795,3 +818,30 @@ class BlobArchiveReader:
         """Download a prediction or odds file, one dict per league."""
         lines = self.fetch_bytes(pathname).decode("utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
+
+
+class CachedArchiveReader(BlobArchiveReader):
+    """``BlobArchiveReader`` with a disk cache for downloaded files.
+
+    Only for write-once files (run files, predictions, odds): a cached copy
+    never goes stale. Never use it for ``index.json`` or the results CSVs.
+    """
+
+    def __init__(self, cache_dir: Path | None) -> None:
+        """Initialize; ``cache_dir`` None disables the cache."""
+        super().__init__()
+        self.cache_dir = cache_dir
+
+    def fetch_bytes(self, pathname: str) -> bytes:
+        """Download one file, or read it from the cache."""
+        cached = self.cache_dir / pathname if self.cache_dir else None
+        if cached is not None and cached.is_file():
+            return cached.read_bytes()
+        body = super().fetch_bytes(pathname)
+        if cached is not None:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            # Write then rename, so an interrupted run never leaves a partial file
+            tmp = cached.with_name(f"{cached.name}.tmp")
+            tmp.write_bytes(body)
+            tmp.replace(cached)
+        return body

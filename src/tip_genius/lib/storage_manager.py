@@ -326,7 +326,10 @@ class StorageManager:
         moment = now or datetime.now(tz=UTC)
         try:
             report = results_archive.update_results_archive(
-                {results_archive.season_of(moment)}, now=moment
+                {results_archive.season_of(moment)},
+                now=moment,
+                attempts=results_archive.CRON_ATTEMPTS,
+                wait=results_archive.CRON_WAIT_SECONDS,
             )
         except Exception:
             logger.warning("Could not update the Blob results archive", exc_info=True)

@@ -630,3 +630,43 @@ def test_espn_regular_time_checks_the_final_score() -> None:
     lines = [{"value": 1.0}, {"value": 2.0}, {"value": 1.0}]
     assert ra.espn_regular_time({"score": "4", "linescores": lines}) == 3
     assert ra.espn_regular_time({"score": "5", "linescores": lines}) is None
+
+
+def test_rebuild_with_unreadable_predictions_is_not_ok(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union Berlin")]})
+    del fake_blob.files[PRED_PATH]
+    report = run(rebuild=True)
+    assert report.aborted
+    assert not report.ok
+    assert fake_blob.puts == []
+    assert sources["requested"] == []
+
+
+def test_malformed_espn_event_is_skipped_not_fatal() -> None:
+    broken = espn_event("STATUS_FULL_TIME", ("2", "0"), [[1, 1], [0, 0]])
+    del broken["competitions"][0]["competitors"][0]["score"]
+    good = espn_event("STATUS_FULL_TIME", ("1", "0"), [[1, 0], [0, 0]])
+    results = ra.espn_results(
+        FakeCache([broken, good]), "UEFA Champions League", {date(2026, 10, 21)}, NOW
+    )
+    assert [(r.home_goals, r.away_goals) for r in results] == [(1, 0)]
+
+
+@pytest.mark.usefixtures("blob_token", "fake_blob")
+def test_cron_step_uses_short_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_update(seasons: set[str], **kwargs: Any) -> ra.ArchiveReport:
+        seen.update(kwargs, seasons=seasons)
+        return ra.ArchiveReport()
+
+    monkeypatch.setattr(
+        sm_module.results_archive, "update_results_archive", fake_update
+    )
+    manager = StorageManager("data/match_predictions", write_to_blob=True)
+    assert manager.update_results_archive(NOW)
+    assert seen["seasons"] == {SEASON}
+    assert seen["attempts"] == ra.CRON_ATTEMPTS
+    assert seen["wait"] == ra.CRON_WAIT_SECONDS
