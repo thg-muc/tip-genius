@@ -45,16 +45,42 @@ import os
 import re
 import sys
 import tempfile
-import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
-from difflib import SequenceMatcher
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
+
+sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "tip_genius"))
+from lib import blob_archive, results_archive  # noqa: E402
+from lib.results_archive import (  # noqa: E402
+    BERLIN,
+    BUNDESLIGA,
+    NAME_STOPWORDS,
+    HttpCache,
+    Result,
+    espn_regular_time,
+    espn_results,
+    kicktipp_points,
+    normalize_team,
+    openligadb_results,
+    season_of,
+    team_similarity,
+)
+
+# Shared with the results archive; re-exported for existing callers
+__all__ = [
+    "NAME_STOPWORDS",
+    "HttpCache",
+    "espn_regular_time",
+    "espn_results",
+    "kicktipp_points",
+    "normalize_team",
+    "openligadb_results",
+    "team_similarity",
+]
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -63,20 +89,10 @@ logger = logging.getLogger(__name__)
 # * Constants
 
 REPO_ROOT = Path(__file__).parents[1]
-BERLIN = ZoneInfo("Europe/Berlin")
 KEY_PATTERN = re.compile(
     r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_Match_Predictions_(.+)"
     r"_FourPointsScoring_named_with-info(?:\.jsonl)?$"
 )
-ESPN_LEAGUES = {
-    "Premier League - England": "eng.1",
-    "La Liga - Spain": "esp.1",
-    "Bundesliga - Germany": "ger.1",
-    "UEFA Champions League": "uefa.champions",
-    "UEFA Europa League": "uefa.europa",
-    "Bundesliga - Austria": "aut.1",
-}
-BUNDESLIGA = "Bundesliga - Germany"
 # 2024/25 is incomplete (no reasoning texts, partial history) and not needed
 DEFAULT_FROM_SEASON = "2025/26"
 # Providers currently offered in the frontend (public/js/main.js LLM_PROVIDERS)
@@ -89,29 +105,7 @@ CURRENT_PROVIDERS = [
     "Meta-Llama-Mid",
     "Microsoft-Phi-Medium",
 ]
-NAME_STOPWORDS = {
-    "fc", "cf", "afc", "sc", "ac", "as", "ssc", "sv", "vfl", "vfb", "tsg", "fsv",
-    "cd", "ud", "rcd", "sd", "rc", "club", "de", "the", "and", "1", "05", "04",
-    "1899", "1846", "1910", "sk", "fk", "bk", "if", "ca", "us", "calcio",
-}  # fmt: skip
-NAME_ALIASES = {
-    "munchen": "munich",
-    "koln": "cologne",
-    "nurnberg": "nuremberg",
-    "hertha bsc": "hertha berlin",
-    "st pauli": "st pauli",
-    "atletico": "atletico",
-    "inter": "internazionale",
-    "psg": "paris saint germain",
-    "man": "manchester",
-    "utd": "united",
-    "wolves": "wolverhampton wanderers",
-    "spurs": "tottenham hotspur",
-}
-MATCH_WINDOW = timedelta(hours=36)
 MATCHDAY_BREAK = timedelta(days=3)
-MIN_TEAM_SIMILARITY = 0.45
-MIN_PAIR_SIMILARITY = 1.25
 
 
 # %% --------------------------------------------
@@ -131,19 +125,6 @@ class Prediction:
     home_goals: int
     away_goals: int
     reasoning: str = ""
-
-
-@dataclass(frozen=True)
-class Result:
-    """Final (90 minute) score of a finished match."""
-
-    league: str
-    kickoff: datetime
-    home: str
-    away: str
-    home_goals: int
-    away_goals: int
-    matchday: str | None = None
 
 
 @dataclass(frozen=True)
@@ -201,68 +182,6 @@ class Score:
 
 # %% --------------------------------------------
 # * Helpers
-
-
-def kicktipp_points(pred: tuple[int, int], actual: tuple[int, int]) -> int:
-    """Return Kicktipp four-points score for a predicted vs. actual result."""
-    if pred == actual:
-        return 4
-    pred_diff, actual_diff = pred[0] - pred[1], actual[0] - actual[1]
-    if (pred_diff > 0) != (actual_diff > 0) or (pred_diff < 0) != (actual_diff < 0):
-        return 0
-    if actual_diff == 0:
-        return 2
-    return 3 if pred_diff == actual_diff else 2
-
-
-def season_of(moment: datetime) -> str:
-    """Return season label like '2026/27' (seasons start on 1 July)."""
-    start = moment.year if moment.month >= 7 else moment.year - 1  # noqa: PLR2004
-    return f"{start}/{(start + 1) % 100:02d}"
-
-
-def normalize_team(name: str) -> str:
-    """Normalize a team name for fuzzy comparison across data sources."""
-    text = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    text = re.sub(r"[^a-z0-9 ]", " ", text.lower().replace("&", " and "))
-    words = [NAME_ALIASES.get(w, w) for w in text.split()]
-    words = [w for w in words if w not in NAME_STOPWORDS]
-    return " ".join(words)
-
-
-def team_similarity(a: str, b: str) -> float:
-    """Return similarity in [0, 1] between two team names."""
-    na, nb = normalize_team(a), normalize_team(b)
-    if not na or not nb:
-        return 0.0
-    if na == nb or na in nb or nb in na:
-        return 1.0
-    ratio = SequenceMatcher(None, na, nb).ratio()
-    wa, wb = set(na.split()), set(nb.split())
-    overlap = len(wa & wb) / min(len(wa), len(wb))
-    return max(ratio, overlap)
-
-
-class HttpCache:
-    """Tiny JSON-on-disk cache for GET requests."""
-
-    def __init__(self, directory: Path) -> None:
-        """Create cache directory."""
-        self.directory = directory
-        self.directory.mkdir(parents=True, exist_ok=True)
-        self.session = requests.Session()
-
-    def get_json(self, url: str, *, cacheable: bool = True) -> object:
-        """Fetch URL as JSON, reading from and writing to the cache."""
-        path = self.directory / (re.sub(r"[^A-Za-z0-9]+", "_", url)[-180:] + ".json")
-        if cacheable and path.exists():
-            return json.loads(path.read_text())
-        response = self.session.get(url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        if cacheable:
-            path.write_text(json.dumps(data))
-        return data
 
 
 # %% --------------------------------------------
@@ -337,9 +256,6 @@ def load_backfill_snapshots() -> dict[tuple[datetime, str], list[dict]]:
     Keyed like KV snapshots by the original run's timestamp. These were
     generated after the fact; keep them out of the live ranking.
     """
-    sys.path.insert(0, str(REPO_ROOT / "src" / "tip_genius"))
-    from lib import blob_archive  # noqa: PLC0415
-
     reader = blob_archive.BlobArchiveReader()
     snapshots: dict[tuple[datetime, str], list[dict]] = {}
     # Fresh read: a cached index can lag behind a backfill that just ran
@@ -423,131 +339,25 @@ def last_before_kickoff(predictions: list[Prediction]) -> list[Prediction]:
 # * Loading results
 
 
-def openligadb_results(cache: HttpCache, seasons: set[int]) -> list[Result]:
-    """Fetch finished Bundesliga matches from openligadb.de."""
-    results = []
-    current = season_of(datetime.now(tz=UTC))
-    for season in sorted(seasons):
-        url = f"https://api.openligadb.de/getmatchdata/bl1/{season}"
-        is_current = current.startswith(str(season))
-        for match in cache.get_json(url, cacheable=not is_current):  # type: ignore[union-attr]
-            final = [r for r in match["matchResults"] if r["resultTypeID"] == 2]  # noqa: PLR2004
-            if not match["matchIsFinished"] or not final:
-                continue
-            results.append(
-                Result(
-                    BUNDESLIGA,
-                    datetime.fromisoformat(match["matchDateTimeUTC"]).astimezone(UTC),
-                    match["team1"]["teamName"],
-                    match["team2"]["teamName"],
-                    final[0]["pointsTeam1"],
-                    final[0]["pointsTeam2"],
-                    f"{BUNDESLIGA} {season} MD {match['group']['groupOrderID']:02d}",
-                )
-            )
-    return results
-
-
-def espn_regular_time(competitor: dict) -> int | None:
-    """Return goals after 90 minutes from ESPN period line scores."""
-    lines = competitor.get("linescores") or []
-    if len(lines) < 2:  # noqa: PLR2004
-        return None
-    return int(sum(float(line.get("value", 0)) for line in lines[:2]))
-
-
-def espn_results(cache: HttpCache, league: str, days: set[date]) -> list[Result]:
-    """Fetch finished matches for one league on the given days from ESPN."""
-    code = ESPN_LEAGUES[league]
-    today = datetime.now(tz=UTC).date()
-    results = []
-    for day in sorted(days):
-        if day >= today:
-            continue
-        url = (
-            "https://site.api.espn.com/apis/site/v2/sports/soccer/"
-            f"{code}/scoreboard?dates={day:%Y%m%d}"
-        )
-        try:
-            data = cache.get_json(url, cacheable=day < today - timedelta(days=2))
-        except requests.RequestException as exc:
-            logger.warning("ESPN request failed for %s %s: %s", league, day, exc)
-            continue
-        for event in data.get("events", []):  # type: ignore[union-attr]
-            status = event["status"]["type"]
-            if not status.get("completed"):
-                continue
-            comp = event["competitions"][0]
-            teams = {c["homeAway"]: c for c in comp["competitors"]}
-            if "home" not in teams or "away" not in teams:
-                continue
-            if any(tag in status.get("name", "") for tag in ("AET", "PEN")):
-                home_goals = espn_regular_time(teams["home"])
-                away_goals = espn_regular_time(teams["away"])
-                if home_goals is None or away_goals is None:
-                    continue
-            else:
-                home_goals = int(teams["home"]["score"])
-                away_goals = int(teams["away"]["score"])
-            results.append(
-                Result(
-                    league,
-                    datetime.fromisoformat(event["date"]),
-                    teams["home"]["team"]["displayName"],
-                    teams["away"]["team"]["displayName"],
-                    home_goals,
-                    away_goals,
-                )
-            )
-    return results
+def as_fixture(pred: Prediction) -> results_archive.Fixture:
+    """Return the archive fixture of a prediction."""
+    return results_archive.Fixture(pred.league, pred.kickoff, pred.home, pred.away)
 
 
 def load_results(cache: HttpCache, predictions: list[Prediction]) -> list[Result]:
     """Fetch results for every league and day that has predictions."""
-    days: dict[str, set[date]] = defaultdict(set)
-    bl_seasons: set[int] = set()
-    for pred in predictions:
-        if pred.league == BUNDESLIGA:
-            bl_seasons.add(int(season_of(pred.kickoff)[:4]))
-        elif pred.league in ESPN_LEAGUES:
-            days[pred.league].add(pred.kickoff.date())
-            days[pred.league].add(pred.kickoff.astimezone(BERLIN).date())
-    results = openligadb_results(cache, bl_seasons)
-    for league, league_days in days.items():
-        logger.info("Fetching %d days of %s results", len(league_days), league)
-        results.extend(espn_results(cache, league, league_days))
-    unknown = {p.league for p in predictions} - set(ESPN_LEAGUES)
-    if unknown:
-        logger.warning("No result source for leagues: %s", sorted(unknown))
-    logger.info("Loaded %d finished results", len(results))
-    return results
+    return results_archive.fetch_results(cache, map(as_fixture, predictions))
 
 
 def match_results(
     predictions: list[Prediction], results: list[Result]
 ) -> dict[tuple, Result]:
     """Map each fixture (league, home, away, kickoff) to its actual result."""
-    by_league: dict[str, list[Result]] = defaultdict(list)
-    for result in results:
-        by_league[result.league].append(result)
-    fixtures = {(p.league, p.home, p.away, p.kickoff) for p in predictions}
-    matched = {}
-    for league, home, away, kickoff in fixtures:
-        best, best_score = None, 0.0
-        for result in by_league.get(league, []):
-            gap = abs(result.kickoff - kickoff)
-            if gap > MATCH_WINDOW:
-                continue
-            sim_home = team_similarity(home, result.home)
-            sim_away = team_similarity(away, result.away)
-            if min(sim_home, sim_away) < MIN_TEAM_SIMILARITY:
-                continue
-            score = sim_home + sim_away - gap / MATCH_WINDOW * 0.2
-            if score > best_score:
-                best, best_score = result, score
-        if best and best_score >= MIN_PAIR_SIMILARITY:
-            matched[league, home, away, kickoff] = best
-    return matched
+    matched = results_archive.match_results(map(as_fixture, predictions), results)
+    return {
+        (fixture.league, fixture.home, fixture.away, fixture.kickoff): result
+        for fixture, (result, _) in matched.items()
+    }
 
 
 # %% --------------------------------------------
