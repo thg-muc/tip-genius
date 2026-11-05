@@ -849,10 +849,11 @@ class ArchiveReport:
 
     @property
     def ok(self) -> bool:
-        """Whether every file and the index update went through."""
+        """Whether every prediction file, results file and the index went through."""
         bad = {"stale", "write-failed", "shrink-refused"}
         return (
             self.aborted is None
+            and not self.unread
             and not any(f.status in bad for f in self.files)
             and self.index_updated is not False
         )

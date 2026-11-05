@@ -77,6 +77,8 @@ def print_report(
     """Print rows per file, unmatched fixtures and the index outcome."""
     mode = "EXECUTE" if execute else "DRY RUN - nothing written"
     print(f"\n=== Results archive {'rebuild ' if rebuild else ''}({mode}) ===")
+    if report.aborted:
+        print(f"ABORTED: {report.aborted}; nothing written")
     print(
         f"{'Season':<8} {'League':<26} {'Existing':>8} {'Added':>6} {'Rows':>5}  Status"
     )
@@ -187,7 +189,7 @@ def main() -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(results_archive.rows_to_csv(rows))
         print(f"\nSaved {len(report.contents)} CSV(s) under {args.save_csv}")
-    if args.execute and not report.ok:
+    if not report.ok:
         sys.exit(1)
 
 

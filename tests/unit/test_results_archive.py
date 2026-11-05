@@ -670,3 +670,13 @@ def test_cron_step_uses_short_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     assert seen["seasons"] == {SEASON}
     assert seen["attempts"] == ra.CRON_ATTEMPTS
     assert seen["wait"] == ra.CRON_WAIT_SECONDS
+
+
+def test_unreadable_prediction_file_makes_the_run_not_ok(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union Berlin")]})
+    del fake_blob.files[PRED_PATH]
+    report = run()
+    assert report.unread == [PRED_PATH]
+    assert not report.ok
