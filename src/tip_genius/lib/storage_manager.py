@@ -86,6 +86,8 @@ class StorageManager:
         self.blob_predictions: dict[str, str] = {}
         # Results index entries verified by this run's results step
         self.blob_results: dict[str, dict[str, Any]] = {}
+        # Results scan state per season, stored once the step went through
+        self.blob_results_scan: dict[str, dict[str, Any] | None] = {}
 
         # Initialize environment configuration
         self.kv_initialized = self._initialize_kv_config()
@@ -311,9 +313,13 @@ class StorageManager:
     def update_results_archive(self, now: datetime | None = None) -> bool:
         """Add the current season's missing match results to the Blob archive.
 
-        Runs before the new odds and predictions are fetched. Never raises and
-        never affects the exit code: a failure only logs a WARNING, and the
-        next run picks up every missing result again (gap detection).
+        Runs before the new odds and predictions are fetched. Reads only the
+        prediction files added since the last complete run plus the fixtures
+        still open then (``results_archive.plan_scan``); the new scan state is
+        written with the results index entries and again by
+        ``finalize_blob_archive``. Never raises and never affects the exit
+        code: a failure only logs a WARNING, and the next run repeats the
+        scan from the old state (gap detection).
 
         Returns
         -------
@@ -328,6 +334,7 @@ class StorageManager:
             report = results_archive.update_results_archive(
                 {results_archive.season_of(moment)},
                 now=moment,
+                incremental=True,
                 attempts=results_archive.CRON_ATTEMPTS,
                 wait=results_archive.CRON_WAIT_SECONDS,
             )
@@ -336,6 +343,9 @@ class StorageManager:
             return False
         if report.index_updated:
             self.blob_results = report.index_entries
+        if report.ok and report.scan_state:
+            # Only a complete run advances the scan state (see plan_scan)
+            self.blob_results_scan = report.scan_state
         return report.ok
 
     def finalize_blob_archive(self) -> None:
@@ -357,7 +367,11 @@ class StorageManager:
             entry = blob_archive.index_entry(
                 manifest, manifest_written=manifest_written
             )
-            if blob_archive.update_index([entry], results=self.blob_results):
+            if blob_archive.update_index(
+                [entry],
+                results=self.blob_results,
+                results_scan=self.blob_results_scan,
+            ):
                 logger.info(
                     "Archived run %s in Vercel Blob: %d odds, %d prediction files",
                     self.run_ts,

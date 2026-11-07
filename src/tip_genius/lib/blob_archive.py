@@ -55,6 +55,7 @@ PREDICTIONS_PREFIX = "Match_Predictions_"
 BACKFILL_PREFIX = "predictions/backfill/"
 BACKFILL_KEY = "backfill_predictions"
 RESULTS_KEY = "results"
+RESULTS_SCAN_KEY = "results_scan"
 ODDS_SOURCES = ("logged", "reconstructed")
 ODDS_COLUMNS = [
     "id",
@@ -421,6 +422,32 @@ def merge_results_index(
     return merged
 
 
+def merge_results_scan(
+    index: dict[str, Any] | None,
+    scan: dict[str, dict[str, Any] | None],
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Set the results step's scan state per season (``results_scan``).
+
+    ``scan`` maps a season (``2026/27``) to its state, which replaces the
+    stored one; None removes the season's state (the next run scans fully).
+    See ``results_archive.plan_scan`` for the fields.
+    """
+    merged = empty_index() if index is None else dict(index)
+    if not scan:
+        return merged
+    current = merged.get(RESULTS_SCAN_KEY)
+    states = dict(current) if isinstance(current, dict) else {}
+    for season, state in scan.items():
+        if state is None:
+            states.pop(season, None)
+        else:
+            states[season] = state
+    merged[RESULTS_SCAN_KEY] = dict(sorted(states.items()))
+    merged["updated_at"] = format_payload_ts(now or datetime.now(tz=UTC))
+    return merged
+
+
 def index_pathnames(index: dict[str, Any]) -> set[str]:
     """Return every pathname an index refers to."""
     pathnames = set(index.get("reconstructed_odds", []))
@@ -568,12 +595,14 @@ def update_index(
     entries: list[dict[str, Any]],
     reconstructed: list[str] | None = None,
     results: dict[str, dict[str, Any]] | None = None,
+    results_scan: dict[str, dict[str, Any] | None] | None = None,
 ) -> bool:
     """Append run entries to ``index.json``.
 
     ``results`` (``{pathname: {rows, updated_at}}``, e.g. what this run's
     results step verified) is merged in as well, so an index read that lags
-    behind that step does not drop its entries.
+    behind that step does not drop its entries. ``results_scan`` (the results
+    step's scan state per season) is set the same way.
 
     Never raises; a failure is logged as a WARNING. Runs can be re-added later
     from their manifests with ``utils/backfill_blob_archive.py --rebuild-index``.
@@ -593,6 +622,8 @@ def update_index(
     merged = merge_index(index, entries, reconstructed)
     if results:
         merged = merge_results_index(merged, results)
+    if results_scan:
+        merged = merge_results_scan(merged, results_scan)
     return put_with_retry(
         INDEX_PATHNAME,
         to_json(merged),
@@ -723,10 +754,15 @@ def update_results_index(
     entries: dict[str, dict[str, Any]],
     *,
     expected: dict[str, Any] | None = None,
+    scan: dict[str, dict[str, Any] | None] | None = None,
     attempts: int = INDEX_VERIFY_ATTEMPTS,
     wait: float = INDEX_VERIFY_WAIT_SECONDS,
 ) -> bool:
     """Set ``results`` entries in ``index.json`` (``{path: {rows, updated_at}}``).
+
+    ``scan`` (scan state per season, see ``merge_results_scan``) is written
+    along with the entries and is part of the read-back check, so a reset
+    (None) is written even when every row count is already indexed.
 
     ``expected`` is the index the caller read earlier: a read that lacks any of
     its pathnames, or lists fewer rows for a results file than it did, is
@@ -751,13 +787,17 @@ def update_results_index(
 
     def missing(index: dict[str, Any]) -> int:
         current = index.get(RESULTS_KEY, {})
+        states = index.get(RESULTS_SCAN_KEY)
+        states = states if isinstance(states, dict) else {}
         return sum(
             current.get(path, {}).get("rows") != entry["rows"]
             for path, entry in entries.items()
-        )
+        ) + sum(states.get(season) != state for season, state in (scan or {}).items())
 
     ok = _verified_index_update(
-        lambda index: merge_results_index(index, entries),
+        lambda index: merge_results_scan(
+            merge_results_index(index, entries), scan or {}
+        ),
         missing,
         stale,
         label=f"{len(entries)} results files",
