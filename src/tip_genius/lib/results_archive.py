@@ -19,9 +19,15 @@ are only logged, never written.
 
 Guards:
 
-- Gap detection: every run targets all fixtures of the season that have a
-  prediction, kicked off more than ``RESULT_DELAY`` ago and have no row yet, so
-  rows lost to a failed write or a stale read heal on the next run.
+- Gap detection: a run targets every fixture it knows of that kicked off more
+  than ``RESULT_DELAY`` ago and has no row yet, so rows lost to a failed write
+  or a stale read heal on the next run. A full scan knows every fixture of the
+  season (all prediction files). The workflow runs incrementally instead
+  (``plan_scan``): it reads only prediction files newer than the stored scan
+  state and retries the fixtures that state lists as open, falling back to a
+  full scan when the state is missing, invalid, older than
+  ``FULL_SCAN_INTERVAL``, or the older files changed. The state only advances
+  after a complete run.
 - Never shrink: a fresh read with fewer rows than the index records is stale;
   it is retried and, if still short, the file is skipped (nothing written).
 - Read-back: each write is read back fresh and must show every row, mirroring
@@ -34,6 +40,7 @@ Guards:
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -89,6 +96,9 @@ CRON_WAIT_SECONDS = 15.0
 UNMATCHED_LOG_WINDOW = timedelta(days=14)
 # Runs this long before a season start can already list its first fixtures
 RUN_LOOKBACK = timedelta(days=30)
+# The workflow step reads only new prediction files, but all of them again
+# after this long (a cheap repair path for rows lost after a verified write)
+FULL_SCAN_INTERVAL = timedelta(days=30)
 
 ESPN_LEAGUES = {
     "Premier League - England": "eng.1",
@@ -574,6 +584,15 @@ def prediction_pathnames(index: dict[str, Any], seasons: set[str]) -> list[str]:
     A run belongs if its timestamp falls in a season (or up to ``RUN_LOOKBACK``
     before its start); each fixture is later assigned by its own kickoff.
     """
+    return sorted(prediction_runs(index, seasons))
+
+
+def prediction_runs(index: dict[str, Any], seasons: set[str]) -> dict[str, str]:
+    """Map each prediction file of ``seasons`` to its (earliest) ``run_ts``.
+
+    Same selection as ``prediction_pathnames``; backfill files carry the
+    ``run_ts`` of the past run they were generated for.
+    """
     windows = [
         (season_start(s) - RUN_LOOKBACK, season_start(s).replace(year=int(s[:4]) + 1))
         for s in seasons
@@ -588,14 +607,19 @@ def prediction_pathnames(index: dict[str, Any], seasons: set[str]) -> list[str]:
             return False
         return any(start <= moment < end for start, end in windows)
 
-    paths: set[str] = set()
+    runs: dict[str, str] = {}
+
+    def add(run_ts: str, paths: Iterable[str]) -> None:
+        for path in paths:
+            runs[path] = min(run_ts, runs.get(path, run_ts))
+
     for run in index.get("runs", []):
         if wanted(run["run_ts"]):
-            paths.update(run.get("predictions", {}).values())
+            add(run["run_ts"], run.get("predictions", {}).values())
     for run_ts, files in index.get(blob_archive.BACKFILL_KEY, {}).items():
         if wanted(run_ts):
-            paths.update(files.values())
-    return sorted(paths)
+            add(run_ts, files.values())
+    return runs
 
 
 def collect_fixtures(
@@ -631,6 +655,141 @@ def collect_fixtures(
                 if fixture and fixture.season in seasons:
                     fixtures.add(fixture)
     return fixtures, failed
+
+
+# %% --------------------------------------------
+# * Incremental scan state
+
+
+@dataclass
+class ScanPlan:
+    """Which prediction files of one season the results step reads."""
+
+    season: str
+    mode: str  # full | incremental
+    reason: str
+    # Every prediction file of the season with its run_ts
+    runs: dict[str, str]
+    # Files to read this run (all of them in a full scan)
+    read: list[str]
+    # Fixtures still open after the previous scan (incremental only)
+    open: set[Fixture] = field(default_factory=set)
+    # When the last full scan ran (payload timestamp)
+    full_scan_at: str = ""
+
+
+def paths_digest(paths: Iterable[str]) -> str:
+    """Return a SHA-256 over the sorted pathnames (order does not matter)."""
+    return hashlib.sha256("\n".join(sorted(paths)).encode("utf-8")).hexdigest()
+
+
+def fixture_to_state(fixture: Fixture) -> list[str]:
+    """Serialize a fixture for the scan state: league, kickoff, home, away."""
+    return [fixture.league, format_kickoff(fixture.kickoff), fixture.home, fixture.away]
+
+
+def fixture_from_state(item: object) -> Fixture:
+    """Parse ``fixture_to_state`` output.
+
+    Raises
+    ------
+    ValueError
+        If the item is not a list of four non-empty strings with a valid kickoff.
+
+    """
+    if not isinstance(item, list) or len(item) != 4:  # noqa: PLR2004
+        msg = f"Bad open fixture: {item!r}"
+        raise ValueError(msg)
+    league, kickoff, home, away = item
+    if not all(isinstance(v, str) and v for v in item):
+        msg = f"Bad open fixture: {item!r}"
+        raise ValueError(msg)
+    moment = datetime.strptime(kickoff, KEY_TIME_FORMAT).replace(tzinfo=UTC)
+    return Fixture(league, moment, home, away)
+
+
+def plan_scan(index: dict[str, Any], season: str, now: datetime) -> ScanPlan:
+    """Decide whether the results step reads all or only new prediction files.
+
+    The season's state in ``index.json`` (``results_scan``) holds:
+
+    - ``through``: highest ``run_ts`` of the files already scanned
+    - ``files``/``digest``: count and SHA-256 of every file at or before
+      ``through`` at the time of the scan
+    - ``open``: fixtures without a row yet (not played, or unmatched)
+    - ``full_scan_at``: time of the last full scan
+
+    An incremental run reads only files with a ``run_ts`` after ``through``
+    and retries ``open``. If the files at or before ``through`` differ from
+    the stored count/digest (a backfill or late index entry for an old run),
+    if the state is missing or invalid, or if the last full scan is older
+    than ``FULL_SCAN_INTERVAL``, every file is read instead, so no file is
+    ever skipped.
+    """
+    runs = prediction_runs(index, {season})
+
+    def full(reason: str) -> ScanPlan:
+        return ScanPlan(season, "full", reason, runs, sorted(runs))
+
+    states = index.get(blob_archive.RESULTS_SCAN_KEY, {})
+    if not isinstance(states, dict):
+        return full("invalid results_scan section")
+    state: Any = states.get(season)
+    if state is None:
+        return full("no scan state")
+    try:
+        through = str(state["through"])
+        datetime.strptime(through, blob_archive.RUN_TS_FORMAT)  # noqa: DTZ007
+        full_scan_at = str(state["full_scan_at"])
+        last_full = datetime.strptime(
+            full_scan_at, blob_archive.PAYLOAD_TS_FORMAT
+        ).replace(tzinfo=UTC)
+        files, digest = int(state["files"]), str(state["digest"])
+        open_fixtures = {fixture_from_state(item) for item in state["open"]}
+    except (KeyError, TypeError, ValueError) as exc:
+        return full(f"invalid scan state ({exc!r})")
+    if any(f.season != season for f in open_fixtures):
+        return full("open fixture outside the season")
+    if now - last_full >= FULL_SCAN_INTERVAL:
+        return full(f"last full scan {full_scan_at}")
+    scanned = [path for path, run_ts in runs.items() if run_ts <= through]
+    if len(scanned) != files or paths_digest(scanned) != digest:
+        return full(f"files up to {through} changed since the last scan")
+    new = sorted(path for path, run_ts in runs.items() if run_ts > through)
+    return ScanPlan(
+        season,
+        "incremental",
+        f"after {through}",
+        runs,
+        new,
+        open_fixtures,
+        full_scan_at,
+    )
+
+
+def scan_state(
+    plan: ScanPlan, open_fixtures: Iterable[Fixture], now: datetime
+) -> dict[str, Any] | None:
+    """Return the state to store after ``plan`` was carried out completely.
+
+    None if the season has no prediction files yet (nothing to remember).
+    """
+    if not plan.runs:
+        return None
+    full_scan_at = plan.full_scan_at
+    if plan.mode == "full":
+        full_scan_at = blob_archive.format_payload_ts(now)
+    return {
+        "through": max(plan.runs.values()),
+        "files": len(plan.runs),
+        "digest": paths_digest(plan.runs),
+        "open": [
+            fixture_to_state(f)
+            for f in sorted(open_fixtures, key=lambda f: (f.kickoff, f.league, f.home))
+        ],
+        "full_scan_at": full_scan_at,
+        "updated_at": blob_archive.format_payload_ts(now),
+    }
 
 
 # %% --------------------------------------------
@@ -846,6 +1005,13 @@ class ArchiveReport:
     contents: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     # Set when the update stopped before looking at any file
     aborted: str | None = None
+    # Prediction files read, and how they were chosen per season
+    files_read: int = 0
+    scan_modes: dict[str, str] = field(default_factory=dict)
+    # Scan state per season to store in index.json (incremental runs; a
+    # rebuild maps its seasons to None to reset them). None while anything
+    # failed, so the next run repeats this one
+    scan_state: dict[str, dict[str, Any] | None] | None = None
 
     @property
     def ok(self) -> bool:
@@ -868,6 +1034,7 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
     rebuild: bool = False,
     force: bool = False,
     dry_run: bool = False,
+    incremental: bool = False,
     attempts: int = blob_archive.INDEX_VERIFY_ATTEMPTS,
     wait: float = blob_archive.INDEX_VERIFY_WAIT_SECONDS,
 ) -> ArchiveReport:
@@ -890,6 +1057,11 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
         Allow a rebuild to shrink a file.
     dry_run : bool, optional
         Compute everything, write nothing.
+    incremental : bool, optional
+        Read only prediction files newer than the stored scan state and retry
+        its open fixtures (see ``plan_scan``); falls back to a full scan. A
+        complete, written run returns the new state in ``scan_state`` and
+        writes it with the results index entries. Ignored with ``rebuild``.
     attempts, wait : optional
         Stale-read retries and the pause between them (seconds).
 
@@ -911,15 +1083,33 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     index = blob_archive.read_index(fresh=True)
     indexed = index.get(blob_archive.RESULTS_KEY, {})
-    paths = prediction_pathnames(index, seasons)
+    plans: list[ScanPlan] = []
+    if incremental and not rebuild:
+        plans = [plan_scan(index, s, now) for s in sorted(seasons)]
+        paths = sorted({path for plan in plans for path in plan.read})
+    else:
+        paths = prediction_pathnames(index, seasons)
     fixtures, report.unread = collect_fixtures(paths, fetch_jsonl, seasons)
+    report.files_read = len(paths)
     if report.unread and rebuild:
         # A rebuild from an incomplete set of predictions would drop rows
         report.aborted = f"{len(report.unread)} prediction files unreadable"
         logger.warning("%s, not rebuilding", report.aborted)
         return report
+    for plan in plans:
+        fixtures |= plan.open
+        report.scan_modes[plan.season] = plan.mode
+        logger.info(
+            "Results scan %s: %s (%s), %d of %d prediction files, %d open fixtures",
+            plan.season,
+            plan.mode,
+            plan.reason,
+            len(plan.read),
+            len(plan.runs),
+            len(plan.open),
+        )
     logger.info(
-        "Results archive: %d prediction files, %d fixtures in %s",
+        "Results archive: read %d prediction files, %d fixtures to check in %s",
         len(paths),
         len(fixtures),
         ", ".join(sorted(seasons)),
@@ -1019,9 +1209,18 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
         else:
             file_report.status = "write-failed"
 
+    if not dry_run:
+        report.scan_state = _next_scan_state(report, plans, fixtures, now)
+        if rebuild:
+            # Rows may have been dropped: the next workflow run scans fully
+            report.scan_state = dict.fromkeys(seasons)
     if report.index_entries and not dry_run:
         report.index_updated = blob_archive.update_results_index(
-            report.index_entries, expected=index, attempts=attempts, wait=wait
+            report.index_entries,
+            expected=index,
+            scan=report.scan_state,
+            attempts=attempts,
+            wait=wait,
         )
     written = [f for f in report.files if f.status == "written"]
     logger.info(
@@ -1032,3 +1231,35 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
         "" if report.ok else " (see warnings)",
     )
     return report
+
+
+def _next_scan_state(
+    report: ArchiveReport,
+    plans: list[ScanPlan],
+    fixtures: set[Fixture],
+    now: datetime,
+) -> dict[str, dict[str, Any] | None] | None:
+    """Return the scan state after a complete incremental-mode run, else None.
+
+    ``plans`` is empty outside incremental mode.
+
+    Open fixtures are those of this run without a row in their file's final
+    content (not played yet, unmatched, or waiting for a rescheduled
+    pairing's row).
+    """
+    bad = {"stale", "write-failed", "shrink-refused"}
+    if (
+        not any(plan.runs for plan in plans)
+        or report.unread
+        or any(f.status in bad for f in report.files)
+    ):
+        return None
+    done = {row["match_key"] for rows in report.contents.values() for row in rows}
+    states: dict[str, dict[str, Any] | None] = {}
+    for plan in plans:
+        still_open = [
+            f for f in fixtures if f.season == plan.season and f.key not in done
+        ]
+        if (state := scan_state(plan, still_open, now)) is not None:
+            states[plan.season] = state
+    return states or None

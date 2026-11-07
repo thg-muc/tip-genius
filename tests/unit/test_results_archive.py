@@ -680,3 +680,373 @@ def test_unreadable_prediction_file_makes_the_run_not_ok(
     report = run()
     assert report.unread == [PRED_PATH]
     assert not report.ok
+
+
+# %% incremental scan (watermark, open fixtures, full-scan fallback)
+
+DEEPSEEK = "Match_Predictions_Deepseek-Chat_FourPointsScoring_named_with-info"
+RUN_TS_2 = "2026-11-06_03-00-05"
+PRED_PATH_2 = blob_archive.predictions_pathname(RUN_TS_2, DEEPSEEK)
+
+
+def add_run(
+    fake: FakeBlob, run_ts: str, matches: dict[str, list[dict[str, Any]]]
+) -> str:
+    """Store one more live prediction file and add its run to the index."""
+    path = blob_archive.predictions_pathname(run_ts, DEEPSEEK)
+    payload = blob_archive.build_prediction_payload(matches, run_ts)
+    fake.files[path] = blob_archive.to_jsonl(payload)
+    index = json.loads(fake.files[blob_archive.INDEX_PATHNAME])
+    index = blob_archive.merge_index(
+        index, [{"run_ts": run_ts, "predictions": {"Deepseek": path}}]
+    )
+    fake.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+    return path
+
+
+def read_index(fake: FakeBlob) -> dict[str, Any]:
+    return json.loads(fake.files[blob_archive.INDEX_PATHNAME])
+
+
+def persist_scan(fake: FakeBlob, report: ra.ArchiveReport) -> None:
+    """Store the report's scan state, as ``finalize_blob_archive`` does."""
+    assert report.ok
+    assert report.scan_state
+    index = blob_archive.merge_results_scan(read_index(fake), report.scan_state)
+    fake.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+
+
+def prediction_reads(fake: FakeBlob) -> list[str]:
+    reads = [g for g in fake.gets if g.startswith("predictions/")]
+    fake.gets.clear()
+    return reads
+
+
+def season_state(report: ra.ArchiveReport) -> dict[str, Any]:
+    """Return the report's scan state for SEASON (must be set)."""
+    assert report.scan_state is not None
+    state = report.scan_state[SEASON]
+    assert state is not None
+    return state
+
+
+def run_incremental(when: datetime = NOW) -> ra.ArchiveReport:
+    return ra.update_results_archive({SEASON}, now=when, wait=0, incremental=True)
+
+
+def test_first_incremental_run_scans_fully_and_records_open_fixtures(
+    fake_blob: FakeBlob, sources: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    seed(
+        fake_blob,
+        {
+            BL: [
+                record("07.11.2026 15:30", "Bayern Munich", "Union Berlin"),
+                record("14.11.2026 15:30", "Not", "Played"),
+            ]
+        },
+    )
+    kickoff = datetime(2026, 11, 7, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(kickoff, "Bayern", "Union", (3, 0))]
+
+    with caplog.at_level(logging.INFO):
+        report = run_incremental()
+
+    assert report.ok
+    assert report.scan_modes == {SEASON: "full"}
+    assert report.files_read == 1
+    assert "read 1 prediction files" in caplog.text
+    assert "no scan state" in caplog.text
+    state = season_state(report)
+    assert state["through"] == RUN_TS
+    assert state["files"] == 1
+    assert state["full_scan_at"] == blob_archive.format_payload_ts(NOW)
+    assert state["open"] == [[BL, "2026-11-14T14:30Z", "Not", "Played"]]
+    # Written with the results entries in the same verified index update
+    assert read_index(fake_blob)[blob_archive.RESULTS_SCAN_KEY][SEASON] == state
+
+
+def test_incremental_run_reads_only_new_files_and_retries_open_fixtures(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(
+        fake_blob,
+        {
+            BL: [
+                record("07.11.2026 15:30", "Bayern Munich", "Union Berlin"),
+                record("08.11.2026 15:30", "Open", "Later"),  # no result yet
+                record("14.11.2026 15:30", "Not", "Played"),
+            ]
+        },
+    )
+    sat = datetime(2026, 11, 7, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(sat, "Bayern", "Union", (3, 0))]
+    persist_scan(fake_blob, run_incremental())
+    prediction_reads(fake_blob)
+
+    add_run(fake_blob, RUN_TS_2, {BL: [record("21.11.2026 15:30", "Next", "Week")]})
+    sun = datetime(2026, 11, 8, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(sun, "Open", "Later", (1, 1))]
+    sources["requested"].clear()
+    later = datetime(2026, 11, 15, 3, 0, tzinfo=UTC)
+
+    report = run_incremental(later)
+
+    assert report.ok
+    assert report.scan_modes == {SEASON: "incremental"}
+    assert prediction_reads(fake_blob) == [PRED_PATH_2]
+    assert report.files_read == 1
+    requested = {(f.home, f.away) for f in sources["requested"]}
+    assert requested == {("Open", "Later"), ("Not", "Played")}
+    assert [r["home_team"] for r in csv_rows(fake_blob)] == ["Bayern Munich", "Open"]
+    state = season_state(report)
+    assert state["through"] == RUN_TS_2
+    assert state["files"] == 2
+    # Not Played had no result in the sources: still open, as is next week's game
+    assert [item[2] for item in state["open"]] == ["Not", "Next"]
+    # The full scan time is kept, so the monthly full scan stays on schedule
+    assert state["full_scan_at"] == blob_archive.format_payload_ts(NOW)
+
+
+def test_unmatched_fixture_stays_open_without_rescanning(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Abandoned", "Game")]})
+    persist_scan(fake_blob, run_incremental())
+    prediction_reads(fake_blob)
+    sources["requested"].clear()
+
+    report = run_incremental(datetime(2026, 11, 13, 3, 0, tzinfo=UTC))
+
+    assert report.scan_modes == {SEASON: "incremental"}
+    assert prediction_reads(fake_blob) == []
+    assert [(f.home, f.away) for f in sources["requested"]] == [("Abandoned", "Game")]
+    assert [u.home for u in report.unmatched] == ["Abandoned"]
+    assert season_state(report)["open"][0][2] == "Abandoned"
+
+
+def test_backfill_file_for_an_old_run_forces_a_full_scan(
+    fake_blob: FakeBlob, sources: dict[str, Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    seed(fake_blob, {BL: [record("14.11.2026 15:30", "Not", "Played")]})
+    persist_scan(fake_blob, run_incremental())
+    add_run(fake_blob, RUN_TS_2, {BL: [record("21.11.2026 15:30", "Next", "Week")]})
+    # A backfill file for a run before the watermark, indexed afterwards
+    backfill = blob_archive.backfill_predictions_pathname("2026-10-30_03-00-05", "X")
+    fake_blob.files[backfill] = blob_archive.to_jsonl(
+        blob_archive.build_prediction_payload(
+            {BL: [record("01.11.2026 15:30", "Late", "Provider")]},
+            "2026-10-30 03:00:05",
+        )
+    )
+    index = blob_archive.merge_backfill_index(
+        read_index(fake_blob), {"2026-10-30_03-00-05": {"X": backfill}}
+    )
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+    prediction_reads(fake_blob)
+    sources["requested"].clear()
+
+    with caplog.at_level(logging.INFO):
+        report = run_incremental()
+
+    assert report.scan_modes == {SEASON: "full"}
+    assert "changed since the last scan" in caplog.text
+    assert sorted(prediction_reads(fake_blob)) == sorted(
+        [PRED_PATH, PRED_PATH_2, backfill]
+    )
+    assert ("Late", "Provider") in {(f.home, f.away) for f in sources["requested"]}
+    assert season_state(report)["files"] == 3
+
+
+@pytest.mark.parametrize(
+    ("state", "reason"),
+    [
+        ({"through": "garbage"}, "invalid scan state"),
+        ("not a dict", "invalid scan state"),
+        (
+            {
+                "through": RUN_TS,
+                "files": 1,
+                "digest": "x",
+                "open": [["only", "two"]],
+                "full_scan_at": "2026-11-09 03:00:00",
+            },
+            "invalid scan state",
+        ),
+        (
+            {
+                "through": RUN_TS,
+                "files": 1,
+                "digest": ra.paths_digest([PRED_PATH]),
+                "open": [],
+                "full_scan_at": "2026-10-01 03:00:00",
+            },
+            "last full scan",
+        ),
+        (
+            {
+                "through": RUN_TS,
+                "files": 1,
+                "digest": "wrong",
+                "open": [],
+                "full_scan_at": "2026-11-09 03:00:00",
+            },
+            "changed since the last scan",
+        ),
+    ],
+)
+def test_invalid_or_old_scan_state_falls_back_to_a_full_scan(
+    state: object, reason: str
+) -> None:
+    index = blob_archive.merge_index(
+        None, [{"run_ts": RUN_TS, "predictions": {"Deepseek": PRED_PATH}}]
+    )
+    index[blob_archive.RESULTS_SCAN_KEY] = {SEASON: state}
+    plan = ra.plan_scan(index, SEASON, NOW)
+    assert plan.mode == "full"
+    assert reason in plan.reason
+    assert plan.read == [PRED_PATH]
+
+
+def test_valid_scan_state_with_nothing_new_reads_no_files() -> None:
+    index = blob_archive.merge_index(
+        None, [{"run_ts": RUN_TS, "predictions": {"Deepseek": PRED_PATH}}]
+    )
+    index[blob_archive.RESULTS_SCAN_KEY] = {
+        SEASON: {
+            "through": RUN_TS,
+            "files": 1,
+            "digest": ra.paths_digest([PRED_PATH]),
+            "open": [[BL, "2026-11-14T14:30Z", "Not", "Played"]],
+            "full_scan_at": "2026-11-09 03:00:00",
+        }
+    }
+    plan = ra.plan_scan(index, SEASON, NOW)
+    assert (plan.mode, plan.read) == ("incremental", [])
+    assert [f.home for f in plan.open] == ["Not"]
+
+
+def test_unreadable_new_file_does_not_advance_the_scan_state(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("14.11.2026 15:30", "Not", "Played")]})
+    persist_scan(fake_blob, run_incremental())
+    path = add_run(fake_blob, RUN_TS_2, {BL: [record("21.11.2026 15:30", "N", "W")]})
+    body = fake_blob.files.pop(path)
+
+    report = run_incremental()
+
+    assert not report.ok
+    assert report.scan_state is None
+    # The next run (file readable again) still reads it
+    fake_blob.files[path] = body
+    prediction_reads(fake_blob)
+    report = run_incremental()
+    assert prediction_reads(fake_blob) == [path]
+    assert season_state(report)["through"] == RUN_TS_2
+
+
+def test_failed_results_write_does_not_advance_the_scan_state(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
+    kickoff = datetime(2026, 11, 7, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(kickoff, "Bayern", "Union", (3, 0))]
+    fake_blob.fail_puts[BL_PATH] = [
+        blob_archive.vercel_blob.BlobError("boom", status_code=503)
+    ] * 20
+
+    report = run_incremental()
+
+    assert report.files[0].status == "write-failed"
+    assert report.scan_state is None
+    assert blob_archive.RESULTS_SCAN_KEY not in read_index(fake_blob)
+
+
+def test_rebuild_resets_the_scan_state(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
+    persist_scan(fake_blob, run_incremental())
+    assert SEASON in read_index(fake_blob)[blob_archive.RESULTS_SCAN_KEY]
+    kickoff = datetime(2026, 11, 7, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(kickoff, "Bayern", "Union", (3, 0))]
+
+    report = run(rebuild=True)
+
+    assert report.ok
+    assert read_index(fake_blob)[blob_archive.RESULTS_SCAN_KEY] == {}
+
+
+def test_merge_results_scan_sets_and_removes_seasons() -> None:
+    index = blob_archive.merge_results_scan(None, {"2025/26": {"a": 1}, SEASON: {}})
+    index = blob_archive.merge_results_scan(index, {"2025/26": None, SEASON: {"b": 2}})
+    assert index[blob_archive.RESULTS_SCAN_KEY] == {SEASON: {"b": 2}}
+
+
+@pytest.mark.usefixtures("blob_token")
+def test_cron_step_runs_incrementally_and_finalize_stores_the_state(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("14.11.2026 15:30", "Not", "Played")]})
+    manager = StorageManager("data/match_predictions", write_to_blob=True)
+    assert manager.update_results_archive(NOW)
+    # Nothing to write, so the results step itself did not touch the index
+    assert blob_archive.RESULTS_SCAN_KEY not in read_index(fake_blob)
+    assert (manager.blob_results_scan[SEASON] or {}).get("through") == RUN_TS
+
+    manager.blob_predictions = {"Deepseek": PRED_PATH_2}
+    manager.run_ts = RUN_TS_2
+    manager.finalize_blob_archive()
+
+    stored = read_index(fake_blob)[blob_archive.RESULTS_SCAN_KEY][SEASON]
+    assert stored == manager.blob_results_scan[SEASON]
+    assert [run["run_ts"] for run in read_index(fake_blob)["runs"]] == [
+        RUN_TS,
+        RUN_TS_2,
+    ]
+
+
+def test_stale_results_csv_does_not_advance_the_scan_state(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
+    index = blob_archive.merge_results_index(
+        read_index(fake_blob), {BL_PATH: {"rows": 5, "updated_at": "x"}}
+    )
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+    fake_blob.files[BL_PATH] = ra.rows_to_csv([])  # fewer rows than indexed
+
+    report = run_incremental()
+
+    assert report.files[0].status == "stale"
+    assert report.scan_state is None
+
+
+def test_malformed_scan_section_falls_back_to_a_full_scan() -> None:
+    index = blob_archive.merge_index(
+        None, [{"run_ts": RUN_TS, "predictions": {"Deepseek": PRED_PATH}}]
+    )
+    index[blob_archive.RESULTS_SCAN_KEY] = []
+    plan = ra.plan_scan(index, SEASON, NOW)
+    assert (plan.mode, plan.read) == ("full", [PRED_PATH])
+    merged = blob_archive.merge_results_scan(index, {SEASON: {"a": 1}})
+    assert merged[blob_archive.RESULTS_SCAN_KEY] == {SEASON: {"a": 1}}
+
+
+def test_scan_reset_is_written_even_when_row_counts_are_indexed(
+    fake_blob: FakeBlob,
+) -> None:
+    index = blob_archive.merge_results_index(
+        None, {BL_PATH: {"rows": 3, "updated_at": "2026-11-09 03:00:00"}}
+    )
+    index = blob_archive.merge_results_scan(index, {SEASON: {"through": RUN_TS}})
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+
+    assert blob_archive.update_results_index(
+        {BL_PATH: {"rows": 3, "updated_at": "2026-11-10 03:00:00"}},
+        expected=index,
+        scan={SEASON: None},
+        wait=0,
+    )
+    assert read_index(fake_blob)[blob_archive.RESULTS_SCAN_KEY] == {}
