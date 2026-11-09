@@ -144,6 +144,27 @@ def test_step_reuses_the_results_step_reads(
     assert not [g for g in fake_blob.gets if "predictions/" in g]
 
 
+def test_step_still_writes_before_the_new_season_starts(
+    kv_posts: list[dict[str, Any]], fake_blob: FakeBlob
+) -> None:
+    seed(fake_blob)
+    first = StorageManager(
+        "data/match_predictions", write_to_kv=True, write_to_blob=True
+    )
+    assert first.update_dashboard_stats(["Deepseek-Chat"], now=NOW)
+    first.finalize_blob_archive()
+    kv_posts.clear()
+    manager = StorageManager(
+        "data/match_predictions", write_to_kv=True, write_to_blob=True
+    )
+    july = datetime(2027, 7, 6, 3, 0, tzinfo=UTC)
+    # 2027/28 has no prediction files yet; the JSON still covers 2026/27
+    assert manager.update_dashboard_stats(["Deepseek-Chat"], now=july)
+    data = json.loads(kv_posts[0]["data"])
+    assert data["meta"]["seasons"] == ["2026/27"]
+    assert manager.blob_stats_scan == {}
+
+
 def test_step_fails_softly(
     kv_posts: list[dict[str, Any]],
     fake_blob: FakeBlob,

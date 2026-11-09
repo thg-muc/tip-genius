@@ -859,7 +859,9 @@ def update_prediction_table(  # noqa: C901, PLR0912, PLR0913, PLR0915
     plan = plan_table_scan(index, season, now, force_full=force_full)
     report.mode, report.reason = plan.mode, plan.reason
     if not plan.runs:
+        # Summer break before the season's first run: nothing to tabulate
         logger.info("Prediction table %s: no prediction files yet", season)
+        report.contents = []
         return report
 
     expected = int(
