@@ -329,17 +329,20 @@ def quotes_from_reconstructed(body: bytes, season: str) -> list[Quote]:
         )
         try:
             kickoff = datetime.fromisoformat(row["kickoff_utc"]).astimezone(UTC)
+            league, home, away = row["league"], row["home_team"], row["away_team"]
         except (KeyError, TypeError, ValueError):
             continue
-        if odds is None or season_of(kickoff) != season:
+        if odds is None or not (league and home and away):
+            continue
+        if season_of(kickoff) != season:
             continue
         source = ODDS_LOGGED if row.get("source") == ODDS_LOGGED else ODDS_RECONSTRUCTED
         quotes.append(
             Quote(
-                row["league"],
+                league,
                 kickoff,
-                row["home_team"],
-                row["away_team"],
+                home,
+                away,
                 odds,
                 "",
                 source,
@@ -547,7 +550,7 @@ def build_rows(
                 [
                     q
                     for q in by_pairing_csv.get(pairing, [])
-                    if leg_of(legs, q.kickoff) == i or len(legs) == 1
+                    if leg_of(legs, q.kickoff) == i
                 ]
                 or None,
             )
@@ -614,22 +617,6 @@ def _leg_rows(
 # * Scan plan
 
 
-def season_runs(index: dict[str, Any], season: str, section: str) -> dict[str, str]:
-    """Map each ``odds`` (or ``predictions``) file of a season's runs to its run_ts."""
-    start = season_start(season)
-    window = (start - RUN_LOOKBACK, start.replace(year=start.year + 1))
-    runs: dict[str, str] = {}
-    for run in index.get("runs", []):
-        try:
-            moment = parse_run_ts(run["run_ts"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        if window[0] <= moment < window[1]:
-            for path in run.get(section, {}).values():
-                runs[path] = min(run["run_ts"], runs.get(path, run["run_ts"]))
-    return runs
-
-
 def newest_reconstructed(index: dict[str, Any], season: str) -> str | None:
     """Return the current reconstructed odds CSV if it can cover ``season``.
 
@@ -663,6 +650,8 @@ class TablePlan:
     all_odds: bool = False
     reconstructed: str | None = None
     full_scan_at: str = ""
+    # Files a previous run could not read (read again this run)
+    retry: list[str] = field(default_factory=list)
 
     @property
     def through(self) -> str:
@@ -682,14 +671,15 @@ def plan_table_scan(  # noqa: C901
     The season's state in ``index.json`` (``stats_scan``) holds ``through``
     (newest run_ts read), ``files``/``digest`` and ``odds_files``/``odds_digest``
     (count and SHA-256 of the prediction and odds files up to ``through``),
-    ``reconstructed`` (the CSV used) and ``full_scan_at``. An incremental run
-    reads only files newer than ``through``. A full scan (``force_full``
+    ``reconstructed`` (the CSV used), ``retry`` (files a previous run could not
+    read) and ``full_scan_at``. An incremental run reads only files newer than
+    ``through`` plus ``retry``. A full scan (``force_full``
     gives the reason, e.g. the results step scanned fully) reads every
     prediction file; it re-reads every odds file only if the odds files up
     to ``through`` changed.
     """
     runs = results_archive.prediction_runs(index, {season})
-    odds = season_runs(index, season, "odds")
+    odds = results_archive.season_runs(index, {season}, "odds")
     reconstructed = newest_reconstructed(index, season)
 
     def plan(mode: str, reason: str, state: dict[str, Any] | None = None) -> TablePlan:
@@ -700,8 +690,9 @@ def plan_table_scan(  # noqa: C901
             all_odds = len(scanned) != state.get("odds_files") or paths_digest(
                 scanned
             ) != state.get("odds_digest")
-        new = [p for p, ts in runs.items() if ts > through]
-        new_odds = [p for p, ts in odds.items() if ts > through]
+        retry = list((state or {}).get("retry", []))
+        new = [p for p, ts in runs.items() if ts > through or p in retry]
+        new_odds = [p for p, ts in odds.items() if ts > through or p in retry]
         return TablePlan(
             season,
             "full" if mode == "rebuild" else mode,
@@ -713,6 +704,7 @@ def plan_table_scan(  # noqa: C901
             all_odds=all_odds,
             reconstructed=reconstructed,
             full_scan_at=str((state or {}).get("full_scan_at", "")),
+            retry=retry,
         )
 
     states = index.get(blob_archive.STATS_SCAN_KEY, {})
@@ -728,6 +720,10 @@ def plan_table_scan(  # noqa: C901
         files, digest = int(state["files"]), str(state["digest"])
         int(state["odds_files"])
         str(state["odds_digest"])
+        retry = state.get("retry", [])
+        if not isinstance(retry, list) or not all(isinstance(p, str) for p in retry):
+            msg = f"bad retry list {retry!r}"
+            raise TypeError(msg)
     except (KeyError, TypeError, ValueError) as exc:
         return plan("rebuild", f"invalid scan state ({exc!r})")
     if state.get("reconstructed") != reconstructed:
@@ -747,8 +743,14 @@ def plan_table_scan(  # noqa: C901
     return plan("incremental", f"after {through}", state)
 
 
-def table_state(plan: TablePlan, now: datetime) -> dict[str, Any]:
-    """Return the scan state to store after ``plan`` went through completely."""
+def table_state(
+    plan: TablePlan, now: datetime, retry: Iterable[str] = ()
+) -> dict[str, Any]:
+    """Return the scan state to store after ``plan`` was carried out.
+
+    ``retry`` lists the files this run could not read; the next run reads
+    them again instead of scanning the whole season.
+    """
     through = plan.through
     files = [p for p, ts in plan.runs.items() if ts <= through]
     odds = [p for p, ts in plan.odds.items() if ts <= through]
@@ -762,6 +764,7 @@ def table_state(plan: TablePlan, now: datetime) -> dict[str, Any]:
         "odds_files": len(odds),
         "odds_digest": paths_digest(odds),
         "reconstructed": plan.reconstructed,
+        "retry": sorted(set(retry)),
         "full_scan_at": full_scan_at,
         "updated_at": blob_archive.format_payload_ts(now),
     }
@@ -791,6 +794,7 @@ class TableReport:
     # Rows to compute statistics from (verified Blob content or dry-run result)
     contents: list[dict[str, str]] | None = None
     index_entry: dict[str, Any] | None = None
+    # State to store (also after unread files, which it lists under retry)
     scan_state: dict[str, Any] | None = None
 
     @property
@@ -877,6 +881,12 @@ def update_prediction_table(  # noqa: C901, PLR0912, PLR0913, PLR0915
         logger.warning("%s has unreadable rows (%r), not touching it", pathname, exc)
         report.status = "aborted"
         return report
+    if not existing and plan.mode == "incremental" and plan.through:
+        # The table is gone although the state says it was built: rebuild it
+        # from every file rather than from the new ones only
+        plan.mode, plan.reason = "full", "table missing"
+        plan.read = sorted(plan.runs)
+        report.mode, report.reason = plan.mode, plan.reason
     if not existing and not plan.all_odds:
         # A missing table cannot carry odds over: read them all
         plan.read_odds = sorted(plan.odds)
@@ -915,7 +925,9 @@ def update_prediction_table(  # noqa: C901, PLR0912, PLR0913, PLR0915
     report.odds_read = len(plan.read_odds)
 
     csv_quotes = None
-    if plan.reconstructed and (rebuild or plan.all_odds or not existing):
+    if plan.reconstructed and (
+        rebuild or plan.all_odds or not existing or plan.reconstructed in plan.retry
+    ):
         try:
             csv_quotes = quotes_from_reconstructed(
                 fetch_bytes(plan.reconstructed), season
@@ -985,6 +997,8 @@ def update_prediction_table(  # noqa: C901, PLR0912, PLR0913, PLR0915
         report.status = "write-failed"
         report.contents = existing
         return report
-    if not report.unread and not dry_run:
-        report.scan_state = table_state(plan, now)
+    if not dry_run:
+        # Unread files are retried next run (see plan_table_scan); the state
+        # still advances so a lasting failure never forces full scans
+        report.scan_state = table_state(plan, now, report.unread)
     return report

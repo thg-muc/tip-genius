@@ -593,32 +593,47 @@ def prediction_runs(index: dict[str, Any], seasons: set[str]) -> dict[str, str]:
     Same selection as ``prediction_pathnames``; backfill files carry the
     ``run_ts`` of the past run they were generated for.
     """
-    windows = [
-        (season_start(s) - RUN_LOOKBACK, season_start(s).replace(year=int(s[:4]) + 1))
-        for s in seasons
-    ]
-
-    def wanted(run_ts: str) -> bool:
-        try:
-            moment = datetime.strptime(run_ts, blob_archive.RUN_TS_FORMAT).replace(
-                tzinfo=UTC
-            )
-        except ValueError:
-            return False
-        return any(start <= moment < end for start, end in windows)
-
-    runs: dict[str, str] = {}
-
-    def add(run_ts: str, paths: Iterable[str]) -> None:
-        for path in paths:
-            runs[path] = min(run_ts, runs.get(path, run_ts))
-
-    for run in index.get("runs", []):
-        if wanted(run["run_ts"]):
-            add(run["run_ts"], run.get("predictions", {}).values())
+    runs = season_runs(index, seasons, "predictions")
     for run_ts, files in index.get(blob_archive.BACKFILL_KEY, {}).items():
-        if wanted(run_ts):
-            add(run_ts, files.values())
+        if run_in_seasons(run_ts, seasons):
+            for path in files.values():
+                runs[path] = min(run_ts, runs.get(path, run_ts))
+    return runs
+
+
+def run_in_seasons(run_ts: str, seasons: set[str]) -> bool:
+    """Whether a run can hold fixtures of ``seasons``.
+
+    True if its timestamp falls in a season or up to ``RUN_LOOKBACK`` before
+    its start.
+    """
+    try:
+        moment = datetime.strptime(run_ts, blob_archive.RUN_TS_FORMAT).replace(
+            tzinfo=UTC
+        )
+    except (TypeError, ValueError):
+        return False
+    return any(
+        season_start(s) - RUN_LOOKBACK
+        <= moment
+        < season_start(s).replace(year=int(s[:4]) + 1)
+        for s in seasons
+    )
+
+
+def season_runs(
+    index: dict[str, Any], seasons: set[str], section: str
+) -> dict[str, str]:
+    """Map each file of a run section (``predictions``, ``odds``) to its run_ts.
+
+    Only live runs that can hold ``seasons``; the earliest ``run_ts`` wins.
+    """
+    runs: dict[str, str] = {}
+    for run in index.get("runs", []):
+        run_ts = run.get("run_ts", "")
+        if run_in_seasons(run_ts, seasons):
+            for path in run.get(section, {}).values():
+                runs[path] = min(run_ts, runs.get(path, run_ts))
     return runs
 
 

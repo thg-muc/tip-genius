@@ -400,7 +400,7 @@ def plan_tasks(
     for fixture in fixtures:
         if season_of(fixture.kickoff) != season:
             continue
-        # As eval_providers.last_before_kickoff: before the offered and the
+        # As kv_snapshots.last_before_kickoff: before the offered and the
         # final kickoff (a match moved earlier makes later offers stale)
         final_kickoff = fixture.kickoff
         pre_kickoff = [

@@ -292,7 +292,7 @@ def main() -> None:
         }
         states: dict[str, dict[str, Any] | None] = {}
         for season, report in inputs.tables.items():
-            if report.ok and report.scan_state:
+            if report.scan_state:
                 states[season] = report.scan_state
         if entries or states:
             updated = blob_archive.update_stats_index(

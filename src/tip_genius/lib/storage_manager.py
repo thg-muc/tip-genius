@@ -413,8 +413,9 @@ class StorageManager:
             table = inputs.tables[season]
             if table.index_entry:
                 self.blob_stats[table.pathname] = table.index_entry
-            if table.ok and table.scan_state:
-                # Only a complete run advances the scan state
+            if table.scan_state:
+                # Set only after the table is in Blob as computed; files it
+                # could not read are listed for a retry
                 self.blob_stats_scan[season] = table.scan_state
             logger.info(
                 "Dashboard stats: table %s %s, %d prediction files downloaded this "
@@ -425,6 +426,12 @@ class StorageManager:
                 table.odds_read,
                 inputs.reads,
             )
+            if table.unread:
+                logger.warning(
+                    "Prediction table %s: %d files unread, retried next run",
+                    season,
+                    len(table.unread),
+                )
             if inputs.table_rows.get(season) is None or inputs.unread:
                 logger.warning(
                     "Dashboard stats not updated: unreadable %s",

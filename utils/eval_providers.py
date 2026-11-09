@@ -363,7 +363,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--from-season",
         default=st.FROM_SEASON,
-        help="first season to include (default %(default)s)",
+        help="first season to include, not before %(default)s (default)",
     )
     parser.add_argument(
         "--include-backfill",
@@ -384,6 +384,11 @@ def main() -> None:
     for name in ("httpx", "httpx2"):
         logging.getLogger(name).setLevel(logging.WARNING)
     args = parse_args()
+    if args.from_season < st.FROM_SEASON:
+        sys.exit(
+            f"The Blob prediction tables start with {st.FROM_SEASON}; older seasons "
+            "(local snapshots) are not part of this backtest any more"
+        )
     load_dotenv(args.env_file)
     cache = EtagCache(args.cache_dir / "blob", offline=args.offline)
     now = datetime.now(tz=UTC)

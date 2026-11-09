@@ -367,7 +367,7 @@ def test_dry_run_writes_nothing(fake_blob: FakeBlob) -> None:
     assert TABLE not in fake_blob.files
 
 
-def test_unreadable_file_keeps_state(fake_blob: FakeBlob) -> None:
+def test_unreadable_file_is_retried_without_a_full_scan(fake_blob: FakeBlob) -> None:
     seed_two_runs(fake_blob)
     missing = blob_archive.predictions_pathname(
         ts(at(5)), f"Match_Predictions_X{SUFFIX}"
@@ -376,8 +376,36 @@ def test_unreadable_file_keeps_state(fake_blob: FakeBlob) -> None:
     report = update(fake_blob)
     assert report.unread == [missing]
     assert report.status == "written"
-    assert report.scan_state is None
     assert not report.ok
+    # The state advances and lists the file for the next run
+    assert report.scan_state is not None
+    assert report.scan_state["retry"] == [missing]
+    store_state(fake_blob, report)
+    prediction_file(fake_blob, "X", at(5), [(at(7, 15), "Bayern", "Köln", 0, 3)])
+    fake_blob.gets.clear()
+    again = update(fake_blob)
+    assert (again.mode, again.files_read) == ("incremental", 1)
+    assert file_gets(fake_blob, "predictions/") == [missing]
+    assert again.rows == 2
+    assert again.scan_state is not None
+    assert again.scan_state["retry"] == []
+
+
+def test_missing_table_with_state_rebuilds_from_every_file(fake_blob: FakeBlob) -> None:
+    seed_two_runs(fake_blob)
+    report = update(fake_blob)
+    report.index_entry = None  # the table entry got lost, the state survived
+    index = blob_archive.merge_results_scan(
+        blob_archive.read_index(),
+        {SEASON: report.scan_state},
+        key=blob_archive.STATS_SCAN_KEY,
+    )
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+    del fake_blob.files[TABLE]
+    again = update(fake_blob)
+    assert (again.mode, again.reason, again.files_read) == ("full", "table missing", 2)
+    assert again.status == "written"
+    assert again.odds_read == 2
 
 
 def test_write_failure_is_soft(fake_blob: FakeBlob) -> None:

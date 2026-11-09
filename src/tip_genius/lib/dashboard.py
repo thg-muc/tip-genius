@@ -108,7 +108,8 @@ class DashboardInputs:
     result_rows: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     # Overwritten files read (fresh reads count as two simple operations)
     reads: int = 0
-    # Files that could not be read
+    # Tables and results CSVs that could not be read (the updated tables'
+    # unread prediction/odds files are in their reports)
     unread: list[str] = field(default_factory=list)
 
     def all_table_rows(self) -> list[dict[str, str]]:
@@ -185,7 +186,6 @@ def collect_inputs(  # noqa: PLR0913
             inputs.tables[season] = report
             inputs.table_rows[season] = report.contents
             inputs.reads += 0 if rebuild else 2
-            inputs.unread.extend(report.unread)
         else:
             expected = int(indexed_tables.get(pathname, {}).get("rows", 0))
             if pathname not in indexed_tables:
