@@ -117,7 +117,7 @@ def eval_logo_matching() -> None:
 
         # Value count for similarity scores
         bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        labels = [f"{bins[i]}-{bins[i+1]}%" for i in range(len(bins) - 1)]
+        labels = [f"{bins[i]}-{bins[i + 1]}%" for i in range(len(bins) - 1)]
 
         counts = defaultdict(int)
 
@@ -127,7 +127,7 @@ def eval_logo_matching() -> None:
 
         # Value count for similarity scores
         bins = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
-        labels = [f"{bins[i]}-{bins[i+1]}%" for i in range(len(bins) - 1)]
+        labels = [f"{bins[i]}-{bins[i + 1]}%" for i in range(len(bins) - 1)]
 
         counts = defaultdict(int)
 
