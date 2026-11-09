@@ -593,32 +593,47 @@ def prediction_runs(index: dict[str, Any], seasons: set[str]) -> dict[str, str]:
     Same selection as ``prediction_pathnames``; backfill files carry the
     ``run_ts`` of the past run they were generated for.
     """
-    windows = [
-        (season_start(s) - RUN_LOOKBACK, season_start(s).replace(year=int(s[:4]) + 1))
-        for s in seasons
-    ]
-
-    def wanted(run_ts: str) -> bool:
-        try:
-            moment = datetime.strptime(run_ts, blob_archive.RUN_TS_FORMAT).replace(
-                tzinfo=UTC
-            )
-        except ValueError:
-            return False
-        return any(start <= moment < end for start, end in windows)
-
-    runs: dict[str, str] = {}
-
-    def add(run_ts: str, paths: Iterable[str]) -> None:
-        for path in paths:
-            runs[path] = min(run_ts, runs.get(path, run_ts))
-
-    for run in index.get("runs", []):
-        if wanted(run["run_ts"]):
-            add(run["run_ts"], run.get("predictions", {}).values())
+    runs = season_runs(index, seasons, "predictions")
     for run_ts, files in index.get(blob_archive.BACKFILL_KEY, {}).items():
-        if wanted(run_ts):
-            add(run_ts, files.values())
+        if run_in_seasons(run_ts, seasons):
+            for path in files.values():
+                runs[path] = min(run_ts, runs.get(path, run_ts))
+    return runs
+
+
+def run_in_seasons(run_ts: str, seasons: set[str]) -> bool:
+    """Whether a run can hold fixtures of ``seasons``.
+
+    True if its timestamp falls in a season or up to ``RUN_LOOKBACK`` before
+    its start.
+    """
+    try:
+        moment = datetime.strptime(run_ts, blob_archive.RUN_TS_FORMAT).replace(
+            tzinfo=UTC
+        )
+    except (TypeError, ValueError):
+        return False
+    return any(
+        season_start(s) - RUN_LOOKBACK
+        <= moment
+        < season_start(s).replace(year=int(s[:4]) + 1)
+        for s in seasons
+    )
+
+
+def season_runs(
+    index: dict[str, Any], seasons: set[str], section: str
+) -> dict[str, str]:
+    """Map each file of a run section (``predictions``, ``odds``) to its run_ts.
+
+    Only live runs that can hold ``seasons``; the earliest ``run_ts`` wins.
+    """
+    runs: dict[str, str] = {}
+    for run in index.get("runs", []):
+        run_ts = run.get("run_ts", "")
+        if run_in_seasons(run_ts, seasons):
+            for path in run.get(section, {}).values():
+                runs[path] = min(run_ts, runs.get(path, run_ts))
     return runs
 
 
@@ -888,20 +903,24 @@ def read_rows_guarded(
     *,
     attempts: int = blob_archive.INDEX_VERIFY_ATTEMPTS,
     wait: float = blob_archive.INDEX_VERIFY_WAIT_SECONDS,
+    parse: Callable[[bytes], list[dict[str, str]]] | None = None,
 ) -> list[dict[str, str]] | None:
     """Read a results CSV fresh; None if it stays shorter than the index says.
 
     A missing file counts as zero rows. A read with fewer rows than
     ``expected_rows`` (from ``index.json``) is stale: it is retried up to
     ``attempts`` times, then given up, so nothing is written from it.
-    Read errors are retried the same way. Never raises.
+    Read errors are retried the same way. Never raises. ``parse`` reads
+    other CSVs (default ``rows_from_csv``; it raises ValueError on a bad
+    header).
     """
+    parse = parse or rows_from_csv
     for attempt in range(1, attempts + 1):
         if attempt > 1:
             time.sleep(wait)
         try:
             body = blob_archive.read_fresh(pathname)
-            rows = [] if body is None else rows_from_csv(body)
+            rows = [] if body is None else parse(body)
         except ValueError:
             logger.warning("%s has an unexpected format, not touching it", pathname)
             return None
@@ -929,20 +948,28 @@ def read_rows_guarded(
     return None
 
 
-def write_rows_verified(
+def write_rows_verified(  # noqa: PLR0913
     pathname: str,
     rows: list[dict[str, str]],
     *,
     attempts: int = blob_archive.INDEX_VERIFY_ATTEMPTS,
     wait: float = blob_archive.INDEX_VERIFY_WAIT_SECONDS,
+    serialize: Callable[[list[dict[str, str]]], bytes] | None = None,
+    parse: Callable[[bytes], list[dict[str, str]]] | None = None,
+    row_key: Callable[[dict[str, str]], object] | None = None,
 ) -> bool:
     """Overwrite a results CSV and read it back until every row shows.
 
     Each attempt puts the full file (idempotent) and reads it back fresh;
     success needs every ``match_key`` of ``rows``. Never raises.
+    ``serialize``, ``parse`` and ``row_key`` (what must show in the
+    read-back) adapt it to other CSVs.
     """
-    body = rows_to_csv(rows)
-    wanted = {row["match_key"] for row in rows}
+    serialize = serialize or rows_to_csv
+    parse = parse or rows_from_csv
+    row_key = row_key or (lambda row: row["match_key"])
+    body = serialize(rows)
+    wanted = {row_key(row) for row in rows}
     for attempt in range(1, attempts + 1):
         if attempt > 1:
             time.sleep(wait)
@@ -956,7 +983,7 @@ def write_rows_verified(
             continue
         try:
             check = blob_archive.read_fresh(pathname)
-            seen = {r["match_key"] for r in rows_from_csv(check)} if check else set()
+            seen = {row_key(r) for r in parse(check)} if check else set()
         except Exception as e:
             logger.warning("Could not read back %s: %s", pathname, e)
             seen = set()
@@ -1005,6 +1032,8 @@ class ArchiveReport:
     contents: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     # Set when the update stopped before looking at any file
     aborted: str | None = None
+    # The index.json read at the start (lets the stats step skip a re-read)
+    index: dict[str, Any] | None = None
     # Prediction files read, and how they were chosen per season
     files_read: int = 0
     scan_modes: dict[str, str] = field(default_factory=dict)
@@ -1082,6 +1111,7 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
     report = ArchiveReport()
 
     index = blob_archive.read_index(fresh=True)
+    report.index = index
     indexed = index.get(blob_archive.RESULTS_KEY, {})
     plans: list[ScanPlan] = []
     if incremental and not rebuild:

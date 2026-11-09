@@ -2,30 +2,28 @@
 
 Scores every provider's past predictions with Kicktipp four-points scoring
 (4 exact result, 3 correct goal difference, 2 correct tendency, 0 otherwise;
-a draw with the wrong score is a tendency hit worth 2).
+a draw with the wrong score is a tendency hit worth 2), using ``lib/stats.py``,
+the same code that computes the dashboard statistics.
 
-Predictions come from the timestamped snapshots in Vercel/Upstash KV
-(read-only token) plus, for the period before KV history starts, the local
-copies in ``data/match_predictions/``. For each match the last snapshot taken
-before kickoff is used. Final scores come from openligadb.de (Bundesliga) and
-ESPN's public scoreboard (all other leagues). HTTP responses are cached on
-disk so reruns are fast. Nothing is written to KV or to the repository.
+Reads only Vercel Blob (``BLOB_READ_WRITE_TOKEN``): the prediction tables
+(``stats/predictions_<season>.csv``, one row per fixture and provider with the
+last prediction before kickoff and the odds) and the results CSVs
+(``results/``), joined on ``match_key``. Downloads are cached on disk and
+re-used while a HEAD shows the same etag (``--offline`` skips the HEADs).
+Nothing is written to Blob, KV or the repository.
 
-A reliability table shows how many offered matches each provider actually
-predicted. The workflow drops failed or invalid LLM answers, so they show up
-as gaps in the snapshots.
-
-``--include-backfill`` also reads the predictions that
-``utils/backfill_llm_predictions.py`` generated after the fact for past runs
-(Blob ``backfill_predictions``, needs ``BLOB_READ_WRITE_TOKEN``) and prints
-them in separate "incl. backfill" tables. The live ranking above them never
-contains backfilled predictions.
+The main tables are the live ranking (predictions made before kickoff by the
+workflow). ``--include-backfill`` adds "incl. backfill" tables with the
+predictions ``utils/backfill_llm_predictions.py`` generated after the fact for
+late-joining providers. Baseline rows (``Odds-Favourite``, ``Always-2:1``,
+``Consensus``) appear in every table. A reliability table shows how many
+offered matches each provider actually predicted.
 
 Usage::
 
     uv run python utils/eval_providers.py --env-file /path/to/.env.local
     uv run python utils/eval_providers.py --league Bundesliga --season 2026/27
-    uv run python utils/eval_providers.py --env-file ... --include-backfill
+    uv run python utils/eval_providers.py --include-backfill --offline
 """
 
 # * Author(s): Thomas Glanzer
@@ -38,338 +36,123 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import logging
-import os
-import re
 import sys
 import tempfile
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import quote
 
-import requests
+import yaml
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "tip_genius"))
-from lib import blob_archive, results_archive  # noqa: E402
-from lib.results_archive import (  # noqa: E402
-    BERLIN,
-    BUNDESLIGA,
-    NAME_STOPWORDS,
-    HttpCache,
-    Result,
-    espn_regular_time,
-    espn_results,
-    kicktipp_points,
-    normalize_team,
-    openligadb_results,
-    season_of,
-    team_similarity,
-)
+from lib import blob_archive, dashboard, prediction_table, results_archive  # noqa: E402
+from lib import stats as st  # noqa: E402
+from lib.results_archive import BUNDESLIGA  # noqa: E402
 
-# Shared with the results archive; re-exported for existing callers
-__all__ = [
-    "NAME_STOPWORDS",
-    "HttpCache",
-    "espn_regular_time",
-    "espn_results",
-    "kicktipp_points",
-    "normalize_team",
-    "openligadb_results",
-    "team_similarity",
-]
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 # %% --------------------------------------------
 # * Constants
 
 REPO_ROOT = Path(__file__).parents[1]
-KEY_PATTERN = re.compile(
-    r"^(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_Match_Predictions_(.+)"
-    r"_FourPointsScoring_named_with-info(?:\.jsonl)?$"
-)
-# 2024/25 is incomplete (no reasoning texts, partial history) and not needed
-DEFAULT_FROM_SEASON = "2025/26"
-# Providers currently offered in the frontend (public/js/main.js LLM_PROVIDERS)
-CURRENT_PROVIDERS = [
-    "Deepseek-Chat",
-    "Google-Gemma-Medium",
-    "OpenRouter-GPT-OSS-Large",
-    "Nvidia-Nemotron-Lightning",
-    "Mistral-Ministral",
-    "Meta-Llama-Mid",
-    "Microsoft-Phi-Medium",
-]
-MATCHDAY_BREAK = timedelta(days=3)
+CONFIG_PATH = REPO_ROOT / "src" / "tip_genius" / "cfg" / "tip_genius_config.yaml"
+DEFAULT_CACHE_DIR = Path(tempfile.gettempdir()) / "tip-genius-eval-cache"
 
 
 # %% --------------------------------------------
-# * Data structures
+# * Blob reads with an etag cache
 
 
-@dataclass(frozen=True)
-class Prediction:
-    """One provider prediction for one match taken from one snapshot."""
+class EtagCache:
+    """Disk cache for files that are overwritten in place (index, CSVs).
 
-    provider: str
-    snapshot: datetime
-    league: str
-    kickoff: datetime
-    home: str
-    away: str
-    home_goals: int
-    away_goals: int
-    reasoning: str = ""
-
-
-@dataclass(frozen=True)
-class Row:
-    """One fixture offered to one provider; points is None if it gave no tip."""
-
-    provider: str
-    league: str
-    fixture: tuple[str, str]
-    kickoff: datetime
-    matchday: str
-    points: int | None
-    tip: tuple[int, int] | None = None
-
-
-@dataclass
-class Score:
-    """Aggregated points for one provider; missing tips score 0."""
-
-    offered: int = 0
-    tipped: int = 0
-    points: int = 0
-    exact: int = 0
-    goal_diff: int = 0
-    tendency: int = 0
-    squares: int = 0
-    two_one: int = 0
-    matchdays: set[str] = field(default_factory=set)
-
-    def add(
-        self, points: int | None, matchday: str, tip: tuple[int, int] | None = None
-    ) -> None:
-        """Count one offered match (points None = no tip given)."""
-        self.offered += 1
-        self.matchdays.add(matchday)
-        self.two_one += tip == (2, 1)
-        if points is None:
-            return
-        self.tipped += 1
-        self.points += points
-        self.squares += points * points
-        self.exact += points == 4  # noqa: PLR2004
-        self.goal_diff += points >= 3  # noqa: PLR2004
-        self.tendency += points >= 2  # noqa: PLR2004
-
-    @property
-    def std_error(self) -> float:
-        """Standard error of the average points per offered match."""
-        if self.offered < 2:  # noqa: PLR2004
-            return 0.0
-        mean = self.points / self.offered
-        variance = (self.squares - self.offered * mean * mean) / (self.offered - 1)
-        return (max(variance, 0.0) / self.offered) ** 0.5
-
-
-# %% --------------------------------------------
-# * Helpers
-
-
-# %% --------------------------------------------
-# * Loading predictions
-
-
-def kv_command(url: str, token: str, *args: str) -> object:
-    """Run one read-only Upstash REST command."""
-    response = requests.post(
-        url,
-        headers={"Authorization": f"Bearer {token}"},
-        json=list(args),
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["result"]
-
-
-def load_kv_snapshots() -> dict[tuple[datetime, str], list[dict]]:
-    """Load all timestamped prediction snapshots from KV."""
-    url = os.environ["KV_REST_API_URL"]
-    token = (
-        os.environ.get("KV_REST_API_READ_ONLY_TOKEN") or os.environ["KV_REST_API_TOKEN"]
-    )
-    keys: list[str] = []
-    cursor = "0"
-    while True:
-        result = kv_command(url, token, "SCAN", cursor, "COUNT", "1000")
-        cursor, batch = result  # type: ignore[misc]
-        keys.extend(batch)
-        if cursor == "0":
-            break
-    keys = sorted(k for k in keys if KEY_PATTERN.match(k))
-    snapshots: dict[tuple[datetime, str], list[dict]] = {}
-    for start in range(0, len(keys), 25):
-        batch = keys[start : start + 25]
-        values = kv_command(url, token, "MGET", *batch)
-        for key, value in zip(batch, values, strict=True):  # type: ignore[arg-type]
-            if value is None:
-                continue
-            match = KEY_PATTERN.match(key)
-            assert match  # noqa: S101
-            stamp = datetime.strptime(match[1], "%Y-%m-%d_%H-%M-%S").replace(tzinfo=UTC)
-            snapshots[stamp, match[2]] = json.loads(value)
-    logger.info("Loaded %d snapshots from KV", len(snapshots))
-    return snapshots
-
-
-def load_local_snapshots(
-    directory: Path, before: datetime
-) -> dict[tuple[datetime, str], list[dict]]:
-    """Load local jsonl snapshots taken before the first KV snapshot."""
-    snapshots: dict[tuple[datetime, str], list[dict]] = {}
-    if not directory.is_dir():
-        return snapshots
-    for path in sorted(directory.glob("20*.jsonl")):
-        match = KEY_PATTERN.match(path.name)
-        if not match:
-            continue
-        stamp = datetime.strptime(match[1], "%Y-%m-%d_%H-%M-%S").replace(tzinfo=UTC)
-        if stamp >= before:
-            continue
-        lines = path.read_text().splitlines()
-        snapshots[stamp, match[2]] = [json.loads(line) for line in lines if line]
-    logger.info("Loaded %d local snapshots from %s", len(snapshots), directory)
-    return snapshots
-
-
-def load_backfill_snapshots() -> dict[tuple[datetime, str], list[dict]]:
-    """Load backfilled predictions from the Blob archive (``backfill_predictions``).
-
-    Keyed like KV snapshots by the original run's timestamp. These were
-    generated after the fact; keep them out of the live ranking.
+    Each read sends one HEAD (simple operation) and downloads the file only
+    if its etag changed; ``offline`` uses the cached copy without a HEAD.
     """
-    reader = blob_archive.BlobArchiveReader()
-    snapshots: dict[tuple[datetime, str], list[dict]] = {}
-    # Fresh read: a cached index can lag behind a backfill that just ran
-    backfill = blob_archive.read_index(fresh=True).get(blob_archive.BACKFILL_KEY, {})
-    for files in backfill.values():
-        for pathname in files.values():
-            match = KEY_PATTERN.match(
-                pathname.removeprefix(blob_archive.BACKFILL_PREFIX)
+
+    def __init__(self, directory: Path, *, offline: bool = False) -> None:
+        """Create the cache in ``directory``."""
+        self.directory = directory
+        self.offline = offline
+        self.heads = 0
+        self.downloads = 0
+
+    def read(self, pathname: str) -> bytes | None:
+        """Return the file's content; None if it does not exist."""
+        body_path = self.directory / pathname
+        etag_path = body_path.with_name(body_path.name + ".etag")
+        if self.offline:
+            return body_path.read_bytes() if body_path.is_file() else None
+        self.heads += 1
+        try:
+            head = blob_archive.vercel_blob.head_blob(pathname)
+        except blob_archive.vercel_blob.BlobNotFoundError:
+            return None
+        if (
+            body_path.is_file()
+            and etag_path.is_file()
+            and etag_path.read_text() == head.etag
+        ):
+            return body_path.read_bytes()
+        self.downloads += 1
+        target = f"{head.url}?etag={quote(head.etag, safe='')}"
+        body = blob_archive.vercel_blob.get_blob(target, access="private").body
+        body_path.parent.mkdir(parents=True, exist_ok=True)
+        body_path.write_bytes(body)
+        etag_path.write_text(head.etag)
+        return body
+
+
+def active_models() -> list[str]:
+    """Return the providers the workflow runs (``llm_provider_options``)."""
+    with CONFIG_PATH.open(encoding="utf-8") as handle:
+        return list(yaml.safe_load(handle)["llm_provider_options"])
+
+
+def load_archive(
+    cache: EtagCache, seasons: list[str]
+) -> tuple[list[st.TableTip], dict[str, tuple[int, int]]]:
+    """Read the prediction tables and results CSVs of ``seasons``."""
+    raw_index = cache.read(blob_archive.INDEX_PATHNAME)
+    if raw_index is None:
+        sys.exit("index.json not found (or not cached with --offline)")
+    index = json.loads(raw_index)
+    rows: list[dict[str, str]] = []
+    result_rows: list[dict[str, str]] = []
+    for season in seasons:
+        pathname = prediction_table.table_pathname(season)
+        body = cache.read(pathname) if pathname in index.get("stats", {}) else None
+        if body is None:
+            logger.warning(
+                "No prediction table %s (run utils/backfill_stats.py)", pathname
             )
-            if not match:
-                continue
-            stamp = datetime.strptime(match[1], "%Y-%m-%d_%H-%M-%S").replace(tzinfo=UTC)
-            snapshots[stamp, match[2]] = reader.fetch_jsonl(pathname)
-    logger.info("Loaded %d backfill snapshots from Blob", len(snapshots))
-    return snapshots
-
-
-def canonical_provider(name: str, counts: dict[str, int]) -> str:
-    """Map case variants (e.g. meta-llama-70b) to the most used spelling."""
-    variants = [c for c in counts if c.lower() == name.lower()]
-    return max(variants, key=lambda c: counts[c])
-
-
-def flatten(snapshots: dict[tuple[datetime, str], list[dict]]) -> list[Prediction]:
-    """Turn snapshots into a flat list of predictions."""
-    counts: dict[str, int] = defaultdict(int)
-    for _, provider in snapshots:
-        counts[provider] += 1
-    predictions = []
-    for (stamp, provider), leagues in snapshots.items():
-        name = canonical_provider(provider, counts)
-        for league in leagues:
-            for match in league.get("matches", []):
-                try:
-                    kickoff = (
-                        datetime.strptime(match["commence_time_str"], "%d.%m.%Y %H:%M")
-                        .replace(tzinfo=BERLIN)
-                        .astimezone(UTC)
-                    )
-                    home_goals = int(match["prediction_home"])
-                    away_goals = int(match["prediction_away"])
-                except (KeyError, TypeError, ValueError):
-                    continue
-                predictions.append(
-                    Prediction(
-                        name,
-                        stamp,
-                        league["name"],
-                        kickoff,
-                        match["home_team"],
-                        match["away_team"],
-                        home_goals,
-                        away_goals,
-                        match.get("reasoning") or "",
-                    )
-                )
-    return predictions
-
-
-def last_before_kickoff(predictions: list[Prediction]) -> list[Prediction]:
-    """Keep, per provider and fixture, the last snapshot taken before kickoff.
-
-    A fixture is identified by league, teams and season so that rescheduled
-    kickoffs collapse into one entry; the kickoff from the newest snapshot wins.
-    """
-    groups: dict[tuple, list[Prediction]] = defaultdict(list)
-    for pred in predictions:
-        season = season_of(pred.kickoff)
-        key = (pred.provider, pred.league, pred.home, pred.away, season)
-        groups[key].append(pred)
-    selected = []
-    for group in groups.values():
-        latest_kickoff = max(group, key=lambda p: p.snapshot).kickoff
-        valid = [p for p in group if p.snapshot < min(p.kickoff, latest_kickoff)]
-        if valid:
-            selected.append(max(valid, key=lambda p: p.snapshot))
-    return selected
-
-
-# %% --------------------------------------------
-# * Loading results
-
-
-def as_fixture(pred: Prediction) -> results_archive.Fixture:
-    """Return the archive fixture of a prediction."""
-    return results_archive.Fixture(pred.league, pred.kickoff, pred.home, pred.away)
-
-
-def load_results(cache: HttpCache, predictions: list[Prediction]) -> list[Result]:
-    """Fetch results for every league and day that has predictions."""
-    return results_archive.fetch_results(cache, map(as_fixture, predictions))
-
-
-def match_results(
-    predictions: list[Prediction], results: list[Result]
-) -> dict[tuple, Result]:
-    """Map each fixture (league, home, away, kickoff) to its actual result."""
-    matched = results_archive.match_results(map(as_fixture, predictions), results)
-    return {
-        (fixture.league, fixture.home, fixture.away, fixture.kickoff): result
-        for fixture, (result, _) in matched.items()
-    }
+        else:
+            rows.extend(prediction_table.rows_from_csv(body))
+        prefix = f"{results_archive.RESULTS_PREFIX}{season.replace('/', '-')}_"
+        for path in sorted(index.get(blob_archive.RESULTS_KEY, {})):
+            if path.startswith(prefix) and (body := cache.read(path)) is not None:
+                result_rows.extend(results_archive.rows_from_csv(body))
+    logger.info(
+        "Loaded %d table rows and %d results (%d HEADs, %d downloads)",
+        len(rows),
+        len(result_rows),
+        cache.heads,
+        cache.downloads,
+    )
+    return st.parse_table(rows), st.parse_results(result_rows)
 
 
 # %% --------------------------------------------
 # * Reporting
 
 
-def print_table(title: str, scores: dict[str, Score]) -> None:
+def print_table(title: str, scores: dict[str, st.Score], active: list[str]) -> None:
     """Print one ranking table, ordered by points per offered match."""
-    ranked = sorted(
-        (s for s in scores.items() if s[1].offered),
-        key=lambda item: (-item[1].points / item[1].offered, -item[1].offered),
-    )
+    ranked = st.ranked(scores)
     print(f"\n=== {title} ===")
     if not ranked:
         print("(no scored matches)")
@@ -380,110 +163,58 @@ def print_table(title: str, scores: dict[str, Score]) -> None:
         f"{'Exact':>6} {'GoalDiff':>8} {'Tendency':>8}"
     )
     for rank, (provider, s) in enumerate(ranked, 1):
-        marker = "*" if provider in CURRENT_PROVIDERS else " "
+        marker = "*" if provider in active else " "
         tipped = max(s.tipped, 1)
+        matchdays = max(len(s.matchdays), 1)
         print(
             f"{rank:>2} {provider + marker:<30} {s.offered:>7} "
-            f"{s.offered - s.tipped:>6} {s.points:>6} "
-            f"{s.points / tipped:>5.2f} {s.points / s.offered:>5.2f} "
+            f"{s.missed:>6} {s.points:>6} "
+            f"{s.avg:>5.2f} {s.avg0:>5.2f} "
             f"{s.std_error:>5.2f} {len(s.matchdays):>4} "
-            f"{s.points / len(s.matchdays):>6.2f} "
-            f"{s.two_one / len(s.matchdays):>6.2f} {s.exact / tipped:>6.1%} "
-            f"{s.goal_diff / tipped:>8.1%} {s.tendency / tipped:>8.1%}"
+            f"{s.ppmd:>6.2f} "
+            f"{s.two_one / matchdays:>6.2f} {s.exact / tipped:>6.1%} "
+            f"{(s.exact + s.diff) / tipped:>8.1%} "
+            f"{(s.exact + s.diff + s.tendency) / tipped:>8.1%}"
         )
 
 
-def aggregate(rows: list[Row]) -> dict[str, Score]:
-    """Aggregate points per provider."""
-    scores: dict[str, Score] = defaultdict(Score)
-    for row in rows:
-        scores[row.provider].add(row.points, row.matchday, row.tip)
-    return scores
+def print_head_to_head(
+    entries: list[st.Entry], label: str, active: list[str], late: list[str]
+) -> None:
+    """Rank active providers on fixtures offered to every one of them.
 
-
-def cluster_matchdays(
-    fixtures: list[tuple[datetime, str, str]], league: str
-) -> dict[tuple[datetime, str, str], str]:
-    """Group (kickoff, home, away) fixtures into matchdays.
-
-    Every team plays once per matchday, so a new matchday starts as soon as a
-    team that already played in the current one appears again, or after a
-    break longer than MATCHDAY_BREAK. Rescheduled games can split a real
-    matchday in two; that affects all providers alike.
+    Missing tips score 0. Also ranks the active providers without the late
+    joiners on a larger sample. Baselines are scored on the same fixtures.
     """
-    labels: dict[tuple[datetime, str, str], str] = {}
-    label = ""
-    teams: set[str] = set()
-    previous: datetime | None = None
-    for fixture in sorted(set(fixtures)):
-        kickoff, home, away = fixture
-        new_round = home in teams or away in teams
-        if previous is None or kickoff - previous > MATCHDAY_BREAK or new_round:
-            label = f"{league} {kickoff:%Y-%m-%d}"
-            teams = set()
-        teams |= {home, away}
-        labels[fixture] = label
-        previous = kickoff
-    return labels
+    present = {e.model for e in entries}
+    group = {m for m in active if m in present}
+    groups = [("all current providers", group)]
+    if late and (established := group - set(late)) != group:
+        groups.append((f"current providers excl. {'/'.join(late)}", established))
+    for group_label, members in groups:
+        common = st.common_entries(entries, members)
+        fixtures = len({e.fixture.match_key for e in common})
+        print_table(
+            f"{label}, head-to-head on {fixtures} common fixtures, {group_label}",
+            st.aggregate(common),
+            active,
+        )
 
 
-def build_rows(
-    raw: list[Prediction],
-    selected: list[Prediction],
-    matched: dict[tuple, Result],
-) -> list[Row]:
-    """Score every fixture each provider was active for; missing tips are None.
-
-    A provider is active from its first snapshot to the last kickoff it
-    predicted. Within that window every finished fixture that any provider
-    tipped before kickoff counts as offered to it.
-    """
-    fixtures: dict[tuple, Result] = {}
-    for pred in selected:
-        result = matched.get((pred.league, pred.home, pred.away, pred.kickoff))
-        if result:
-            key = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
-            fixtures[key] = result
-
-    by_league: dict[str, list[tuple[datetime, str, str]]] = defaultdict(list)
-    for key, result in fixtures.items():
-        if result.matchday is None:
-            by_league[key[0]].append((result.kickoff, key[1], key[2]))
-    clustered: dict[tuple, str] = {}
-    for league, league_fixtures in by_league.items():
-        for fixture, label in cluster_matchdays(league_fixtures, league).items():
-            clustered[league, *fixture] = label
-
-    window: dict[str, tuple[datetime, datetime]] = {}
-    for pred in raw:
-        first, last = window.get(pred.provider, (pred.snapshot, pred.kickoff))
-        window[pred.provider] = (min(first, pred.snapshot), max(last, pred.kickoff))
-    tips = {
-        (p.provider, p.league, p.home, p.away, season_of(p.kickoff)): p
-        for p in selected
-    }
-
-    rows = []
-    for key, result in fixtures.items():
-        matchday = result.matchday or clustered[key[0], result.kickoff, *key[1:3]]
-        actual = (result.home_goals, result.away_goals)
-        for provider, (first, last) in window.items():
-            if not first < result.kickoff <= last:
-                continue
-            tip = tips.get((provider, *key))
-            tipped = (tip.home_goals, tip.away_goals) if tip else None
-            points = kicktipp_points(tipped, actual) if tipped else None
-            rows.append(
-                Row(
-                    provider, key[0], key[1:3], result.kickoff, matchday, points, tipped
-                )
-            )
-    return rows
+def in_season(entries: list[st.Entry], season: str) -> list[st.Entry]:
+    """Keep entries of one season."""
+    return [e for e in entries if e.fixture.season == season]
 
 
-def print_report(rows: list[Row], season: str, from_season: str) -> None:
+def print_report(
+    entries: list[st.Entry],
+    season: str,
+    from_season: str,
+    active: list[str],
+    late: list[str],
+) -> None:
     """Print overall, per-league, per-season and head-to-head tables."""
-    print("\n* = currently offered in the frontend")
+    print("\n* = currently run by the workflow")
     print(
         "Offered = finished matches while the provider was active, "
         "Missed = offered but no tip before kickoff (scores 0), "
@@ -493,171 +224,51 @@ def print_report(rows: list[Row], season: str, from_season: str) -> None:
         "Exact = 4 pts, GoalDiff = 3+ pts, "
         "Tendency = 2+ pts, as share of tipped matches"
     )
-    print_table(f"All leagues, since {from_season}", aggregate(rows))
-    for league in sorted({r.league for r in rows}):
-        league_rows = [r for r in rows if r.league == league]
-        print_table(f"{league}, since {from_season}", aggregate(league_rows))
-    for one_season in sorted({season_of(r.kickoff) for r in rows}):
-        season_rows = [r for r in rows if season_of(r.kickoff) == one_season]
-        print_table(f"Season {one_season}, all leagues", aggregate(season_rows))
-
-    season_rows = [r for r in rows if season_of(r.kickoff) == season]
-    bundesliga_rows = [r for r in season_rows if r.league == BUNDESLIGA]
-    print_table(f"Season {season}, {BUNDESLIGA}", aggregate(bundesliga_rows))
-    print_head_to_head(bundesliga_rows, f"Season {season}, {BUNDESLIGA}")
-    print_head_to_head(season_rows, f"Season {season}, all leagues")
-
-
-def print_head_to_head(rows: list[Row], label: str) -> None:
-    """Rank current providers on fixtures offered to every one of them.
-
-    Missing tips score 0. Also ranks the current providers without Nemotron
-    and Ministral, which only joined recently, on a larger sample.
-    """
-    by_fixture: dict[tuple, dict[str, Row]] = defaultdict(dict)
-    for row in rows:
-        if row.provider in CURRENT_PROVIDERS:
-            by_fixture[row.league, row.fixture, row.kickoff][row.provider] = row
-    recent = {"Nvidia-Nemotron-Lightning", "Mistral-Ministral"}
-    groups = [
-        ("all current providers", set(CURRENT_PROVIDERS)),
-        ("current providers excl. Nemotron/Ministral", set(CURRENT_PROVIDERS) - recent),
-    ]
-    for group_label, group in groups:
-        common = [
-            row
-            for rows_by_provider in by_fixture.values()
-            if group <= rows_by_provider.keys()
-            for provider, row in rows_by_provider.items()
-            if provider in group
-        ]
+    print_table(f"All leagues, since {from_season}", st.aggregate(entries), active)
+    for league in sorted({e.fixture.league for e in entries}):
+        league_entries = [e for e in entries if e.fixture.league == league]
         print_table(
-            f"{label}, head-to-head on common fixtures, {group_label}",
-            aggregate(common),
+            f"{league}, since {from_season}", st.aggregate(league_entries), active
         )
+    for one_season in sorted({e.fixture.season for e in entries}):
+        print_table(
+            f"Season {one_season}, all leagues",
+            st.aggregate(in_season(entries, one_season)),
+            active,
+        )
+    season_entries = in_season(entries, season)
+    bundesliga = [e for e in season_entries if e.fixture.league == BUNDESLIGA]
+    print_table(f"Season {season}, {BUNDESLIGA}", st.aggregate(bundesliga), active)
+    print_head_to_head(bundesliga, f"Season {season}, {BUNDESLIGA}", active, late)
+    print_head_to_head(season_entries, f"Season {season}, all leagues", active, late)
 
 
-def print_backfill_report(rows: list[Row], season: str, providers: set[str]) -> None:
+def print_backfill_report(
+    entries: list[st.Entry], season: str, active: list[str], late: list[str]
+) -> None:
     """Print the "incl. backfill" tables, separate from the live ranking."""
-    names = ", ".join(sorted(providers)) or "none"
+    providers = sorted({e.model for e in entries if e.origin == "backfill"})
+    names = ", ".join(providers) or "none"
     print(
         "\n##### incl. backfill: live predictions plus predictions generated "
         f"after the fact for past runs ({names}); not a live result #####"
     )
-    season_rows = [r for r in rows if season_of(r.kickoff) == season]
+    season_entries = in_season(entries, season)
     label = f"Season {season}, all leagues (incl. backfill)"
-    print_table(label, aggregate(season_rows))
-    for league in sorted({r.league for r in season_rows}):
-        league_rows = [r for r in season_rows if r.league == league]
+    print_table(label, st.aggregate(season_entries), active)
+    for league in sorted({e.fixture.league for e in season_entries}):
+        league_entries = [e for e in season_entries if e.fixture.league == league]
         print_table(
-            f"Season {season}, {league} (incl. backfill)", aggregate(league_rows)
+            f"Season {season}, {league} (incl. backfill)",
+            st.aggregate(league_entries),
+            active,
         )
-    print_head_to_head(season_rows, label)
+    print_head_to_head(season_entries, label, active, late)
 
 
-# %% --------------------------------------------
-# * Reliability
-
-RUN_GAP = timedelta(minutes=30)
-
-
-@dataclass
-class Coverage:
-    """Prediction coverage counts for one provider."""
-
-    runs: int = 0
-    missed_runs: int = 0
-    offered: int = 0
-    predicted: int = 0
-    past_fixtures: int = 0
-    past_predicted: int = 0
-
-
-def group_runs(stamps: set[datetime]) -> dict[datetime, datetime]:
-    """Map each snapshot timestamp to the start of its workflow run.
-
-    One run writes a snapshot per provider within seconds, so timestamps
-    closer than RUN_GAP belong to the same run.
-    """
-    run_of: dict[datetime, datetime] = {}
-    run_start: datetime | None = None
-    previous: datetime | None = None
-    for stamp in sorted(stamps):
-        if previous is None or stamp - previous > RUN_GAP:
-            run_start = stamp
-        assert run_start is not None  # noqa: S101
-        run_of[stamp] = run_start
-        previous = stamp
-    return run_of
-
-
-def reliability(
-    raw: list[Prediction], selected: list[Prediction], season: str | None
-) -> dict[str, Coverage]:
-    """Measure how many offered matches each provider actually predicted.
-
-    The workflow drops matches whose LLM call failed or returned an invalid
-    tip, and writes no snapshot at all for a provider without any valid tip.
-    So per run, a fixture predicted by any provider counts as offered to all
-    providers active then (between their first and last run); a provider with
-    no snapshot in such a run missed the whole run. Pre-kickoff coverage
-    compares the selected last-before-kickoff tips the same way, since a later
-    run can fill a gap.
-    """
-    run_of = group_runs({p.snapshot for p in raw})
-    offered: dict[datetime, set[tuple]] = defaultdict(set)
-    delivered: dict[tuple[str, datetime], set[tuple]] = defaultdict(set)
-    for pred in raw:
-        fixture = (pred.league, pred.home, pred.away)
-        offered[run_of[pred.snapshot]].add(fixture)
-        delivered[pred.provider, run_of[pred.snapshot]].add(fixture)
-    runs = sorted(offered)
-    providers = {p.provider for p in raw}
-    window = {
-        provider: (
-            min(run for prov, run in delivered if prov == provider),
-            max(run for prov, run in delivered if prov == provider),
-        )
-        for provider in providers
-    }
-    coverage: dict[str, Coverage] = defaultdict(Coverage)
-    for provider, (first, last) in window.items():
-        for run in runs:
-            if not first <= run <= last:
-                continue
-            if season and season_of(run) != season:
-                continue
-            got = delivered.get((provider, run), set())
-            cov = coverage[provider]
-            cov.runs += 1
-            cov.missed_runs += not got
-            cov.offered += len(offered[run])
-            cov.predicted += len(got & offered[run])
-
-    now = datetime.now(tz=UTC)
-    fixtures: dict[tuple, datetime] = {}
-    tipped: dict[str, set[tuple]] = defaultdict(set)
-    for pred in selected:
-        if pred.kickoff >= now:
-            continue
-        fixture = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
-        fixtures[fixture] = pred.kickoff
-        tipped[pred.provider].add(fixture)
-    for provider, (first, last) in window.items():
-        last_kickoff = max(
-            (p.kickoff for p in selected if p.provider == provider), default=last
-        )
-        for fixture, kickoff in fixtures.items():
-            if not first < kickoff <= last_kickoff:
-                continue
-            if season and season_of(kickoff) != season:
-                continue
-            coverage[provider].past_fixtures += 1
-            coverage[provider].past_predicted += fixture in tipped[provider]
-    return coverage
-
-
-def print_reliability(title: str, coverage: dict[str, Coverage]) -> None:
+def print_reliability(
+    title: str, coverage: dict[str, st.Coverage], active: list[str]
+) -> None:
     """Print one reliability table, least reliable providers last."""
     rows = [(p, c) for p, c in coverage.items() if c.offered or c.past_fixtures]
     rows.sort(key=lambda item: -item[1].predicted / max(item[1].offered, 1))
@@ -670,7 +281,7 @@ def print_reliability(title: str, coverage: dict[str, Coverage]) -> None:
         f"{'Tipped':>7} {'PerRun':>6} {'Past':>6} {'Tipped':>7} {'PreKO':>6}"
     )
     for provider, c in rows:
-        marker = "*" if provider in CURRENT_PROVIDERS else " "
+        marker = "*" if provider in active else " "
         per_run = c.predicted / c.offered if c.offered else 0.0
         pre_ko = c.past_predicted / c.past_fixtures if c.past_fixtures else 0.0
         print(
@@ -681,55 +292,42 @@ def print_reliability(title: str, coverage: dict[str, Coverage]) -> None:
 
 
 def print_reliability_report(
-    raw: list[Prediction], selected: list[Prediction], season: str, from_season: str
+    tips: list[st.TableTip], season: str, from_season: str, active: list[str]
 ) -> None:
     """Print reliability since the first season and for the focused season."""
     print(
-        "\nReliability: Runs = workflow runs while the provider was active, "
-        "Missed = runs with no snapshot at all, PerRun = share of matches "
-        "offered in those runs that got a valid tip, PreKO = share of past "
+        "\nReliability (live predictions): Runs = workflow runs while the "
+        "provider was active, Missed = runs without any tip, PerRun = share of "
+        "matches listed in those runs that got a tip, PreKO = share of past "
         "matches with a tip before kickoff"
     )
-    print_reliability(f"since {from_season}", reliability(raw, selected, None))
-    print_reliability(f"season {season}", reliability(raw, selected, season))
+    now = datetime.now(tz=UTC)
+    print_reliability(f"since {from_season}", st.reliability(tips, now), active)
+    season_tips = [t for t in tips if t.season == season]
+    print_reliability(
+        f"season {season}",
+        st.reliability(season_tips, now, windows_from=tips),
+        active,
+    )
 
 
-# %% --------------------------------------------
-# * Odds baseline
-
-ODDS_BASELINE = "Odds-Favourite"
-
-
-def odds_baseline(odds_csv: Path, past: list[Prediction]) -> list[Prediction]:
-    """Build tips that follow the bookmaker favourite (2:1 or 1:2).
-
-    Gives a reference row: an LLM is only useful if it beats simply backing
-    the favourite. Uses logged or reconstructed odds; fixtures without all
-    three odds count as missed for the baseline.
-    """
-    odds: dict[tuple, tuple[float, float]] = {}
-    with odds_csv.open(encoding="utf-8") as handle:
-        for row in csv.DictReader(handle):
-            if row["odds_home"] and row["odds_draw"] and row["odds_away"]:
-                key = (row["league"], row["home_team"], row["away_team"], row["season"])
-                odds[key] = (float(row["odds_home"]), float(row["odds_away"]))
-    baseline = {}
-    for pred in past:
-        key = (pred.league, pred.home, pred.away, season_of(pred.kickoff))
-        if key in odds and key not in baseline:
-            home_odds, away_odds = odds[key]
-            goals = (2, 1) if home_odds <= away_odds else (1, 2)
-            baseline[key] = Prediction(
-                ODDS_BASELINE,
-                pred.kickoff - timedelta(hours=1),
-                pred.league,
-                pred.kickoff,
-                pred.home,
-                pred.away,
-                *goals,
-            )
-    logger.info("Odds baseline tips: %d", len(baseline))
-    return list(baseline.values())
+def print_coverage(
+    tips: list[st.TableTip], results: dict[str, tuple[int, int]], *, show: bool
+) -> None:
+    """Print how many past fixtures joined to a result."""
+    cutoff = datetime.now(tz=UTC) - results_archive.RESULT_DELAY
+    past: dict[str, st.TableTip] = {}
+    for tip in tips:
+        if tip.kickoff <= cutoff:
+            past.setdefault(tip.match_key, tip)
+    missing = sorted(k for k in past if k not in results)
+    print(
+        f"\nPast fixtures with predictions: {len(past)}, "
+        f"with a result: {len(past) - len(missing)}, without: {len(missing)}"
+    )
+    if show:
+        for key in missing:
+            print(f"  no result: {key}")
 
 
 # %% --------------------------------------------
@@ -743,109 +341,79 @@ def parse_args() -> argparse.Namespace:
         "--env-file",
         type=Path,
         default=REPO_ROOT / ".env.local",
-        help="dotenv file with KV_REST_API_URL and a KV token",
-    )
-    parser.add_argument(
-        "--local-dir",
-        type=Path,
-        default=REPO_ROOT / "data" / "match_predictions",
-        help="directory with older local jsonl snapshots",
+        help="dotenv file with BLOB_READ_WRITE_TOKEN",
     )
     parser.add_argument(
         "--cache-dir",
         type=Path,
-        default=Path(tempfile.gettempdir()) / "tip-genius-eval-cache",
-        help="where to cache result API responses",
+        default=DEFAULT_CACHE_DIR,
+        help="where to cache Blob downloads",
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="use the cached files only (no Blob requests)",
     )
     parser.add_argument("--league", help="only leagues containing this text")
     parser.add_argument(
         "--season",
-        default=season_of(datetime.now(tz=UTC)),
+        default=results_archive.season_of(datetime.now(tz=UTC)),
         help="season for the focused ranking, e.g. 2026/27",
     )
     parser.add_argument(
         "--from-season",
-        default=DEFAULT_FROM_SEASON,
-        help="first season to include, e.g. 2024/25 (default %(default)s)",
-    )
-    parser.add_argument(
-        "--odds-csv",
-        type=Path,
-        help="odds per fixture (utils/reconstruct_odds.py) for the "
-        f"{ODDS_BASELINE} baseline",
+        default=st.FROM_SEASON,
+        help="first season to include, not before %(default)s (default)",
     )
     parser.add_argument(
         "--include-backfill",
         action="store_true",
-        help="also score backfilled predictions from Blob in separate "
-        "'incl. backfill' tables (needs BLOB_READ_WRITE_TOKEN)",
+        help="also print 'incl. backfill' tables with the backfilled predictions",
     )
     parser.add_argument(
         "--show-unmatched",
         action="store_true",
-        help="list past fixtures without a matched result",
+        help="list past fixtures without a result",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     """Run the backtest and print the report."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    for name in ("httpx", "httpx2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     args = parse_args()
-    load_dotenv(args.env_file)
-    snapshots = load_kv_snapshots()
-    first_kv = min(stamp for stamp, _ in snapshots)
-    snapshots |= load_local_snapshots(args.local_dir, before=first_kv)
-
-    raw = select(flatten(snapshots), args)
-    predictions = last_before_kickoff(raw)
-    now = datetime.now(tz=UTC)
-    past = [p for p in predictions if p.kickoff < now - timedelta(hours=3)]
-
-    cache = HttpCache(args.cache_dir)
-    results = load_results(cache, past)
-    matched = match_results(past, results)
-
-    unmatched = {
-        (p.league, p.kickoff, p.home, p.away)
-        for p in past
-        if (p.league, p.home, p.away, p.kickoff) not in matched
-    }
-    fixtures = {(p.league, p.home, p.away, p.kickoff) for p in past}
-    print(
-        f"\nPast fixtures with predictions: {len(fixtures)}, "
-        f"matched to results: {len(matched)}, unmatched: {len(unmatched)}"
-    )
-    if args.show_unmatched:
-        for league, kickoff, home, away in sorted(unmatched):
-            print(f"  unmatched: {league} {kickoff:%Y-%m-%d %H:%M} {home} - {away}")
-    baseline = odds_baseline(args.odds_csv, past) if args.odds_csv else []
-    rows = build_rows(raw + baseline, past + baseline, matched)
-    print_report(rows, args.season, args.from_season)
-    print_reliability_report(raw, predictions, args.season, args.from_season)
-
-    if args.include_backfill:
-        backfill = select(flatten(load_backfill_snapshots()), args)
-        raw_all = raw + backfill
-        past_all = [
-            p
-            for p in last_before_kickoff(raw_all)
-            if p.kickoff < now - timedelta(hours=3)
-        ]
-        matched_all = match_results(past_all, load_results(cache, past_all))
-        baseline_all = odds_baseline(args.odds_csv, past_all) if args.odds_csv else []
-        rows_all = build_rows(
-            raw_all + baseline_all, past_all + baseline_all, matched_all
+    if args.from_season < st.FROM_SEASON:
+        sys.exit(
+            f"The Blob prediction tables start with {st.FROM_SEASON}; older seasons "
+            "(local snapshots) are not part of this backtest any more"
         )
-        print_backfill_report(rows_all, args.season, {p.provider for p in backfill})
-
-
-def select(predictions: list[Prediction], args: argparse.Namespace) -> list[Prediction]:
-    """Keep predictions from ``--from-season`` on and, if given, ``--league``."""
-    kept = [p for p in predictions if season_of(p.kickoff) >= args.from_season]
+    load_dotenv(args.env_file)
+    cache = EtagCache(args.cache_dir / "blob", offline=args.offline)
+    now = datetime.now(tz=UTC)
+    tips, results = load_archive(cache, dashboard.seasons_since(args.from_season, now))
     if args.league:
         wanted = args.league.lower()
-        kept = [p for p in kept if wanted in p.league.lower()]
-    return kept
+        tips = [t for t in tips if wanted in t.league.lower()]
+    active = active_models()
+    late = st.late_joiners(tips, active)
+    print_coverage(tips, results, show=args.show_unmatched)
+
+    live = st.score_entries(tips, results, include_backfill=False)
+    print_report(live, args.season, args.from_season, active, late)
+    print_reliability_report(tips, args.season, args.from_season, active)
+    backfill_tips = defaultdict(int)
+    for tip in tips:
+        if tip.origin == "backfill":
+            backfill_tips[tip.provider] += 1
+    if args.include_backfill:
+        print_backfill_report(
+            st.score_entries(tips, results), args.season, active, late
+        )
+    elif backfill_tips:
+        counts = ", ".join(f"{p} {n}" for p, n in sorted(backfill_tips.items()))
+        print(f"\nBackfill tips not shown ({counts}): pass --include-backfill")
 
 
 if __name__ == "__main__":

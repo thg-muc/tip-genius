@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from utils import reconstruct_odds as ro
-from utils.eval_providers import Prediction
+from utils.kv_snapshots import Prediction
 
 CL = "UEFA Champions League"
 LIGA = "La Liga - Spain"

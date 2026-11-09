@@ -52,7 +52,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[1] / "src" / "tip_genius"))
 
-from eval_providers import (  # noqa: E402
+from kv_snapshots import (  # noqa: E402
     DEFAULT_FROM_SEASON,
     NAME_STOPWORDS,
     REPO_ROOT,

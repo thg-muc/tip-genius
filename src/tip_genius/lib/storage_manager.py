@@ -14,7 +14,7 @@ from typing import Any
 
 import requests
 import yaml
-from lib import blob_archive, results_archive
+from lib import blob_archive, dashboard, results_archive, stats
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -88,6 +88,13 @@ class StorageManager:
         self.blob_results: dict[str, dict[str, Any]] = {}
         # Results scan state per season, stored once the step went through
         self.blob_results_scan: dict[str, dict[str, Any] | None] = {}
+        # Prediction table index entries and scan state of the stats step
+        self.blob_stats: dict[str, dict[str, Any]] = {}
+        self.blob_stats_scan: dict[str, dict[str, Any] | None] = {}
+        # Shared by the results and stats steps: each write-once file once
+        self.blob_reader = blob_archive.MemoryArchiveReader()
+        self.results_report: results_archive.ArchiveReport | None = None
+        self.stats_kv_key: str | None = None
 
         # Initialize environment configuration
         self.kv_initialized = self._initialize_kv_config()
@@ -334,6 +341,7 @@ class StorageManager:
             report = results_archive.update_results_archive(
                 {results_archive.season_of(moment)},
                 now=moment,
+                fetch_jsonl=self.blob_reader.fetch_jsonl,
                 incremental=True,
                 attempts=results_archive.CRON_ATTEMPTS,
                 wait=results_archive.CRON_WAIT_SECONDS,
@@ -341,6 +349,7 @@ class StorageManager:
         except Exception:
             logger.warning("Could not update the Blob results archive", exc_info=True)
             return False
+        self.results_report = report
         if report.index_updated:
             self.blob_results = report.index_entries
         if report.ok and report.scan_state:
@@ -348,35 +357,155 @@ class StorageManager:
             self.blob_results_scan = report.scan_state
         return report.ok
 
+    def update_dashboard_stats(
+        self, active_models: list[str], now: datetime | None = None
+    ) -> bool:
+        """Update the prediction table and write the dashboard statistics to KV.
+
+        Runs right after ``update_results_archive`` and before the new odds
+        are fetched. Brings the current season's prediction table in Blob up
+        to date (``lib.prediction_table``, incremental), reads the other
+        seasons' tables and the results CSVs, computes the statistics JSON
+        (``lib.stats``) from Blob data only and writes it to KV under the
+        configured key. Reuses the index, results CSVs and prediction files
+        the results step already read. The table's index entry and scan state
+        are written by ``finalize_blob_archive``. Never raises and never
+        affects the exit code: a failure only logs a WARNING and the previous
+        JSON stays in KV.
+
+        Parameters
+        ----------
+        active_models : list[str]
+            Models the workflow currently runs (``llm_provider_options``).
+        now : datetime | None, optional
+            Current time.
+
+        Returns
+        -------
+        bool
+            True if the table update went through and the JSON was written.
+
+        """
+        if not self.blob_initialized:
+            return False
+        moment = now or datetime.now(tz=UTC)
+        season = results_archive.season_of(moment)
+        try:
+            report = self.results_report
+            index = report.index if report is not None else None
+            if index is None:
+                index = blob_archive.read_index(fresh=True)
+            elif report is not None and report.index_updated:
+                index = blob_archive.merge_results_index(index, report.index_entries)
+            full = report is not None and report.scan_modes.get(season) == "full"
+            inputs = dashboard.collect_inputs(
+                index,
+                now=moment,
+                seasons=dashboard.seasons_since(stats.FROM_SEASON, moment),
+                update={season},
+                fetch_jsonl=self.blob_reader.fetch_jsonl,
+                fetch_bytes=self.blob_reader.fetch_bytes,
+                results_contents=dashboard.verified_results(report),
+                force_full="results step scanned fully" if full else None,
+                attempts=results_archive.CRON_ATTEMPTS,
+                wait=results_archive.CRON_WAIT_SECONDS,
+            )
+            table = inputs.tables[season]
+            if table.index_entry:
+                self.blob_stats[table.pathname] = table.index_entry
+            if table.scan_state:
+                # Set only after the table is in Blob as computed; files it
+                # could not read are listed for a retry
+                self.blob_stats_scan[season] = table.scan_state
+            logger.info(
+                "Dashboard stats: table %s %s, %d prediction files downloaded this "
+                "run (shared), %d odds files, ~%d reads of tables/results",
+                season,
+                table.status,
+                self.blob_reader.downloads,
+                table.odds_read,
+                inputs.reads,
+            )
+            if table.unread:
+                logger.warning(
+                    "Prediction table %s: %d files unread, retried next run",
+                    season,
+                    len(table.unread),
+                )
+            if inputs.table_rows.get(season) is None or inputs.unread:
+                logger.warning(
+                    "Dashboard stats not updated: unreadable %s",
+                    ", ".join(inputs.unread) or table.pathname,
+                )
+                return False
+            _, body = dashboard.build_json(inputs, active=active_models, now=moment)
+        except Exception:
+            logger.warning("Could not compute the dashboard stats", exc_info=True)
+            return False
+        key = self.stats_kv_key or self._stats_kv_key()
+        if not self.write_to_kv or not self.kv_initialized or not key:
+            logger.info(
+                "KV not enabled: dashboard stats (%d bytes) not stored", len(body)
+            )
+            return False
+        if not self._store_to_kv(body, key):
+            logger.warning("Could not write the dashboard stats to KV key %s", key)
+            return False
+        logger.info("Dashboard stats written to KV key %s (%d bytes)", key, len(body))
+        return table.ok
+
+    def _stats_kv_key(self) -> str | None:
+        """Return the KV key of the dashboard statistics from the config."""
+        try:
+            self.stats_kv_key = self._load_config()["stats_kv_key"]
+        except (FileNotFoundError, KeyError, yaml.YAMLError) as e:
+            logger.warning("No dashboard stats KV key configured: %s", e)
+            return None
+        return self.stats_kv_key
+
     def finalize_blob_archive(self) -> None:
         """Write the run manifest and add the run to ``index.json``.
 
-        Lists only the files actually written in this run. Never raises.
+        Lists only the files actually written in this run, plus the index
+        entries and scan states the results and stats steps verified. Without
+        odds or prediction files no manifest is written, but pending stats
+        entries still go to the index. Never raises.
         """
-        if not self.blob_initialized or not (self.blob_odds or self.blob_predictions):
+        if not self.blob_initialized:
+            return
+        has_files = bool(self.blob_odds or self.blob_predictions)
+        if not (has_files or self.blob_stats or self.blob_stats_scan):
             return
         try:
-            manifest = blob_archive.build_manifest(
-                self.run_ts, self.blob_odds, self.blob_predictions
-            )
-            manifest_written = blob_archive.put_with_retry(
-                blob_archive.manifest_pathname(self.run_ts),
-                blob_archive.to_json(manifest),
-                content_type=blob_archive.JSON_CONTENT_TYPE,
-            )
-            entry = blob_archive.index_entry(
-                manifest, manifest_written=manifest_written
-            )
+            entries = []
+            if has_files:
+                manifest = blob_archive.build_manifest(
+                    self.run_ts, self.blob_odds, self.blob_predictions
+                )
+                manifest_written = blob_archive.put_with_retry(
+                    blob_archive.manifest_pathname(self.run_ts),
+                    blob_archive.to_json(manifest),
+                    content_type=blob_archive.JSON_CONTENT_TYPE,
+                )
+                entries.append(
+                    blob_archive.index_entry(
+                        manifest, manifest_written=manifest_written
+                    )
+                )
             if blob_archive.update_index(
-                [entry],
+                entries,
                 results=self.blob_results,
                 results_scan=self.blob_results_scan,
+                stats=self.blob_stats,
+                stats_scan=self.blob_stats_scan,
             ):
                 logger.info(
-                    "Archived run %s in Vercel Blob: %d odds, %d prediction files",
+                    "Archived run %s in Vercel Blob: %d odds, %d prediction files, "
+                    "%d stats tables",
                     self.run_ts,
                     len(self.blob_odds),
                     len(self.blob_predictions),
+                    len(self.blob_stats),
                 )
         except Exception:
             logger.warning("Could not finalize the Blob archive", exc_info=True)
@@ -421,15 +550,16 @@ class StorageManager:
 
     def _store_to_kv(
         self,
-        payload: list[dict[str, Any]],
+        payload: list[dict[str, Any]] | bytes,
         key_name: str,
     ) -> bool:
-        """Store predictions in Vercel KV.
+        """Store predictions (or an already serialized JSON value) in Vercel KV.
 
         Parameters
         ----------
-        payload : list[dict[str, Any]]
-            The prediction payload, one entry per league
+        payload : list[dict[str, Any]] | bytes
+            The prediction payload, one entry per league, or JSON bytes
+            (sent as they are, e.g. the compact dashboard statistics)
         key_name : str
             The key name to use in KV storage
 
@@ -449,12 +579,20 @@ class StorageManager:
 
         try:
             # Store in KV using the provided key - use request body instead of URL path
-            response = requests.post(
-                f"{self.kv_url}/set/{key_name}",
-                headers=headers,
-                json=payload,  # Use json parameter instead of including in URL
-                timeout=10,
-            )
+            if isinstance(payload, bytes):
+                response = requests.post(
+                    f"{self.kv_url}/set/{key_name}",
+                    headers=headers,
+                    data=payload,
+                    timeout=10,
+                )
+            else:
+                response = requests.post(
+                    f"{self.kv_url}/set/{key_name}",
+                    headers=headers,
+                    json=payload,  # Use json parameter instead of including in URL
+                    timeout=10,
+                )
 
             if response.status_code == 200:
                 logger.debug(

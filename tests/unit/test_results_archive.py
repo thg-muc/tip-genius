@@ -14,7 +14,7 @@ from lib import storage_manager as sm_module
 from lib.storage_manager import StorageManager
 
 from utils import backfill_results
-from utils import eval_providers as ev
+from utils import kv_snapshots as ev
 
 from .conftest import FakeBlob
 
