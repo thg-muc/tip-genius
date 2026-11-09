@@ -10,14 +10,17 @@ The archive lives in a private Vercel Blob store and is laid out flat by type:
 - ``runs/<run_ts>.json`` (one manifest per workflow run)
 - ``results/<season>_<League-Key>.csv`` (final 90-minute scores, see
   ``lib.results_archive``; rewritten in place when rows are added)
+- ``stats/predictions_<season>.csv`` (one row per fixture and provider for
+  the dashboard statistics, see ``lib.prediction_table``; rewritten in place)
 - ``index.json`` (every archived run, so readers never need ``list``)
 
 Backfilled predictions are listed in ``index.json`` under
 ``backfill_predictions`` (``{run_ts: {provider_key: pathname}}``), never in
 ``runs``, so readers cannot mistake them for live pre-match predictions.
 
-Every file is write-once except ``index.json`` and the results CSVs, which are
-listed under ``results`` (``{pathname: {"rows", "updated_at"}}``). With
+Every file is write-once except ``index.json``, the results CSVs, listed under
+``results`` (``{pathname: {"rows", "updated_at"}}``), and the prediction tables,
+listed the same way under ``stats``. With
 several reconstructed CSVs, the newest one (highest timestamp, last in
 ``reconstructed_odds``) is the current one. The ``index.json``
 read-modify-write is not atomic, so never run the backfill or
@@ -56,6 +59,8 @@ BACKFILL_PREFIX = "predictions/backfill/"
 BACKFILL_KEY = "backfill_predictions"
 RESULTS_KEY = "results"
 RESULTS_SCAN_KEY = "results_scan"
+STATS_KEY = "stats"
+STATS_SCAN_KEY = "stats_scan"
 ODDS_SOURCES = ("logged", "reconstructed")
 ODDS_COLUMNS = [
     "id",
@@ -400,16 +405,19 @@ def merge_results_index(
     index: dict[str, Any] | None,
     entries: dict[str, dict[str, Any]],
     now: datetime | None = None,
+    *,
+    key: str = RESULTS_KEY,
 ) -> dict[str, Any]:
     """Merge results files into ``results`` (``{pathname: {rows, updated_at}}``).
 
     Per pathname the entry with the newer ``updated_at`` wins (ties go to
     ``entries``), so carrying entries over into an index read that lags
-    behind never replaces a newer row count with an older one.
+    behind never replaces a newer row count with an older one. ``key``
+    selects the section (``stats`` for the prediction tables).
     """
     merged = empty_index() if index is None else dict(index)
     results: dict[str, dict[str, Any]] = {
-        path: dict(entry) for path, entry in merged.get(RESULTS_KEY, {}).items()
+        path: dict(entry) for path, entry in merged.get(key, {}).items()
     }
     for path, entry in entries.items():
         current = results.get(path)
@@ -417,7 +425,7 @@ def merge_results_index(
             current.get("updated_at") or ""
         ):
             results[path] = dict(entry)
-    merged[RESULTS_KEY] = dict(sorted(results.items()))
+    merged[key] = dict(sorted(results.items()))
     merged["updated_at"] = format_payload_ts(now or datetime.now(tz=UTC))
     return merged
 
@@ -426,24 +434,27 @@ def merge_results_scan(
     index: dict[str, Any] | None,
     scan: dict[str, dict[str, Any] | None],
     now: datetime | None = None,
+    *,
+    key: str = RESULTS_SCAN_KEY,
 ) -> dict[str, Any]:
     """Set the results step's scan state per season (``results_scan``).
 
     ``scan`` maps a season (``2026/27``) to its state, which replaces the
     stored one; None removes the season's state (the next run scans fully).
-    See ``results_archive.plan_scan`` for the fields.
+    See ``results_archive.plan_scan`` for the fields. ``key`` selects the
+    section (``stats_scan`` for the prediction tables).
     """
     merged = empty_index() if index is None else dict(index)
     if not scan:
         return merged
-    current = merged.get(RESULTS_SCAN_KEY)
+    current = merged.get(key)
     states = dict(current) if isinstance(current, dict) else {}
     for season, state in scan.items():
         if state is None:
             states.pop(season, None)
         else:
             states[season] = state
-    merged[RESULTS_SCAN_KEY] = dict(sorted(states.items()))
+    merged[key] = dict(sorted(states.items()))
     merged["updated_at"] = format_payload_ts(now or datetime.now(tz=UTC))
     return merged
 
@@ -452,6 +463,7 @@ def index_pathnames(index: dict[str, Any]) -> set[str]:
     """Return every pathname an index refers to."""
     pathnames = set(index.get("reconstructed_odds", []))
     pathnames.update(index.get(RESULTS_KEY, {}))
+    pathnames.update(index.get(STATS_KEY, {}))
     for files in index.get(BACKFILL_KEY, {}).values():
         pathnames.update(files.values())
     for run in index.get("runs", []):
@@ -596,13 +608,16 @@ def update_index(
     reconstructed: list[str] | None = None,
     results: dict[str, dict[str, Any]] | None = None,
     results_scan: dict[str, dict[str, Any] | None] | None = None,
+    stats: dict[str, dict[str, Any]] | None = None,
+    stats_scan: dict[str, dict[str, Any] | None] | None = None,
 ) -> bool:
     """Append run entries to ``index.json``.
 
     ``results`` (``{pathname: {rows, updated_at}}``, e.g. what this run's
     results step verified) is merged in as well, so an index read that lags
     behind that step does not drop its entries. ``results_scan`` (the results
-    step's scan state per season) is set the same way.
+    step's scan state per season) is set the same way, and so are ``stats``
+    and ``stats_scan`` (the prediction tables and their scan state).
 
     Never raises; a failure is logged as a WARNING. Runs can be re-added later
     from their manifests with ``utils/backfill_blob_archive.py --rebuild-index``.
@@ -624,6 +639,10 @@ def update_index(
         merged = merge_results_index(merged, results)
     if results_scan:
         merged = merge_results_scan(merged, results_scan)
+    if stats:
+        merged = merge_results_index(merged, stats, key=STATS_KEY)
+    if stats_scan:
+        merged = merge_results_scan(merged, stats_scan, key=STATS_SCAN_KEY)
     return put_with_retry(
         INDEX_PATHNAME,
         to_json(merged),
@@ -757,6 +776,8 @@ def update_results_index(
     scan: dict[str, dict[str, Any] | None] | None = None,
     attempts: int = INDEX_VERIFY_ATTEMPTS,
     wait: float = INDEX_VERIFY_WAIT_SECONDS,
+    entries_key: str = RESULTS_KEY,
+    scan_key: str = RESULTS_SCAN_KEY,
 ) -> bool:
     """Set ``results`` entries in ``index.json`` (``{path: {rows, updated_at}}``).
 
@@ -769,15 +790,16 @@ def update_results_index(
     stale and never overwritten. Success needs a read-back showing every entry
     with its row count. Never raises; a failure is logged as a WARNING (the
     next run re-adds the entries, since it compares the CSVs to the index).
+    ``entries_key``/``scan_key`` select the sections (``update_stats_index``).
     """
     known = index_pathnames(expected) if expected else set()
     known_rows = {
         path: int(entry.get("rows", 0))
-        for path, entry in (expected or {}).get(RESULTS_KEY, {}).items()
+        for path, entry in (expected or {}).get(entries_key, {}).items()
     }
 
     def stale(index: dict[str, Any]) -> int:
-        current = index.get(RESULTS_KEY, {})
+        current = index.get(entries_key, {})
         lower = {
             path
             for path, rows in known_rows.items()
@@ -786,8 +808,8 @@ def update_results_index(
         return len((known - index_pathnames(index)) | lower)
 
     def missing(index: dict[str, Any]) -> int:
-        current = index.get(RESULTS_KEY, {})
-        states = index.get(RESULTS_SCAN_KEY)
+        current = index.get(entries_key, {})
+        states = index.get(scan_key)
         states = states if isinstance(states, dict) else {}
         return sum(
             current.get(path, {}).get("rows") != entry["rows"]
@@ -796,21 +818,50 @@ def update_results_index(
 
     ok = _verified_index_update(
         lambda index: merge_results_scan(
-            merge_results_index(index, entries), scan or {}
+            merge_results_index(index, entries, key=entries_key),
+            scan or {},
+            key=scan_key,
         ),
         missing,
         stale,
-        label=f"{len(entries)} results files",
+        label=f"{len(entries)} {entries_key} files",
         attempts=attempts,
         wait=wait,
     )
     if not ok:
         logger.warning(
-            "Results index update NOT verified after %d attempts; the next run "
+            "Index update of %s NOT verified after %d attempts; the next run "
             "re-adds the entries",
+            entries_key,
             attempts,
         )
     return ok
+
+
+def update_stats_index(
+    entries: dict[str, dict[str, Any]],
+    *,
+    expected: dict[str, Any] | None = None,
+    scan: dict[str, dict[str, Any] | None] | None = None,
+    attempts: int = INDEX_VERIFY_ATTEMPTS,
+    wait: float = INDEX_VERIFY_WAIT_SECONDS,
+) -> bool:
+    """Set ``stats`` entries and ``stats_scan`` state in ``index.json``, verified.
+
+    Same guards as ``update_results_index`` (stale reads are never
+    overwritten, success needs a read-back showing every entry and state).
+    Used by ``utils/backfill_stats.py``; the workflow carries its entries
+    into ``update_index`` instead. Never raises.
+    """
+    return update_results_index(
+        entries,
+        expected=expected,
+        scan=scan,
+        attempts=attempts,
+        wait=wait,
+        entries_key=STATS_KEY,
+        scan_key=STATS_SCAN_KEY,
+    )
 
 
 class BlobArchiveReader:
@@ -858,6 +909,28 @@ class BlobArchiveReader:
         """Download a prediction or odds file, one dict per league."""
         lines = self.fetch_bytes(pathname).decode("utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
+
+
+class MemoryArchiveReader(BlobArchiveReader):
+    """``BlobArchiveReader`` that keeps downloaded files in memory.
+
+    Lets two workflow steps share reads of write-once files (prediction and
+    odds files) within one run. Never use it for ``index.json``, the results
+    CSVs or the prediction tables, which are overwritten in place.
+    """
+
+    def __init__(self) -> None:
+        """Initialize with an empty cache."""
+        super().__init__()
+        self.cache: dict[str, bytes] = {}
+        self.downloads = 0
+
+    def fetch_bytes(self, pathname: str) -> bytes:
+        """Download one file once; later calls return the cached body."""
+        if pathname not in self.cache:
+            self.cache[pathname] = super().fetch_bytes(pathname)
+            self.downloads += 1
+        return self.cache[pathname]
 
 
 class CachedArchiveReader(BlobArchiveReader):

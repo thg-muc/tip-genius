@@ -958,6 +958,10 @@ class TipGenius:
 
             # Archive finished results before new odds/predictions; never raises
             self.storage_manager.update_results_archive()
+            # Dashboard statistics from Blob into KV; never raises
+            self.storage_manager.update_dashboard_stats(
+                list(config.get("llm_provider_options") or [])
+            )
 
             sports_list = config["sports_list"]
             llm_provider_options = config["llm_provider_options"]

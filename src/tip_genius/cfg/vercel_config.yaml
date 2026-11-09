@@ -5,3 +5,5 @@ tip_genius:
   kv_url_env_name: KV_REST_API_URL
   # Private Blob store for the long-term archive (read by the Vercel SDK)
   blob_token_env_name: BLOB_READ_WRITE_TOKEN
+  # KV key of the dashboard statistics JSON (written after the results step)
+  stats_kv_key: dashboard_stats
