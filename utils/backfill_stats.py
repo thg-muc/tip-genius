@@ -109,6 +109,7 @@ def print_leaderboard(data: dict[str, Any], key: str, title: str) -> None:
     part = data["slices"].get(key)
     if part is None:
         return
+    names = [model["id"] for model in data["models"]]
     columns = data["meta"]["columns"]["leaderboard"]
     print(f"\n--- {title} ({key}): {part['fixtures']} fixtures ---")
     print(
@@ -118,7 +119,7 @@ def print_leaderboard(data: dict[str, Any], key: str, title: str) -> None:
     for raw in part["leaderboard"]:
         row = dict(zip(columns, raw, strict=True))
         print(
-            f"{row['rank']:>2} {row['model']:<28} {row['points']:>5} "
+            f"{row['rank']:>2} {names[row['model']]:<28} {row['points']:>5} "
             f"{row['offered']:>5} {row['missed']:>4} {row['avg0']:>6.3f} "
             f"{row['se']:>5.3f} {row['ppmd']:>6.2f} {row['backfill']:>4}"
         )
@@ -128,7 +129,7 @@ def print_leaderboard(data: dict[str, Any], key: str, title: str) -> None:
         for raw in fair["rows"]:
             row = dict(zip(fair_columns, raw, strict=True))
             print(
-                f"    {row['rank']:>2} {row['model']:<28} {row['points']:>5} "
+                f"    {row['rank']:>2} {names[row['model']]:<28} {row['points']:>5} "
                 f"{row['avg0']:>6.3f}"
             )
 
