@@ -494,12 +494,16 @@ class StorageManager:
                         manifest, manifest_written=manifest_written
                     )
                 )
+            report = self.results_report
             if blob_archive.update_index(
                 entries,
                 results=self.blob_results,
                 results_scan=self.blob_results_scan,
                 stats=self.blob_stats,
                 stats_scan=self.blob_stats_scan,
+                # The index read at the start of the run: a later read that
+                # lacks any of its files is stale and never overwritten
+                expected=report.index if report is not None else None,
             ):
                 logger.info(
                     "Archived run %s in Vercel Blob: %d odds, %d prediction files, "

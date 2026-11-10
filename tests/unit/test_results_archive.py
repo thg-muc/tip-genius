@@ -1096,6 +1096,25 @@ def test_finalize_stores_entries_and_state_after_an_unverified_index_update(
     assert index[blob_archive.RESULTS_SCAN_KEY][SEASON]["through"] == RUN_TS
 
 
+@pytest.mark.usefixtures("blob_token")
+def test_finalize_never_overwrites_an_index_that_lost_runs(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("14.11.2026 15:30", "Not", "Played")]})
+    manager = StorageManager("data/match_predictions", write_to_blob=True)
+    assert manager.update_results_archive(NOW)
+    # A lagging read at the end of the run returns an index without RUN_TS
+    lagging = blob_archive.to_json(blob_archive.empty_index())
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = lagging
+    manager.blob_predictions = {"Deepseek": PRED_PATH_2}
+    manager.run_ts = RUN_TS_2
+
+    manager.finalize_blob_archive()
+
+    assert fake_blob.files[blob_archive.INDEX_PATHNAME] == lagging
+    assert not [p for p in fake_blob.puts if p["pathname"] == "index.json"]
+
+
 def test_stale_results_csv_keeps_its_fixtures_open(
     fake_blob: FakeBlob, sources: dict[str, Any]
 ) -> None:

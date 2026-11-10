@@ -607,15 +607,19 @@ def read_index(*, fresh: bool = False) -> dict[str, Any]:
     return empty_index() if body is None else json.loads(body)
 
 
-def update_index(
+def update_index(  # noqa: PLR0913
     entries: list[dict[str, Any]],
     reconstructed: list[str] | None = None,
     results: dict[str, dict[str, Any]] | None = None,
     results_scan: dict[str, dict[str, Any] | None] | None = None,
     stats: dict[str, dict[str, Any]] | None = None,
     stats_scan: dict[str, dict[str, Any] | None] | None = None,
+    *,
+    expected: dict[str, Any] | None = None,
+    attempts: int = INDEX_VERIFY_ATTEMPTS,
+    wait: float = INDEX_VERIFY_WAIT_SECONDS,
 ) -> bool:
-    """Append run entries to ``index.json``.
+    """Append run entries to ``index.json``, verified.
 
     ``results`` (``{pathname: {rows, updated_at}}``, e.g. what this run's
     results step verified) is merged in as well, so an index read that lags
@@ -623,37 +627,69 @@ def update_index(
     step's scan state per season) is set the same way, and so are ``stats``
     and ``stats_scan`` (the prediction tables and their scan state).
 
+    ``expected`` is an index the caller read earlier (the workflow: the one
+    read at the start of the run). A fresh read that lacks any of its
+    pathnames is stale and never overwritten. Each attempt puts the merge and
+    polls the read-back (``_verified_index_update``); success needs every run,
+    pathname, row count and scan state of this call in the index.
+
     Never raises; a failure is logged as a WARNING. Runs can be re-added later
     from their manifests with ``utils/backfill_blob_archive.py --rebuild-index``.
     The read-modify-write is not atomic: never run the backfill or
     ``--rebuild-index`` near the cron (Tue/Fri 03:00 UTC).
     """
-    try:
-        index = read_index(fresh=True)
-    except Exception as e:
-        logger.warning(
-            "Could not read %s (HTTP %s), index not updated: %s",
-            INDEX_PATHNAME,
-            getattr(e, "status_code", None),
-            e,
-        )
-        return False
-    merged = merge_index(index, entries, reconstructed)
-    if results:
-        merged = merge_results_index(merged, results)
-    if results_scan:
-        merged = merge_results_scan(merged, results_scan)
-    if stats:
-        merged = merge_results_index(merged, stats, key=STATS_KEY)
-    if stats_scan:
-        merged = merge_results_scan(merged, stats_scan, key=STATS_SCAN_KEY)
-    return put_with_retry(
-        INDEX_PATHNAME,
-        to_json(merged),
-        content_type=JSON_CONTENT_TYPE,
-        allow_overwrite=True,
-        cache_control_max_age=INDEX_CACHE_MAX_AGE,
+    run_ts = {entry["run_ts"] for entry in entries}
+    wanted = index_pathnames(merge_index(None, entries, reconstructed))
+    known = index_pathnames(expected) if expected else set()
+    sections = [
+        (RESULTS_KEY, results or {}, RESULTS_SCAN_KEY, results_scan or {}),
+        (STATS_KEY, stats or {}, STATS_SCAN_KEY, stats_scan or {}),
+    ]
+
+    def merge(index: dict[str, Any]) -> dict[str, Any]:
+        merged = merge_index(index, entries, reconstructed)
+        for key, files, scan_key, scan in sections:
+            if files:
+                merged = merge_results_index(merged, files, key=key)
+            if scan:
+                merged = merge_results_scan(merged, scan, key=scan_key)
+        return merged
+
+    def missing(index: dict[str, Any]) -> int:
+        count = len(run_ts - {run.get("run_ts") for run in index.get("runs", [])})
+        count += len(wanted - index_pathnames(index))
+        for key, files, scan_key, scan in sections:
+            current = index.get(key, {})
+            for path, entry in files.items():
+                found = current.get(path)
+                # A newer entry (another writer) counts as present
+                count += found is None or (
+                    found.get("rows") != entry.get("rows")
+                    and str(found.get("updated_at") or "")
+                    <= str(entry.get("updated_at") or "")
+                )
+            states = index.get(scan_key)
+            states = states if isinstance(states, dict) else {}
+            count += sum(states.get(season) != state for season, state in scan.items())
+        return count
+
+    ok = _verified_index_update(
+        merge,
+        missing,
+        lambda index: len(known - index_pathnames(index)),
+        label=f"run {', '.join(sorted(run_ts)) or '(no run)'}",
+        attempts=attempts,
+        wait=wait,
     )
+    if not ok:
+        logger.warning(
+            "Run index update NOT verified after %d attempts (%s may lack these "
+            "entries); re-add runs with utils/backfill_blob_archive.py "
+            "--rebuild-index",
+            attempts,
+            INDEX_PATHNAME,
+        )
+    return ok
 
 
 def await_readback(
