@@ -54,22 +54,28 @@
         <div id="error" class="hidden bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8" role="alert"></div>
 
         <!-- Leaderboard -->
-        <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl overflow-hidden mb-8 sm:mb-10" aria-labelledby="table-title">
-            <div class="flex items-baseline justify-between px-3 sm:px-5 pt-3 pb-2">
-                <h2 id="table-title" class="text-base sm:text-xl font-bold">Table</h2>
+        <!-- Collapsible from its header row; the state is remembered (see bindCards) -->
+        <details id="table-card" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl overflow-hidden mb-8 sm:mb-10" open>
+            <summary class="summary-plain flex items-center justify-between gap-2 px-3 sm:px-5 pt-3 pb-3 open-pb-2 cursor-pointer select-none">
+                <span class="flex items-center gap-2"><h2 id="table-title" class="text-base sm:text-xl font-bold">Table</h2><svg class="w-4 h-4 text-gray-400 card-chevron shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg></span>
                 <p id="table-meta" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400"></p>
-            </div>
+            </summary>
             <div class="overflow-x-auto">
                 <table id="leaderboard" class="w-full text-xs sm:text-sm tabular-nums"></table>
             </div>
             <div id="table-legend" class="px-3 sm:px-5 py-3 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700"></div>
-        </section>
+        </details>
 
         <!-- Detail tabs -->
         <div class="flex justify-center mb-3">
             <div id="view-tabs" class="inline-flex rounded-md shadow-sm overflow-hidden" role="tablist" aria-label="View"></div>
         </div>
-        <section id="panel" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4 lg:p-5 mb-6" role="tabpanel"></section>
+        <details id="panel-card" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl mb-6" open>
+            <summary class="summary-plain flex items-center gap-2 px-3 sm:px-4 lg:px-5 pt-3 pb-3 open-pb-0 cursor-pointer select-none">
+                <h2 id="panel-title" class="text-base sm:text-xl font-bold"></h2><svg class="w-4 h-4 text-gray-400 card-chevron shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+            </summary>
+            <div id="panel" class="px-3 sm:px-4 lg:px-5 pt-2 pb-3 sm:pb-4 lg:pb-5" role="tabpanel"></div>
+        </details>
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
@@ -178,9 +184,31 @@ function bindControls() {
     const b = e.target.closest('[data-view]')
     if (!b) return
     ui.tab = b.dataset.view
+    $('panel-card').open = true
     renderControls()
     renderPanel()
   })
+}
+
+// Folded cards are remembered per browser; a folded table is re-measured on opening
+const CARDS_KEY = 'dashboardFoldedCards'
+
+function bindCards() {
+  let folded = {}
+  try {
+    folded = JSON.parse(localStorage.getItem(CARDS_KEY)) || {}
+  } catch {
+    folded = {}
+  }
+  for (const id of ['table-card', 'panel-card']) {
+    const card = $(id)
+    if (folded[id]) card.open = false
+    card.addEventListener('toggle', () => {
+      folded[id] = !card.open
+      localStorage.setItem(CARDS_KEY, JSON.stringify(folded))
+      if (id === 'table-card' && card.open) alignStickyColumns()
+    })
+  }
 }
 
 function update(patch) {
@@ -322,7 +350,7 @@ function alignStickyColumns() {
   const table = $('leaderboard')
   const box = table.parentElement
   const heads = [...table.querySelectorAll('thead th')]
-  if (!heads.length) return
+  if (!heads.length || !$('table-card').open) return
   const modelCells = table.querySelectorAll('tr > :nth-child(2)')
   // An overflowing table shrinks every column to its minimum and ignores cell
   // widths, so the width goes on the cell's content as a minimum instead
@@ -393,7 +421,7 @@ function renderTimeline() {
   const range = diffRange(tl, diff)
   $('panel').innerHTML = `
     <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 mb-3 sm:mb-2">
-      <h2 class="text-base sm:text-xl font-bold">${diff ? 'Points gap to Favourite 2:1' : 'Cumulative points'}</h2>
+      <h3 class="text-sm sm:text-base font-semibold">${diff ? 'Points gap to Favourite 2:1' : 'Cumulative points'}</h3>
       <div class="grid grid-cols-2 w-full sm:w-auto p-0.5 rounded-lg bg-gray-100 dark:bg-slate-900" role="group">${modeButton('diff', 'Gap to favourite')}${modeButton('total', 'Total points')}</div>
     </div>
     <p class="${backfillNote ? '' : 'hidden sm:block '}text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3"><span class="hidden sm:inline">${diff
@@ -499,14 +527,13 @@ function bindLegend() {
 
 function renderHits() {
   if (view.mode !== 'standard') {
-    $('panel').innerHTML = '<h2 class="text-base sm:text-xl font-bold mb-2">Hit types</h2><p class="text-sm text-gray-500 dark:text-gray-400">Not available in the fair comparison – turn off “Fair comparison”.</p>'
+    $('panel').innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Not available in the fair comparison – turn off “Fair comparison”.</p>'
     return
   }
   const rows = view.rows.filter((r) => r.hits)
   const colors = D.hitColors()
   const c = D.chrome()
   $('panel').innerHTML = `
-    <h2 class="text-base sm:text-xl font-bold mb-1">Hit types</h2>
     <p class="hidden sm:block text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2">Share of offered matches; each match counts once, at the best level reached.</p>
     <div class="flex flex-wrap justify-between sm:justify-start gap-x-2 sm:gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-3 mb-5 sm:mt-0 sm:mb-2">${D.HIT_TYPES.map((h) =>
       `<span class="inline-flex items-center gap-1 sm:gap-1.5 whitespace-nowrap"><span class="inline-block w-3 h-3 rounded-sm border border-gray-300 dark:border-gray-600" style="background:${colors[h.key]}"></span>${h.key === 'diff' ? '<span class="sm:hidden">Goal diff.</span><span class="hidden sm:inline">Goal difference</span>' : h.label}${h.points ? `<span class="hidden sm:inline"> (${h.points})</span>` : ''}</span>`).join('')}</div>
@@ -588,12 +615,15 @@ function renderRecent() {
   }).join('')
   const note = recent.otherSeason ? `<p class="text-xs sm:text-sm text-amber-700 dark:text-amber-300 mb-3">Last matchdays exist only for the current season ${recent.season}.</p>` : ''
   const allNote = state.league === 'all' ? '<p class="hidden sm:block text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3">The latest matchday per league; pick a league for the last three.</p>' : ''
-  $('panel').innerHTML = `<h2 class="text-base sm:text-xl font-bold mb-1">Last matchdays</h2>${note}${allNote}
+  $('panel').innerHTML = `${note}${allNote}
     <div class="flex flex-wrap justify-between sm:justify-start gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-3 mb-5 sm:mt-0 sm:mb-3">${[4, 3, 2, 0].map((p) => `<span class="${p ? 'inline-flex' : 'hidden sm:inline-flex'} items-center gap-1">${pointsBadge(p)} ${D.HIT_TYPES.find((h) => h.points === p).label}</span>`).join('')}</div>
     ${blocks}`
 }
 
+const VIEW_TITLES = { timeline: 'Trends', hits: 'Hit types', recent: 'Last matchdays' }
+
 function renderPanel() {
+  $('panel-title').textContent = VIEW_TITLES[ui.tab]
   destroyCharts()
   if (ui.tab === 'timeline') renderTimeline()
   else if (ui.tab === 'hits') renderHits()
@@ -629,6 +659,7 @@ async function init() {
   state = D.readState(stats)
   D.applyChartDefaults(Chart)
   bindControls()
+  bindCards()
   render()
   $('footer-meta').innerHTML = D.footerMetaHtml(stats)
   D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
