@@ -86,6 +86,8 @@ class StorageManager:
         self.blob_predictions: dict[str, str] = {}
         # Results index entries verified by this run's results step
         self.blob_results: dict[str, dict[str, Any]] = {}
+        # First index.json read of the run: finalize's stale-read reference
+        self.run_index: dict[str, Any] | None = None
         # Results scan state per season, stored once the step went through
         self.blob_results_scan: dict[str, dict[str, Any] | None] = {}
         # Prediction table index entries and scan state of the stats step
@@ -350,10 +352,13 @@ class StorageManager:
             logger.warning("Could not update the Blob results archive", exc_info=True)
             return False
         self.results_report = report
-        if report.index_updated:
-            self.blob_results = report.index_entries
-        if report.ok and report.scan_state:
-            # Only a complete run advances the scan state (see plan_scan)
+        self.run_index = self.run_index or report.index
+        # Entries of verified CSVs and the state go into the run's index
+        # update too, also when this step's own index update was not verified
+        # (newer entries win the merge, so carrying them over is safe)
+        self.blob_results = dict(report.index_entries)
+        if report.scan_state:
+            # None after an unreadable prediction file (see _next_scan_state)
             self.blob_results_scan = report.scan_state
         return report.ok
 
@@ -395,7 +400,8 @@ class StorageManager:
             index = report.index if report is not None else None
             if index is None:
                 index = blob_archive.read_index(fresh=True)
-            elif report is not None and report.index_updated:
+                self.run_index = self.run_index or index
+            elif report is not None and report.index_entries:
                 index = blob_archive.merge_results_index(index, report.index_entries)
             full = report is not None and report.scan_modes.get(season) == "full"
             inputs = dashboard.collect_inputs(
@@ -498,6 +504,9 @@ class StorageManager:
                 results_scan=self.blob_results_scan,
                 stats=self.blob_stats,
                 stats_scan=self.blob_stats_scan,
+                # The index read at the start of the run: a later read that
+                # lacks any of its files is stale and never overwritten
+                expected=self.run_index,
             ):
                 logger.info(
                     "Archived run %s in Vercel Blob: %d odds, %d prediction files, "

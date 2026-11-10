@@ -203,6 +203,31 @@ def test_step_keeps_old_json_when_the_table_is_stale(
     assert kv_posts == []
 
 
+def test_finalize_guards_against_a_stale_index_when_the_results_step_raised(
+    kv_posts: list[dict[str, Any]],
+    fake_blob: FakeBlob,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed(fake_blob)
+
+    def boom(*_args: Any, **_kwargs: Any) -> None:
+        msg = "broken"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(ra, "update_results_archive", boom)
+    manager = StorageManager(
+        "data/match_predictions", write_to_kv=True, write_to_blob=True
+    )
+    assert not manager.update_results_archive(NOW)
+    assert manager.update_dashboard_stats(["Deepseek-Chat"], now=NOW)
+    # The stats step's index read is the reference: a later read without RUN
+    # is stale and never overwritten
+    lagging = blob_archive.to_json(blob_archive.empty_index())
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = lagging
+    manager.finalize_blob_archive()
+    assert fake_blob.files[blob_archive.INDEX_PATHNAME] == lagging
+
+
 def test_step_skipped_in_debug_mode(
     kv_posts: list[dict[str, Any]], fake_blob: FakeBlob
 ) -> None:

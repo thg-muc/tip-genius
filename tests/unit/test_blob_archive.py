@@ -224,7 +224,43 @@ def test_update_index_never_overwrites_unreadable_index(
     with caplog.at_level(logging.WARNING):
         assert not blob_archive.update_index([{"run_ts": TS}])
     assert fake_blob.puts == []
-    assert "index not updated" in caplog.text
+    assert "Run index update NOT verified" in caplog.text
+
+
+def test_update_index_never_overwrites_a_stale_read(
+    fake_blob: FakeBlob, caplog: pytest.LogCaptureFixture
+) -> None:
+    seen = blob_archive.merge_index(
+        None, [{"run_ts": TS, "odds": {"A": "odds/a.jsonl"}}]
+    )
+    # The fresh read lags behind: it lacks the run seen at the start
+    fake_blob.files["index.json"] = blob_archive.to_json(blob_archive.empty_index())
+    entry = {"run_ts": "2026-10-30_03-00-00", "odds": {"A": "odds/b.jsonl"}}
+    with caplog.at_level(logging.WARNING):
+        assert not blob_archive.update_index([entry], expected=seen, wait=0)
+    assert fake_blob.puts == []
+    assert "looks stale" in caplog.text
+
+
+def test_update_index_polls_a_lagging_read_back(
+    fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_blob.files["index.json"] = blob_archive.to_json(blob_archive.empty_index())
+    old = fake_blob.files["index.json"]
+    real = blob_archive.read_fresh
+    lagging = iter([False, True, True])  # first read before the put, then 2 lags
+
+    def read(pathname: str) -> bytes | None:
+        return old if next(lagging, False) else real(pathname)
+
+    monkeypatch.setattr(blob_archive, "read_fresh", read)
+    entry = {"run_ts": TS, "odds": {"A": "odds/a.jsonl"}}
+    stats = {"stats/predictions_2026-27.csv": {"rows": 3, "updated_at": "x"}}
+    assert blob_archive.update_index([entry], stats=stats, stats_scan={"s": {"a": 1}})
+    assert [p["pathname"] for p in fake_blob.puts] == ["index.json"]
+    index = json.loads(fake_blob.files["index.json"])
+    assert index[blob_archive.STATS_KEY] == stats
+    assert index[blob_archive.STATS_SCAN_KEY] == {"s": {"a": 1}}
 
 
 def test_reader_uses_index_not_list(fake_blob: FakeBlob) -> None:
@@ -443,3 +479,21 @@ def test_backfill_index_gives_up_after_bounded_attempts(
     assert not ok
     assert len([p for p in fake_blob.puts if p["pathname"] == "index.json"]) == 3
     assert "NOT verified after 3 attempts" in caplog.text
+
+
+def test_update_index_accepts_a_newer_foreign_entry(fake_blob: FakeBlob) -> None:
+    path = "stats/predictions_2026-27.csv"
+    newer = {path: {"rows": 9, "updated_at": "2026-11-10 12:00:00"}}
+    fake_blob.files["index.json"] = blob_archive.to_json(
+        blob_archive.merge_results_index(None, newer, key=blob_archive.STATS_KEY)
+    )
+    older = {path: {"rows": 3, "updated_at": "2026-11-10 11:00:00"}}
+    # Stats only (no run entry): the newer entry stays and counts as shown
+    assert blob_archive.update_index([], stats=older, wait=0)
+    index = json.loads(fake_blob.files["index.json"])
+    assert index[blob_archive.STATS_KEY] == newer
+    # Same timestamp, other row count: not shown, so it is written
+    same = {path: {"rows": 5, "updated_at": "2026-11-10 12:00:00"}}
+    assert blob_archive.update_index([], stats=same, wait=0)
+    index = json.loads(fake_blob.files["index.json"])
+    assert index[blob_archive.STATS_KEY] == same

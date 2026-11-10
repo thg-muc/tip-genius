@@ -334,16 +334,29 @@ def test_stale_read_that_recovers_is_used(
     assert [r["home_team"] for r in csv_rows(fake_blob)] == ["Old", "Bayern Munich"]
 
 
-def test_read_back_verification_retries_then_fails(
+def test_read_back_verification_polls_then_retries_then_fails(
     fake_blob: FakeBlob, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture = ra.Fixture(BL, datetime(2026, 11, 7, 14, 30, tzinfo=UTC), "A", "B")
     row = ra.result_row(fixture, bl_result(fixture.kickoff, "A", "B", (1, 0)), 2, NOW)
-    reads = iter([ra.rows_to_csv([])])
+    sleeps: list[float] = []
+    monkeypatch.setattr(blob_archive.time, "sleep", sleeps.append)
+    polls = len(blob_archive.READBACK_DELAYS)
     real = blob_archive.read_fresh
+
+    # Lagging reads within one attempt's polls: a single put, waits before
+    # the first read-back
+    reads = iter([ra.rows_to_csv([])] * (polls - 1))
     monkeypatch.setattr(
         blob_archive, "read_fresh", lambda p: next(reads, None) or real(p)
     )
+    assert ra.write_rows_verified(BL_PATH, [row], wait=0)
+    assert [p["pathname"] for p in fake_blob.puts] == [BL_PATH]
+    assert sleeps == list(blob_archive.READBACK_DELAYS)
+
+    # Lagging through every poll of the first attempt: put again
+    fake_blob.puts.clear()
+    reads = iter([ra.rows_to_csv([])] * polls)
     assert ra.write_rows_verified(BL_PATH, [row], wait=0)
     assert [p["pathname"] for p in fake_blob.puts] == [BL_PATH, BL_PATH]
 
@@ -946,7 +959,7 @@ def test_unreadable_new_file_does_not_advance_the_scan_state(
     assert season_state(report)["through"] == RUN_TS_2
 
 
-def test_failed_results_write_does_not_advance_the_scan_state(
+def test_failed_results_write_keeps_its_fixtures_open(
     fake_blob: FakeBlob, sources: dict[str, Any]
 ) -> None:
     seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
@@ -959,8 +972,59 @@ def test_failed_results_write_does_not_advance_the_scan_state(
     report = run_incremental()
 
     assert report.files[0].status == "write-failed"
-    assert report.scan_state is None
+    assert not report.ok
+    # The state advances, the fixture stays open: no full scan next run
+    assert report.scan_state is not None
+    assert (report.scan_state[SEASON] or {}).get("open") == [
+        [BL, "2026-11-07T14:30Z", "Bayern Munich", "Union"]
+    ]
     assert blob_archive.RESULTS_SCAN_KEY not in read_index(fake_blob)
+    index = blob_archive.merge_results_scan(read_index(fake_blob), report.scan_state)
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+    fake_blob.fail_puts.clear()
+    prediction_reads(fake_blob)
+
+    retry = run_incremental()
+
+    assert retry.scan_modes[SEASON] == "incremental"
+    assert prediction_reads(fake_blob) == []
+    assert retry.files[0].status == "written"
+    assert retry.ok
+    assert retry.scan_state is not None
+    assert (retry.scan_state[SEASON] or {}).get("open") == []
+
+
+def test_unverified_write_that_landed_heals_the_index(
+    fake_blob: FakeBlob, sources: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
+    kickoff = datetime(2026, 11, 7, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(kickoff, "Bayern", "Union", (3, 0))]
+    real = blob_archive.read_fresh
+    lagging = True
+
+    def read(pathname: str) -> bytes | None:
+        # The put lands, but every read-back of this run still shows the old file
+        if lagging and pathname == BL_PATH:
+            return None
+        return real(pathname)
+
+    monkeypatch.setattr(blob_archive, "read_fresh", read)
+    report = run_incremental()
+    assert report.files[0].status == "write-failed"
+    assert report.scan_state is not None
+    index = blob_archive.merge_results_scan(read_index(fake_blob), report.scan_state)
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = blob_archive.to_json(index)
+    lagging = False
+    sources["results"] = []
+
+    retry = run_incremental()
+
+    # The row is there: nothing to fetch, the index entry is re-added
+    assert retry.files[0].status == "unchanged"
+    assert retry.index_entries[BL_PATH]["rows"] == 1
+    assert retry.scan_state is not None
+    assert (retry.scan_state[SEASON] or {}).get("open") == []
 
 
 def test_rebuild_resets_the_scan_state(
@@ -1007,7 +1071,51 @@ def test_cron_step_runs_incrementally_and_finalize_stores_the_state(
     ]
 
 
-def test_stale_results_csv_does_not_advance_the_scan_state(
+@pytest.mark.usefixtures("blob_token")
+def test_finalize_stores_entries_and_state_after_an_unverified_index_update(
+    fake_blob: FakeBlob, sources: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
+    kickoff = datetime(2026, 11, 7, 14, 30, tzinfo=UTC)
+    sources["results"] = [bl_result(kickoff, "Bayern", "Union", (3, 0))]
+    # The CSV is verified, but the step's own index read-back keeps lagging
+    monkeypatch.setattr(
+        blob_archive, "update_results_index", lambda *_args, **_kwargs: False
+    )
+    manager = StorageManager("data/match_predictions", write_to_blob=True)
+    assert not manager.update_results_archive(NOW)
+    assert manager.blob_results[BL_PATH]["rows"] == 1
+    assert manager.blob_results_scan[SEASON] is not None
+
+    manager.blob_predictions = {"Deepseek": PRED_PATH_2}
+    manager.run_ts = RUN_TS_2
+    manager.finalize_blob_archive()
+
+    index = read_index(fake_blob)
+    assert index[blob_archive.RESULTS_KEY][BL_PATH]["rows"] == 1
+    assert index[blob_archive.RESULTS_SCAN_KEY][SEASON]["through"] == RUN_TS
+
+
+@pytest.mark.usefixtures("blob_token")
+def test_finalize_never_overwrites_an_index_that_lost_runs(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("14.11.2026 15:30", "Not", "Played")]})
+    manager = StorageManager("data/match_predictions", write_to_blob=True)
+    assert manager.update_results_archive(NOW)
+    # A lagging read at the end of the run returns an index without RUN_TS
+    lagging = blob_archive.to_json(blob_archive.empty_index())
+    fake_blob.files[blob_archive.INDEX_PATHNAME] = lagging
+    manager.blob_predictions = {"Deepseek": PRED_PATH_2}
+    manager.run_ts = RUN_TS_2
+
+    manager.finalize_blob_archive()
+
+    assert fake_blob.files[blob_archive.INDEX_PATHNAME] == lagging
+    assert not [p for p in fake_blob.puts if p["pathname"] == "index.json"]
+
+
+def test_stale_results_csv_keeps_its_fixtures_open(
     fake_blob: FakeBlob, sources: dict[str, Any]
 ) -> None:
     seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
@@ -1020,6 +1128,26 @@ def test_stale_results_csv_does_not_advance_the_scan_state(
     report = run_incremental()
 
     assert report.files[0].status == "stale"
+    assert report.scan_state is not None
+    assert (report.scan_state[SEASON] or {}).get("open") == [
+        [BL, "2026-11-07T14:30Z", "Bayern Munich", "Union"]
+    ]
+
+
+def test_unreadable_prediction_file_does_not_advance_the_scan_state(
+    fake_blob: FakeBlob, sources: dict[str, Any]
+) -> None:
+    seed(fake_blob, {BL: [record("07.11.2026 15:30", "Bayern Munich", "Union")]})
+
+    def broken(_path: str) -> list[dict[str, Any]]:
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    report = ra.update_results_archive(
+        {SEASON}, now=NOW, wait=0, incremental=True, fetch_jsonl=broken
+    )
+
+    assert report.unread
     assert report.scan_state is None
 
 
