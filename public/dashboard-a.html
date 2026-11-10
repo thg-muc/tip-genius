@@ -42,13 +42,15 @@
             </div>
         </div>
 
+        <!-- Notice slot (reserved even when empty, see notesWithPlaceholder) -->
+        <div id="notes" class="space-y-2 mb-3"></div>
+
         <!-- Season and options -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
             <div id="season-control" class="inline-flex self-center sm:self-auto rounded-md shadow-sm overflow-hidden" role="group" aria-label="Season"></div>
             <div id="toggles" class="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-600 dark:text-gray-300"></div>
         </div>
 
-        <div id="notes" class="space-y-2 mb-3"></div>
         <div id="error" class="hidden bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8" role="alert"></div>
 
         <!-- Leaderboard -->
