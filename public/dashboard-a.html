@@ -145,7 +145,7 @@ function renderControls() {
   $('toggles').innerHTML = [
     toggle('showAll', 'Show all models', state.showAll, false,
       'Include inactive models and models with fewer than 80% of the matches'),
-    toggle('backfill', 'Count backfill tips', state.backfill, !view?.hasBackfill || !!state.fair,
+    toggle('backfill', 'Allow backfill tips', state.backfill, !view?.hasBackfill || !!state.fair,
       'Count the tips generated afterwards for late joiners (before their first live run)'),
     toggle('fair', 'Fair comparison', !!state.fair, !view?.fairGroups.length,
       'Only matches offered to every active model'),
