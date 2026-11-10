@@ -12,9 +12,10 @@ Rules (also written into the JSON's ``meta``):
   after the provider's first prediction and no later than the last kickoff it
   predicted. A missing tip on an offered fixture scores 0 (``Avg0``, the
   ranking key, is points per offered fixture; ``Avg`` points per tip).
-- Baselines are offered every fixture: ``Odds-Favourite`` tips 2:1 for a home
-  and 0:1 for an away favourite (higher margin-free win probability, never a
-  draw; no odds = no tip), ``Always-2:1`` tips 2:1, ``Consensus`` tips the
+- Baselines are offered every fixture: ``Odds-Favourite`` ("Favourite 2:1")
+  tips a 2:1 win for the favourite, 2:1 for a home and 1:2 for an away
+  favourite (higher margin-free win probability, never a draw; no odds = no
+  tip), ``Always-2:1`` tips 2:1, ``Consensus`` tips the
   median of every model's tip on the fixture, per side, .5 rounded up (at
   least two tips).
 - Matchdays: per league, a new matchday starts when a team plays again or
@@ -56,7 +57,7 @@ ALWAYS_HOME = "Always-2:1"
 CONSENSUS = "Consensus"
 BASELINES = (ODDS_FAVOURITE, ALWAYS_HOME, CONSENSUS)
 BASELINE_LABELS = {
-    ODDS_FAVOURITE: "Odds favourite (2:1 / 0:1)",
+    ODDS_FAVOURITE: "Favourite 2:1 (2:1 / 1:2)",
     ALWAYS_HOME: "Always 2:1",
     CONSENSUS: "Model consensus (median)",
 }
@@ -131,8 +132,9 @@ RULES = {
         "tip, missed = no tip; shares are of offered fixtures"
     ),
     "baselines": (
-        "Odds-Favourite: 2:1 home / 0:1 away favourite by margin-free win "
-        "probability of the latest odds before kickoff (never a draw; no odds "
+        "Odds-Favourite (Favourite 2:1): 2:1 home / 1:2 away favourite by "
+        "margin-free win probability of the latest odds before kickoff (never "
+        "a draw; no odds "
         "= no tip). Always-2:1. Consensus: median of every model's tip per "
         "side, .5 rounded up, at least two tips. Baselines are offered every "
         "fixture"
@@ -360,7 +362,7 @@ def parse_results(rows: Iterable[dict[str, str]]) -> dict[str, tuple[int, int]]:
 
 
 def odds_favourite(odds: tuple[float, float, float] | None) -> tuple[int, int] | None:
-    """Tip 2:1 for a home and 0:1 for an away favourite; None without odds.
+    """Tip a 2:1 win for the favourite (2:1 home, 1:2 away); None without odds.
 
     The favourite has the higher margin-free win probability; normalising
     1/odds by their sum keeps the order of 1/odds, so the lower price wins
@@ -371,7 +373,7 @@ def odds_favourite(odds: tuple[float, float, float] | None) -> tuple[int, int] |
     inverse = [1 / value for value in odds]
     total = sum(inverse)
     home, away = inverse[0] / total, inverse[2] / total
-    return (2, 1) if home >= away else (0, 1)
+    return (2, 1) if home >= away else (1, 2)
 
 
 def consensus(tips: Iterable[tuple[int, int]]) -> tuple[int, int] | None:
