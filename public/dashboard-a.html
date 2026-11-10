@@ -360,18 +360,25 @@ function renderTimeline() {
   const tl = D.timeline(stats, view)
   const diff = ui.timelineMode === 'diff'
   const c = D.chrome()
-  const modeButton = (key, label) => `<button type="button" data-mode="${key}" aria-pressed="${ui.timelineMode === key}"
-    class="${segmentClasses(ui.timelineMode === key)}">${label}</button>`
+  // A switch inside the panel, deliberately unlike the view tabs above:
+  // grey track, the chosen option as a raised pill, equal halves
+  const modeButton = (key, label) => {
+    const active = ui.timelineMode === key
+    return `<button type="button" data-mode="${key}" aria-pressed="${active}"
+      class="px-3 py-1 rounded-md text-xs sm:text-sm text-center whitespace-nowrap transition-colors ${active
+        ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-white font-semibold shadow-sm'
+        : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'}">${label}</button>`
+  }
   const backfillNote = !state.backfill && view.hasBackfill ? ' The trend always includes the backfill tips.' : ''
   const range = diffRange(tl, diff)
   $('panel').innerHTML = `
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+    <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-3 mb-3 sm:mb-2">
       <h2 class="text-base sm:text-xl font-bold">${diff ? 'Points gap to Favourite 2:1' : 'Cumulative points'}</h2>
-      <div class="inline-flex rounded-md shadow-sm overflow-hidden" role="group">${modeButton('diff', 'Gap to favourite')}${modeButton('total', 'Total points')}</div>
+      <div class="grid grid-cols-2 w-full sm:w-auto p-0.5 rounded-lg bg-gray-100 dark:bg-slate-900" role="group">${modeButton('diff', 'Gap to favourite')}${modeButton('total', 'Total points')}</div>
     </div>
-    <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3">${diff
+    <p class="${backfillNote ? '' : 'hidden sm:block '}text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3"><span class="hidden sm:inline">${diff
       ? 'Above zero: more points than Favourite 2:1 on the same matches since the model’s first tip.'
-      : 'Points summed per ' + tl.stepName + '.'}${backfillNote}</p>
+      : 'Points summed per ' + tl.stepName + '.'}</span>${backfillNote}</p>
     <div class="relative h-72 sm:h-96"><canvas id="timeline-chart" aria-label="Line chart of points over time" role="img"></canvas></div>
     ${legendHtml(tl.series.map((s) => ({ index: s.row.info.index, label: clippedLabel(s, range), ...D.modelStyle(s.row.info) })))}
     ${formTable()}`
