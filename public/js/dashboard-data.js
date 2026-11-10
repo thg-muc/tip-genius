@@ -39,7 +39,7 @@ const MODEL_DISPLAY = {
     logo: 'OpenAI',
   },
   'OpenRouter-Grok': { name: 'Grok', short: 'Grok', logo: 'xAI' },
-  'Odds-Favourite': { name: 'Favourite 2:1', short: 'Favourite', icon: '⭐' },
+  'Odds-Favourite': { name: 'Favourite 2:1', short: 'Favourite 2:1', icon: '⭐' },
   'Always-2:1': { name: 'Always 2:1', short: 'Always 2:1', icon: '🏠' },
   Consensus: { name: 'Model consensus', short: 'Consensus', icon: '🤖' },
 }
