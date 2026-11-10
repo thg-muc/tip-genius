@@ -16,15 +16,16 @@
 <body class="font-sans flex flex-col min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 dark:from-slate-900 dark:to-blue-950 text-gray-800 dark:text-gray-200">
     <header class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-30 mb-3 sm:mb-6">
         <div class="container mx-auto px-4 py-2 sm:py-3">
-            <div class="flex items-center justify-between">
-                <a href="/" class="flex items-center group transition duration-200">
+            <!-- Three columns: brand, the switch to the tips page in the middle, GitHub -->
+            <div class="grid grid-cols-3 items-center">
+                <a href="/" class="justify-self-start flex items-center group transition duration-200">
                     <span class="text-base sm:text-2xl mr-2">⚽️</span>
                     <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                 </a>
-                <nav class="flex items-center gap-1 text-sm sm:text-base">
-                    <a href="/" class="h-10 inline-flex items-center px-2 sm:px-3 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tips</a>
-                    <span class="h-10 inline-flex items-center px-2 sm:px-3 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Stats</span>
-                </nav>
+                <a href="/" class="justify-self-center h-10 inline-flex items-center px-3 sm:px-4 rounded-lg text-sm sm:text-base font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900 hover:bg-sky-100 dark:hover:bg-slate-700 transition duration-200">Tips</a>
+                <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="justify-self-end h-10 inline-flex items-center text-gray-500 p-1 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                </a>
             </div>
         </div>
     </header>
@@ -48,7 +49,7 @@
         <!-- Season and options -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-2 mb-5 sm:mb-3">
             <div id="season-control" class="inline-flex self-center sm:self-auto rounded-md shadow-sm overflow-hidden" role="group" aria-label="Season"></div>
-            <div id="toggles" class="flex flex-wrap justify-center gap-x-3 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-600 dark:text-gray-300"></div>
+            <div id="toggles" class="flex flex-wrap justify-center gap-x-3 sm:gap-x-4 gap-y-1 text-sm sm:text-base text-gray-600 dark:text-gray-300"></div>
         </div>
 
         <div id="error" class="hidden bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8" role="alert"></div>
@@ -84,6 +85,11 @@
             <p class="sm:hidden"><strong class="font-semibold">Scoring:</strong> 4 exact, 3 goal difference, 2 outcome.</p>
             <p class="hidden sm:block"><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. Wrong and missing tips score 0.</p>
             <p id="footer-meta"></p>
+            <!-- Contact and copyright, as on the main page -->
+            <div class="flex justify-between items-center pt-2 text-xs text-gray-500 dark:text-gray-400">
+                <a href="http://linkedin.com/in/thomas-glanzer" class="text-xs sm:text-sm font-semibold hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Contact</a>
+                <div class="text-xs sm:text-sm font-semibold">© <span id="currentYear"></span> THG</div>
+            </div>
         </div>
     </footer>
 
@@ -109,12 +115,13 @@ const esc = D.escapeHtml
 
 function tabClasses(active, first, last) {
   return [
-    'flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base whitespace-nowrap flex-1 lg:flex-none lg:w-52 transition-all duration-200 border-b-2 tracking-wide font-mono',
+    // Same classes as createTab() in main.js
+    'flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 whitespace-nowrap transition-all duration-300 relative border-b-2 tracking-wide font-mono',
     first ? 'rounded-l-md' : '',
     last ? 'rounded-r-md' : '',
     active
       ? 'bg-white dark:bg-gray-800 text-sky-700 dark:text-sky-400 font-semibold border-sky-500 dark:border-sky-400 shadow-md'
-      : 'bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400',
+      : 'bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5',
   ].join(' ')
 }
 
@@ -129,8 +136,8 @@ function renderControls() {
   $('league-tabs').innerHTML = D.LEAGUES.map((l, i) => {
     const active = l.value === state.league
     const icon = l.logo
-      ? `<img src="${l.logo}" alt="" class="w-6 h-6 object-contain">`
-      : '<span class="text-lg" aria-hidden="true">🌍</span>'
+      ? `<img src="${l.logo}" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain">`
+      : '<span class="w-7 h-7 sm:w-6 sm:h-6 inline-flex items-center justify-center text-2xl sm:text-xl leading-none" aria-hidden="true">🌍</span>'
     return `<button type="button" role="tab" aria-selected="${active}" data-league="${esc(l.value)}"
       class="${tabClasses(active, i === 0, i === D.LEAGUES.length - 1)}" title="${esc(l.label)}">
       ${icon}<span class="hidden sm:inline-block">${esc(l.label)}</span></button>`
@@ -289,7 +296,7 @@ function formCell(row) {
 }
 
 function deltaCell(row) {
-  if (row.info.isFavourite) return '<span class="text-gray-500 dark:text-gray-400">0</span>'
+  if (row.info.isFavourite) return '<span class="text-gray-500 dark:text-gray-400" title="reference">–</span>'
   const cls = row.deltaFav > 0.0005 ? 'text-green-700 dark:text-green-400' : row.deltaFav < -0.0005 ? 'text-red-700 dark:text-red-400' : 'text-gray-500'
   return `<span class="${cls}">${D.fmtSigned(row.deltaFav)}</span>`
 }
@@ -410,10 +417,10 @@ function glossaryHtml() {
 }
 
 function renderNotes() {
-  $('notes').innerHTML = D.notesWithPlaceholder(view).map((n) => `<div ${n.placeholder ? 'aria-hidden="true"' : ''} class="${n.placeholder ? 'invisible ' : ''}flex gap-2 items-start rounded-lg px-3 py-2 text-xs sm:text-sm ${n.kind === 'sample'
+  $('notes').innerHTML = D.notesWithPlaceholder(view).map((n) => `<div ${n.placeholder ? 'aria-hidden="true"' : ''} class="${n.placeholder ? 'invisible ' : ''}flex gap-2 items-center rounded-lg px-3 py-1 text-xs sm:text-sm ${n.kind === 'sample'
     ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-800'
     : 'bg-sky-50 dark:bg-slate-800 text-sky-900 dark:text-sky-100 border border-sky-200 dark:border-slate-700'}">
-    <span aria-hidden="true">${n.kind === 'sample' ? '⚠︎' : 'ℹ︎'}</span><span>${esc(n.text)}</span></div>`).join('')
+    <span aria-hidden="true">${n.kind === 'sample' ? '⚠︎' : 'ℹ︎'}</span><span><span class="sm:hidden">${esc(n.short)}</span><span class="hidden sm:inline">${esc(n.text)}</span></span></div>`).join('')
 }
 
 // --- Panels -------------------------------------------------------------------------
@@ -742,6 +749,7 @@ async function init() {
     bindCards()
     render()
     $('footer-meta').innerHTML = D.footerMetaHtml(stats)
+    $('currentYear').textContent = new Date().getFullYear()
   } catch (err) {
     console.error('Failed to render the stats', err)
     $('error').textContent = 'The stats could not be shown. Please try again later.'

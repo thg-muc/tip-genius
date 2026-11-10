@@ -28,14 +28,17 @@
     <!-- Sticky header with navigation -->
     <header class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10 mb-3 sm:mb-6">
         <div class="container mx-auto px-4 py-2 sm:py-3">
-            <div class="flex items-center justify-between">
+            <!-- Three columns: brand, the switch to the stats page in the middle, GitHub and model menu -->
+            <div class="grid grid-cols-3 items-center">
                 <!-- Logo and site title -->
-                <a href="#about" class="flex items-center group transition duration-200">
+                <a href="#about" class="justify-self-start flex items-center group transition duration-200">
                     <span class="text-base sm:text-2xl mr-2 hover:animate-bounce">⚽️</span>
                     <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                 </a>
+                <!-- Switch to the statistics page (phase 2: link /dashboard) -->
+                <a href="/dashboard-a.html" class="justify-self-center h-10 inline-flex items-center px-3 sm:px-4 rounded-lg text-sm sm:text-base font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900 hover:bg-sky-100 dark:hover:bg-slate-700 transition duration-200">Stats</a>
                 <!-- Header right section with GitHub and LLM menu -->
-                <div class="flex items-center space-x-0 sm:space-x-1">
+                <div class="justify-self-end flex items-center space-x-0 sm:space-x-1">
                     <!-- GitHub link -->
                     <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="text-gray-500 p-1 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">

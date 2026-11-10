@@ -101,8 +101,16 @@ export const GLOSSARY = [
   },
 ]
 
+// Order as on the main page (LEAGUES in main.js), with "All leagues" first
 export const LEAGUES = [
   { value: 'all', code: 'all', label: 'All leagues', short: 'All' },
+  {
+    value: 'Premier League - England',
+    code: 'pl',
+    label: 'Premier League',
+    short: 'PL',
+    logo: '/images/leagues/PremierLeague-England.png',
+  },
   {
     value: 'Bundesliga - Germany',
     code: 'bl',
@@ -116,13 +124,6 @@ export const LEAGUES = [
     label: 'La Liga',
     short: 'LL',
     logo: '/images/leagues/LaLiga-Spain.png',
-  },
-  {
-    value: 'Premier League - England',
-    code: 'pl',
-    label: 'Premier League',
-    short: 'PL',
-    logo: '/images/leagues/PremierLeague-England.png',
   },
   {
     value: 'UEFA Champions League',
@@ -853,6 +854,7 @@ export function viewNotes(view) {
     notes.push({
       kind: 'sample',
       text: `Small sample: only ${view.fixtures} matches. Differences within the error bars are chance.`,
+      short: `Small sample: ${view.fixtures} matches, gaps may be chance.`,
     })
   }
   if (view.mode === 'fair') {
@@ -861,11 +863,13 @@ export function viewNotes(view) {
       text: `Fair comparison: only the ${view.fairGroup.fixtures} matches offered to every ${
         view.fairGroup.group === 'established' ? 'established' : 'active'
       } model.${view.hasBackfill ? ' Backfill tips always count here.' : ''}`,
+      short: `Fair comparison: ${view.fairGroup.fixtures} shared matches.`,
     })
   } else if (!view.state.backfill && view.hasBackfill) {
     notes.push({
       kind: 'info',
       text: 'Without backfill: tips generated afterwards do not count, so the late joiners have fewer matches.',
+      short: 'Without backfill: late joiners have fewer matches.',
     })
   }
   return notes
@@ -880,6 +884,7 @@ export function notesWithPlaceholder(view) {
     {
       kind: 'sample',
       text: 'Small sample: only 100 matches. Differences within the error bars are chance.',
+      short: 'Small sample: 100 matches, gaps may be chance.',
       placeholder: true,
     },
   ]
