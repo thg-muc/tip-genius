@@ -81,6 +81,10 @@ MAX_RETRY_WAIT_SECONDS = 10.0
 # Backfill index updates are read back; a fresh read can lag behind a write
 INDEX_VERIFY_ATTEMPTS = 4
 INDEX_VERIFY_WAIT_SECONDS = 30.0
+# Pauses before each read-back after a put (~45 s in all). An overwritten blob
+# can serve its old content for 15 s and more, even under the new etag
+# (observed 10.11.2026); polling instead of re-putting lets it settle
+READBACK_DELAYS = (3.0, 6.0, 12.0, 24.0)
 
 # Tue/Fri, from shortly before the 03:00 UTC cron until delayed runs are done
 CRON_WEEKDAYS = {1, 4}
@@ -652,6 +656,32 @@ def update_index(
     )
 
 
+def await_readback(
+    check: Callable[[], bool],
+    pathname: str,
+    delays: tuple[float, ...] = READBACK_DELAYS,
+) -> bool:
+    """Poll ``check`` (a fresh read-back) after each pause in ``delays``.
+
+    Returns True as soon as ``check`` does (logged at INFO when it took more
+    than one read, to keep an eye on the lag). Never raises.
+    """
+    waited = 0.0
+    for number, delay in enumerate(delays, start=1):
+        time.sleep(delay)
+        waited += delay
+        if check():
+            if number > 1:
+                logger.info(
+                    "%s read-back current after %.0f s (%d reads)",
+                    pathname,
+                    waited,
+                    number,
+                )
+            return True
+    return False
+
+
 def _read_index_quietly() -> dict[str, Any] | None:
     """Read ``index.json`` fresh; log and return None on failure."""
     try:
@@ -680,8 +710,9 @@ def _verified_index_update(
     Each attempt reads the index fresh; ``stale(index)`` counts what the caller
     saw earlier but the read lacks (then nothing is written, as a stale read
     would overwrite newer entries). Otherwise it puts ``merge(index)`` and
-    reads back; success needs ``missing(read_back) == 0``. Between attempts it
-    waits ``wait`` seconds. Never raises.
+    polls the read-back (``await_readback``); success needs
+    ``missing(read_back) == 0``. Between attempts it waits ``wait`` seconds.
+    Never raises.
     """
     for attempt in range(1, attempts + 1):
         if attempt > 1:
@@ -709,8 +740,12 @@ def _verified_index_update(
             cache_control_max_age=INDEX_CACHE_MAX_AGE,
         ):
             continue
-        check = _read_index_quietly()
-        if check is not None and not missing(check):
+
+        def current() -> bool:
+            check = _read_index_quietly()
+            return check is not None and not missing(check)
+
+        if await_readback(current, INDEX_PATHNAME):
             return True
         logger.warning(
             "%s read-back misses %s (attempt %d/%d), re-merging",

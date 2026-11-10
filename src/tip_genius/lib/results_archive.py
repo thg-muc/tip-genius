@@ -960,8 +960,9 @@ def write_rows_verified(  # noqa: PLR0913
 ) -> bool:
     """Overwrite a results CSV and read it back until every row shows.
 
-    Each attempt puts the full file (idempotent) and reads it back fresh;
-    success needs every ``match_key`` of ``rows``. Never raises.
+    Each attempt puts the full file (idempotent) and polls a fresh read-back
+    (``blob_archive.await_readback``); success needs every ``match_key`` of
+    ``rows``. Never raises.
     ``serialize``, ``parse`` and ``row_key`` (what must show in the
     read-back) adapt it to other CSVs.
     """
@@ -981,13 +982,19 @@ def write_rows_verified(  # noqa: PLR0913
             cache_control_max_age=blob_archive.INDEX_CACHE_MAX_AGE,
         ):
             continue
-        try:
-            check = blob_archive.read_fresh(pathname)
-            seen = {row_key(r) for r in parse(check)} if check else set()
-        except Exception as e:
-            logger.warning("Could not read back %s: %s", pathname, e)
-            seen = set()
-        if wanted <= seen:
+        seen: set[object] = set()
+
+        def current() -> bool:
+            nonlocal seen
+            try:
+                check = blob_archive.read_fresh(pathname)
+                seen = {row_key(r) for r in parse(check)} if check else set()
+            except Exception as e:
+                logger.warning("Could not read back %s: %s", pathname, e)
+                seen = set()
+            return wanted <= seen
+
+        if blob_archive.await_readback(current, pathname):
             return True
         logger.warning(
             "%s read-back misses %d of %d rows (attempt %d/%d)",
@@ -1038,8 +1045,9 @@ class ArchiveReport:
     files_read: int = 0
     scan_modes: dict[str, str] = field(default_factory=dict)
     # Scan state per season to store in index.json (incremental runs; a
-    # rebuild maps its seasons to None to reset them). None while anything
-    # failed, so the next run repeats this one
+    # rebuild maps its seasons to None to reset them). None while a
+    # prediction file was unreadable, so the next run repeats this one; a
+    # stale or unverified results file only keeps its fixtures open
     scan_state: dict[str, dict[str, Any] | None] | None = None
 
     @property
@@ -1269,22 +1277,35 @@ def _next_scan_state(
     fixtures: set[Fixture],
     now: datetime,
 ) -> dict[str, dict[str, Any] | None] | None:
-    """Return the scan state after a complete incremental-mode run, else None.
+    """Return the scan state after an incremental-mode run, else None.
 
-    ``plans`` is empty outside incremental mode.
+    ``plans`` is empty outside incremental mode. None while a prediction file
+    was unreadable (its fixtures are unknown, so the next run repeats this
+    one) or a file refused to shrink.
 
     Open fixtures are those of this run without a row in their file's final
     content (not played yet, unmatched, or waiting for a rescheduled
-    pairing's row).
+    pairing's row). A stale file (not read) or an unverified write keeps its
+    new fixtures open instead of blocking the state, so the next run checks
+    just those again rather than every prediction file.
     """
-    bad = {"stale", "write-failed", "shrink-refused"}
     if (
         not any(plan.runs for plan in plans)
         or report.unread
-        or any(f.status in bad for f in report.files)
+        or any(f.status == "shrink-refused" for f in report.files)
     ):
         return None
-    done = {row["match_key"] for rows in report.contents.values() for row in rows}
+    # Rows read from Blob this run, or written and read back
+    in_blob = {
+        f.pathname: f.existing if f.status == "write-failed" else f.rows
+        for f in report.files
+        if f.status != "stale"
+    }
+    done = {
+        row["match_key"]
+        for pathname, rows in report.contents.items()
+        for row in rows[: in_blob.get(pathname, 0)]
+    }
     states: dict[str, dict[str, Any] | None] = {}
     for plan in plans:
         still_open = [
