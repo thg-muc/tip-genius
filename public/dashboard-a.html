@@ -83,7 +83,7 @@ import * as D from '/js/dashboard-data.js'
 const VIEWS = [
   { key: 'timeline', label: 'Verlauf' },
   { key: 'hits', label: 'Trefferarten' },
-  { key: 'recent', label: 'Letzte Spieltage' },
+  { key: 'recent', label: '<span class="sm:hidden">Spieltage</span><span class="hidden sm:inline">Letzte Spieltage</span>' },
 ]
 
 let stats
@@ -249,11 +249,11 @@ function renderTable() {
     <tr>
       ${th('Pl.', 'Platz unter den gelisteten Modellen', `text-right ${stickyBg} bg-gray-100 dark:bg-slate-900`)}
       ${th('Modell', '', `text-left ${stickyBg} left-8 sm:left-10 bg-gray-100 dark:bg-slate-900`)}
-      ${th('Sp.', 'Angebotene Spiele', 'text-right')}
-      ${th('Pkt.', 'Punkte', 'text-right')}
       ${th('Ø', 'Punkte pro angebotenem Spiel (Rangfolge)', 'text-right')}
-      ${th('95-%-Intervall', 'Konfidenzintervall von Ø; gestrichelt: Quoten-Favorit', 'text-left')}
       ${th('± Fav.', 'Differenz zu Ø des Quoten-Favoriten', 'text-right')}
+      ${th('Pkt.', 'Punkte', 'text-right')}
+      ${th('Sp.', 'Angebotene Spiele', 'text-right')}
+      ${th('95-%-Intervall', 'Konfidenzintervall von Ø; gestrichelt: Quoten-Favorit', 'text-left')}
       ${standard ? th('4', 'Exakte Ergebnisse (4 Punkte)', 'text-right') + th('3', 'Richtige Tordifferenz (3 Punkte)', 'text-right') + th('2', 'Richtige Tendenz (2 Punkte)', 'text-right') : ''}
       ${th('Abd.', 'Abdeckung: gelieferte von erwarteten Tipps', 'text-right')}
       ${standard ? th('Form', 'Ø der letzten 5 Spieltage bzw. Wochen', 'text-right') : ''}
@@ -270,11 +270,11 @@ function renderTable() {
     return `<tr class="${rowBg} ${weight} ${base ? 'italic' : ''} border-t border-gray-100 dark:border-gray-700 ${muted}">
       ${td(row.rank ?? '', `text-right font-mono font-bold ${stickyBg} ${rowBg} w-8 sm:w-10`)}
       ${td(modelCell(row), `${stickyBg} left-8 sm:left-10 ${rowBg} max-w-40 sm:max-w-none`)}
-      ${td(row.offered, 'text-right text-gray-500 dark:text-gray-400')}
-      ${td(row.points, 'text-right')}
       ${td(D.fmt(row.avg0), 'text-right font-bold')}
-      ${td(ciCell(row, scale, favAvg))}
       ${td(deltaCell(row), 'text-right')}
+      ${td(row.points, 'text-right')}
+      ${td(row.offered, 'text-right text-gray-500 dark:text-gray-400')}
+      ${td(ciCell(row, scale, favAvg))}
       ${hits}
       ${td(coverageCell(row), 'text-right whitespace-nowrap')}
       ${standard ? td(formCell(row), 'text-right whitespace-nowrap') : ''}
