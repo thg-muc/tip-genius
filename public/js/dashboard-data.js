@@ -791,6 +791,20 @@ export function viewNotes(view) {
   return notes
 }
 
+// With no note, an invisible placeholder of the same size keeps the space, so
+// the content below does not jump when a filter adds or removes a note
+export function notesWithPlaceholder(view) {
+  const notes = viewNotes(view)
+  if (notes.length) return notes
+  return [
+    {
+      kind: 'sample',
+      text: 'Small sample: only 100 matches. Differences within the error bars are chance.',
+      placeholder: true,
+    },
+  ]
+}
+
 // --- Chart.js defaults ---------------------------------------------------------
 
 export function applyChartDefaults(Chart) {

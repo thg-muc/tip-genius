@@ -24,8 +24,8 @@
                         <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                     </a>
                     <nav class="flex items-center gap-1 text-sm sm:text-base">
-                        <a href="/" class="px-2 sm:px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tips</a>
-                        <span class="px-2 sm:px-3 py-1 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Stats</span>
+                        <a href="/" class="h-10 inline-flex items-center px-2 sm:px-3 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tips</a>
+                        <span class="h-10 inline-flex items-center px-2 sm:px-3 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Stats</span>
                     </nav>
                 </div>
             </div>
@@ -109,8 +109,8 @@
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
-        <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 space-y-2 max-w-7xl">
-            <p><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes (4 exact, 3 goal difference, 2 outcome), missing tips 0. Ranked by average points per offered match. Odds favourite: 2:1 for the home, 0:1 for the away favourite.</p>
+        <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center space-y-2 max-w-7xl">
+            <p><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. Wrong and missing tips score 0. Ranked by average points per offered match. Odds favourite: 2:1 for the home, 0:1 for the away favourite.</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -191,7 +191,7 @@ function update(patch) {
 }
 
 function renderNotes() {
-  $('notes').innerHTML = D.viewNotes(view).map((n) => `<div class="flex gap-2 items-start rounded-lg px-3 py-2 text-xs sm:text-sm ${n.kind === 'sample'
+  $('notes').innerHTML = D.notesWithPlaceholder(view).map((n) => `<div ${n.placeholder ? 'aria-hidden="true"' : ''} class="${n.placeholder ? 'invisible ' : ''}flex gap-2 items-start rounded-lg px-3 py-2 text-xs sm:text-sm ${n.kind === 'sample'
     ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-800'
     : 'bg-sky-50 dark:bg-slate-800 text-sky-900 dark:text-sky-100 border border-sky-200 dark:border-slate-700'}">
     <span aria-hidden="true">${n.kind === 'sample' ? '⚠︎' : 'ℹ︎'}</span><span>${esc(n.text)}</span></div>`).join('')
