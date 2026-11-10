@@ -560,9 +560,9 @@ function renderRecent() {
         </tbody></table></div></div>`
   }).join('')
   const note = recent.otherSeason ? `<p class="text-xs sm:text-sm text-amber-700 dark:text-amber-300 mb-3">Last matchdays exist only for the current season ${recent.season}.</p>` : ''
-  const allNote = state.league === 'all' ? '<p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3">The latest matchday per league; pick a league for the last three.</p>' : ''
+  const allNote = state.league === 'all' ? '<p class="hidden sm:block text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3">The latest matchday per league; pick a league for the last three.</p>' : ''
   $('panel').innerHTML = `<h2 class="text-base sm:text-xl font-bold mb-1">Last matchdays</h2>${note}${allNote}
-    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mb-3">${[4, 3, 2, 0].map((p) => `<span class="inline-flex items-center gap-1">${pointsBadge(p)} ${D.HIT_TYPES.find((h) => h.points === p).label}</span>`).join('')}</div>
+    <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mb-3">${[4, 3, 2, 0].map((p) => `<span class="${p ? 'inline-flex' : 'hidden sm:inline-flex'} items-center gap-1">${pointsBadge(p)} ${D.HIT_TYPES.find((h) => h.points === p).label}</span>`).join('')}</div>
     ${blocks}`
 }
 
