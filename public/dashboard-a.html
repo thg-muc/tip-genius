@@ -74,7 +74,8 @@
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center space-y-2">
-            <p><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. Wrong and missing tips score 0.</p>
+            <p class="sm:hidden"><strong class="font-semibold">Scoring:</strong> 4 exact, 3 goal difference, 2 outcome.</p>
+            <p class="hidden sm:block"><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. Wrong and missing tips score 0.</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -92,7 +93,7 @@ let stats
 let state
 let view
 let charts = []
-const ui = { tab: 'timeline', timelineMode: 'diff', highlight: null }
+const ui = { tab: 'timeline', timelineMode: 'diff', highlight: null, glossaryOpen: D.startsExpanded() }
 
 const $ = (id) => document.getElementById(id)
 const esc = D.escapeHtml
@@ -306,7 +307,7 @@ function renderTable() {
   $('table-legend').innerHTML = [
     '<span class="inline-flex items-center gap-1"><span class="inline-block w-3 h-3 rounded-full bg-gray-400"></span> Avg</span> <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block w-6 h-1.5 rounded-full bg-gray-400 opacity-40"></span> 95% interval</span> <span class="inline-flex items-center gap-1 ml-2"><span class="inline-block h-3 border-l border-dashed border-gray-900 dark:border-gray-100"></span> Favourite 2:1</span>',
     !state.showAll && hiddenCount
-      ? `${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden (inactive or under 80% of the matches) – “Show all models”.`
+      ? `<span class="sm:hidden">${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden.</span><span class="hidden sm:inline">${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden (inactive or under 80% of the matches) – “Show all models”.</span>`
       : '',
   ].filter(Boolean).map((t) => `<p class="mt-1 first:mt-0">${t}</p>`).join('') + glossaryHtml()
 }
@@ -326,10 +327,13 @@ function alignStickyColumns() {
 function glossaryHtml() {
   const skip = view.mode === 'standard' ? [] : ['hits', 'form']
   const items = D.GLOSSARY.filter((g) => !skip.includes(g.key))
-  return `<h3 class="mt-3 mb-1 font-semibold text-gray-700 dark:text-gray-300">How to read this table</h3>
+  // Collapsible, closed on phones; ui.glossaryOpen keeps the choice across re-renders
+  return `<details id="glossary" class="mt-3" ${ui.glossaryOpen ? 'open' : ''}>
+    <summary class="cursor-pointer mb-1 font-semibold text-gray-700 dark:text-gray-300">How to read this table</summary>
     <dl class="grid sm:grid-cols-2 gap-x-6 gap-y-1">${items.map((g) => `<div>
       <dt class="inline font-semibold text-gray-700 dark:text-gray-300">${esc(g.term)}:</dt>
-      <dd class="inline">${esc(g.text)}${g.key === 'form' ? ' ▲/▼: better/worse than the model’s Avg for the whole selection.' : ''}</dd></div>`).join('')}</dl>`
+      <dd class="inline">${esc(g.text)}${g.key === 'form' ? ' ▲/▼: better/worse than the model’s Avg for the whole selection.' : ''}</dd></div>`).join('')}</dl>
+  </details>`
 }
 
 function renderNotes() {
@@ -600,9 +604,13 @@ async function init() {
   D.applyChartDefaults(Chart)
   bindControls()
   render()
-  $('footer-meta').textContent = `Updated: ${D.fmtGenerated(stats)} · Results through ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} matches, ${stats.meta.tips} tips`
+  $('footer-meta').innerHTML = D.footerMetaHtml(stats)
   D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
   window.addEventListener('resize', alignStickyColumns)
+  // 'toggle' does not bubble, so listen in the capture phase
+  $('table-legend').addEventListener('toggle', (e) => {
+    if (e.target.id === 'glossary') ui.glossaryOpen = e.target.open
+  }, true)
   document.body.classList.add('loaded')
 }
 

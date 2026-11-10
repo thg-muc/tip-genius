@@ -92,14 +92,17 @@
 
         <!-- 6: glossary -->
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-6" aria-labelledby="glossary-title">
-            <h2 id="glossary-title" class="text-lg sm:text-2xl font-bold mb-3">What the terms mean</h2>
-            <div id="glossary"></div>
+            <details id="glossary-box">
+                <summary class="cursor-pointer"><h2 id="glossary-title" class="inline text-lg sm:text-2xl font-bold">What the terms mean</h2></summary>
+                <div id="glossary" class="mt-3"></div>
+            </details>
         </section>
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center space-y-2 max-w-4xl">
-            <p><strong class="font-semibold">How it is scored:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. The last tip before kickoff counts; wrong and missing tips score 0. Favourite 2:1 tips a 2:1 win for the bookmakers’ favourite (1:2 when it plays away), the consensus the median of all model tips.</p>
+            <p class="sm:hidden"><strong class="font-semibold">Scoring:</strong> 4 exact, 3 goal difference, 2 outcome.</p>
+            <p class="hidden sm:block"><strong class="font-semibold">How it is scored:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. The last tip before kickoff counts; wrong and missing tips score 0. Favourite 2:1 tips a 2:1 win for the bookmakers’ favourite (1:2 when it plays away), the consensus the median of all model tips.</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -571,7 +574,8 @@ async function init() {
   D.applyChartDefaults(Chart)
   bindControls()
   render()
-  $('footer-meta').textContent = `Updated: ${D.fmtGenerated(stats)} · Results through ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} matches, ${stats.meta.tips} tips`
+  $('footer-meta').innerHTML = D.footerMetaHtml(stats)
+  $('glossary-box').open = D.startsExpanded()
   D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
   let wasMobile = isMobile()
   window.addEventListener('resize', () => { if (isMobile() !== wasMobile) { wasMobile = isMobile(); rerenderCharts() } })

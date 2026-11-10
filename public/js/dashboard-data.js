@@ -771,6 +771,19 @@ export function fmtGenerated(stats) {
   })
 }
 
+// Footer status line; phones skip the results date to stay on two lines
+export function footerMetaHtml(stats) {
+  const counts = `${stats.meta.matches} matches, ${stats.meta.tips} tips`
+  return `Updated: ${escapeHtml(fmtGenerated(stats))}<span class="hidden sm:inline"> · Results through ${escapeHtml(
+    fmtDate(stats.meta.data_through)
+  )}</span> · ${escapeHtml(counts)}`
+}
+
+// Glossaries start open where there is room and closed on phones
+export function startsExpanded() {
+  return window.matchMedia('(min-width: 640px)').matches
+}
+
 export function escapeHtml(text) {
   return String(text).replace(
     /[&<>"']/g,
