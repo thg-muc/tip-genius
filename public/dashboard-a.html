@@ -285,7 +285,7 @@ function renderTable() {
       : standard ? td('–', 'text-right') + td('–', 'text-right') + td('–', 'text-right') : ''
     return `<tr class="${rowBg} ${weight} ${base ? 'italic' : ''} border-t border-gray-100 dark:border-gray-700 ${muted}">
       ${td(row.rank ?? '', `text-right font-mono font-bold ${stickyBg} ${rowBg} w-8 sm:w-10`)}
-      ${td(modelCell(row), `${stickyBg} ${rowBg} max-w-40 sm:max-w-none`)}
+      ${td(modelCell(row), `${stickyBg} ${rowBg}`)}
       ${td(D.fmt(row.avg0), 'text-right font-bold')}
       ${td(deltaCell(row), 'text-right')}
       ${td(row.points, 'text-right')}
@@ -312,13 +312,33 @@ function renderTable() {
 }
 
 // The Model column sticks right of the rank column; its offset is the rank
-// column's rendered width, which depends on table layout, not a fixed class
+// column's rendered width, which depends on table layout, not a fixed class.
+// When the table is wider than the screen (phones), the Model column gets the
+// room left once the columns up to M fit, so names are not cut short and the
+// interval and later columns sit behind a horizontal scroll
+const LAST_VISIBLE_COLUMN = 5 // '#', Model, Avg, ± Fav, Pts, M
+
 function alignStickyColumns() {
   const table = $('leaderboard')
-  const first = table.querySelector('thead th')
-  if (!first) return
-  const left = `${first.getBoundingClientRect().width}px`
-  table.querySelectorAll('tr > :nth-child(2)').forEach((cell) => (cell.style.left = left))
+  const box = table.parentElement
+  const heads = [...table.querySelectorAll('thead th')]
+  if (!heads.length) return
+  const modelCells = table.querySelectorAll('tr > :nth-child(2)')
+  // An overflowing table shrinks every column to its minimum and ignores cell
+  // widths, so the width goes on the cell's content as a minimum instead
+  const contents = table.querySelectorAll('tbody tr > :nth-child(2) > div')
+  contents.forEach((div) => (div.style.minWidth = ''))
+  if (table.scrollWidth > box.clientWidth + 1) {
+    const others = heads
+      .slice(0, LAST_VISIBLE_COLUMN + 1)
+      .reduce((sum, th, i) => (i === 1 ? sum : sum + th.getBoundingClientRect().width), 0)
+    const cell = heads[1]
+    const padding = parseFloat(getComputedStyle(cell).paddingLeft) + parseFloat(getComputedStyle(cell).paddingRight)
+    const width = Math.max(96, Math.floor(box.clientWidth - others)) - padding
+    contents.forEach((div) => (div.style.minWidth = `${width}px`))
+  }
+  const left = `${heads[0].getBoundingClientRect().width}px`
+  modelCells.forEach((cell) => (cell.style.left = left))
 }
 
 // Visible explanations of the baselines and every column (tooltips alone do
