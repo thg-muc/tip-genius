@@ -784,6 +784,44 @@ export function startsExpanded() {
   return window.matchMedia('(min-width: 640px)').matches
 }
 
+// --- Model labels (one look everywhere) -----------------------------------
+//
+// A model is always shown as its logo (or a baseline's symbol) plus its name:
+// the short name on phones, the full name from the sm breakpoint up. Colour
+// only appears where it identifies a line in a chart, next to this label.
+
+export function modelIconHtml(info, size = 'w-5 h-5') {
+  if (info.logo) {
+    return `<img src="${info.logo}" alt="" class="${size} object-contain shrink-0" loading="lazy">`
+  }
+  return `<span class="${size} shrink-0 inline-flex items-center justify-center text-sm leading-none" aria-hidden="true">${info.icon || ''}</span>`
+}
+
+export function modelNameHtml(info) {
+  return `<span class="sm:hidden">${escapeHtml(info.short)}</span><span class="hidden sm:inline">${escapeHtml(info.name)}</span>`
+}
+
+export function modelLabelHtml(info, { size = 'w-5 h-5', suffix = '' } = {}) {
+  return `<span class="inline-flex items-center gap-2 min-w-0 ${info.isBaseline ? 'italic' : ''}">${modelIconHtml(
+    info,
+    size
+  )}<span class="truncate">${modelNameHtml(info)}${suffix}</span></span>`
+}
+
+// Logo images for canvas charts, loaded once; onLoad redraws a waiting chart
+const iconImages = new Map()
+export function modelIconImage(info, onLoad) {
+  if (!info.logo) return null
+  let image = iconImages.get(info.logo)
+  if (!image) {
+    image = new Image()
+    image.src = info.logo
+    iconImages.set(info.logo, image)
+  }
+  if (!image.complete && onLoad) image.addEventListener('load', onLoad, { once: true })
+  return image
+}
+
 export function escapeHtml(text) {
   return String(text).replace(
     /[&<>"']/g,
