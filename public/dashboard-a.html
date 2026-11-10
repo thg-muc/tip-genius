@@ -343,8 +343,8 @@ function hiddenModelsNote(count) {
   const link = (show, label) =>
     `<button type="button" data-show-all="${show ? '1' : '0'}" class="font-semibold text-sky-700 dark:text-sky-400 hover:underline">${label}</button>`
   return state.showAll
-    ? `${count} greyed-out ${models} shown${reason} · ${link(false, 'Hide greyed out')}`
-    : `${count} more ${models} hidden${reason} · ${link(true, 'Show all')}`
+    ? `${count} unranked ${models} shown${reason} · ${link(false, 'Hide unranked')}`
+    : `${count} unranked ${models} hidden${reason} · ${link(true, 'Show unranked')}`
 }
 
 // The Model column sticks right of the rank column; its offset is the rank
