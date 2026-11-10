@@ -39,14 +39,14 @@ const MODEL_DISPLAY = {
     logo: 'OpenAI',
   },
   'OpenRouter-Grok': { name: 'Grok', short: 'Grok', logo: 'xAI' },
-  'Odds-Favourite': { name: 'Odds favourite', short: 'Favourite' },
-  'Always-2:1': { name: 'Always 2:1', short: 'Always 2:1' },
-  Consensus: { name: 'Model consensus', short: 'Consensus' },
+  'Odds-Favourite': { name: 'Favourite 2:1', short: 'Favourite', icon: '⭐' },
+  'Always-2:1': { name: 'Always 2:1', short: 'Always 2:1', icon: '🏠' },
+  Consensus: { name: 'Model consensus', short: 'Consensus', icon: '🤖' },
 }
 
 const BASELINE_HINTS = {
   'Odds-Favourite':
-    'Baseline without AI: tips 2:1 when the bookmakers make the home team the favourite, 0:1 when the away team is (never a draw)',
+    'Baseline without AI: the bookmakers’ favourite wins 2:1, i.e. 2:1 when the home team is the favourite and 1:2 when the away team is (never a draw)',
   'Always-2:1': 'Baseline without AI: tips 2:1 for the home team in every match',
   Consensus:
     'Baseline built from the models: per match the median of all model tips (home and away goals separately, .5 rounded up)',
@@ -59,7 +59,7 @@ export const FAVOURITE = 'Odds-Favourite'
 export const GLOSSARY = [
   {
     key: 'favourite',
-    term: 'Odds favourite',
+    term: 'Favourite 2:1',
     text: BASELINE_HINTS['Odds-Favourite'] + '.',
   },
   { key: 'consensus', term: 'Model consensus', text: BASELINE_HINTS.Consensus + '.' },
@@ -72,7 +72,7 @@ export const GLOSSARY = [
   {
     key: 'delta',
     term: '± Fav',
-    text: 'Avg minus the odds favourite’s Avg. Positive means better than simply backing the favourite.',
+    text: 'Avg minus the Avg of Favourite 2:1. Positive means better than simply backing the favourite.',
   },
   {
     key: 'interval',
@@ -316,6 +316,7 @@ export function modelInfo(stats, index) {
     lastTip: model.last_tip,
     backfill: model.backfill,
     hint: BASELINE_HINTS[model.id] || null,
+    icon: display.icon || null,
     slot,
   }
 }

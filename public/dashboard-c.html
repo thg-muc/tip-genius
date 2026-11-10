@@ -56,9 +56,9 @@
         <!-- Chart grid -->
         <div class="grid lg:grid-cols-2 gap-3 sm:gap-4 mb-6">
             <section class="min-w-0 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="gap-title">
-                <h2 id="gap-title" class="text-sm sm:text-base font-bold">Gap to the odds favourite</h2>
+                <h2 id="gap-title" class="text-sm sm:text-base font-bold">Gap to Favourite 2:1</h2>
                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Average points per match minus favourite, with the model’s 95% interval</p>
-                <div id="gap-wrap" class="relative"><canvas id="gap-chart" role="img" aria-label="Bars: gap of each model to the odds favourite"></canvas></div>
+                <div id="gap-wrap" class="relative"><canvas id="gap-chart" role="img" aria-label="Bars: gap of each model to Favourite 2:1"></canvas></div>
             </section>
 
             <section class="min-w-0 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="tl-title">
@@ -110,7 +110,7 @@
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center space-y-2 max-w-7xl">
-            <p><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. Wrong and missing tips score 0. Ranked by average points per offered match. Odds favourite: 2:1 for the home, 0:1 for the away favourite.</p>
+            <p><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. Wrong and missing tips score 0. Ranked by average points per offered match. Favourite 2:1: a 2:1 win for the bookmakers’ favourite (1:2 when it plays away).</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -236,7 +236,7 @@ function renderKpis() {
   if (fav) {
     const beaten = llms.filter((r) => r.avg0 < fav.avg0).length
     tiles.push(tile(
-      'Odds favourite',
+      'Favourite 2:1',
       `${D.fmt(fav.avg0)} <span class="text-sm sm:text-base font-normal text-gray-500 dark:text-gray-400">pts/match</span>`,
       `better than ${beaten} of ${llms.length} models`
     ))
@@ -466,7 +466,7 @@ function renderForm() {
         <td class="px-1 py-1 text-right">${D.fmt(r.avg0)}</td>
         <td class="px-1 py-1 text-right whitespace-nowrap">${cov ? `${r.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warning">⚠︎</span> ' : ''}${D.pct(cov.share)}` : '–'}</td></tr>`
     }).join('')}</tbody></table>
-    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Vertical line = form of the odds favourite.</p>`
+    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Vertical line = form of Favourite 2:1.</p>`
 }
 
 // --- Matchday matrix ---------------------------------------------------------------------

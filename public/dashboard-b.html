@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="description" content="Do the AI models beat the odds favourite? An evaluation of every Tip Genius tip.">
+    <meta name="description" content="Do the AI models beat the favourite? An evaluation of every Tip Genius tip.">
     <title>Stats (variant B: story) – Tip Genius</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <link rel="stylesheet" href="/css/tailwind.css">
@@ -54,7 +54,7 @@
             <h2 id="dots-title" class="text-lg sm:text-2xl font-bold mb-1">Points per match</h2>
             <p id="dots-lede" class="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-3"></p>
             <div id="dots-wrap" class="relative"><canvas id="dots-chart" role="img" aria-label="Points per match per model with 95% confidence interval"></canvas></div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Dot = average points per offered match, bar = 95% confidence interval, dashed = odds favourite. Diamonds are baselines without AI.</p>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Dot = average points per offered match, bar = 95% confidence interval, dashed = Favourite 2:1. Diamonds are baselines without AI.</p>
             <details class="mt-3 text-sm">
                 <summary class="cursor-pointer text-sky-700 dark:text-sky-400">Show as a table</summary>
                 <div id="dots-table" class="overflow-x-auto mt-2"></div>
@@ -65,7 +65,7 @@
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6" aria-labelledby="tl-title">
             <h2 id="tl-title" class="text-lg sm:text-2xl font-bold mb-1">Gap to the favourite over time</h2>
             <p id="tl-lede" class="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-3"></p>
-            <div class="relative h-64 sm:h-80"><canvas id="tl-chart" role="img" aria-label="Points gap to the odds favourite over time"></canvas></div>
+            <div class="relative h-64 sm:h-80"><canvas id="tl-chart" role="img" aria-label="Points gap to Favourite 2:1 over time"></canvas></div>
             <div id="tl-legend"></div>
         </section>
 
@@ -99,7 +99,7 @@
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 text-center space-y-2 max-w-4xl">
-            <p><strong class="font-semibold">How it is scored:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. The last tip before kickoff counts; wrong and missing tips score 0. The odds favourite tips 2:1 for the home or 0:1 for the away favourite, the consensus the median of all model tips.</p>
+            <p><strong class="font-semibold">How it is scored:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. The last tip before kickoff counts; wrong and missing tips score 0. Favourite 2:1 tips a 2:1 win for the bookmakers’ favourite (1:2 when it plays away), the consensus the median of all model tips.</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -133,10 +133,10 @@ function heroHtml() {
   if (!h) return `<p class="text-sm text-gray-500">${esc(eyebrow)}</p><h1 class="text-2xl font-bold">No evaluation yet</h1>`
   const name = esc(h.best.info.name)
   const title = {
-    ahead: `${name} beats the odds favourite`,
-    'ahead-noise': `${name} is just ahead of the odds favourite`,
-    'behind-noise': 'No model beats the odds favourite',
-    behind: 'The odds favourite tips better than every model',
+    ahead: `${name} beats the favourite`,
+    'ahead-noise': `${name} is just ahead of the favourite`,
+    'behind-noise': 'No model beats the favourite',
+    behind: 'Backing the favourite beats every model',
   }[h.verdict]
   const cls = h.delta > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
   const beat = h.beating === 0
