@@ -505,7 +505,7 @@ function diffRange(tl, diff) {
 function offChartNote(s, range) {
   if (range.min == null) return ''
   const last = s.diff.filter((v) => v != null).at(-1)
-  return last < range.min ? ` (${D.fmtSigned(last, 0)}, off chart)` : ''
+  return last < range.min ? ` (${D.fmtSigned(last, 0)})` : ''
 }
 
 function formTable() {

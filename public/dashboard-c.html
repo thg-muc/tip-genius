@@ -400,7 +400,7 @@ function renderTimeline() {
   $('tl-legend').innerHTML = `<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-2">${tl.series.map((s) => {
     const st = D.modelStyle(s.row.info)
     const last = s.diff.filter((v) => v != null).at(-1)
-    const off = range.min != null && last < range.min ? ` (${D.fmtSigned(last, 0)}, off chart)` : ''
+    const off = range.min != null && last < range.min ? ` (${D.fmtSigned(last, 0)})` : ''
     return `<span class="inline-flex items-center gap-1.5"><svg width="16" height="8" aria-hidden="true"><line x1="1" y1="4" x2="15" y2="4" stroke="${st.color}" stroke-width="${Math.min(st.width, 3)}" stroke-dasharray="${st.dash.join(' ')}" stroke-linecap="round"/></svg>${esc(s.row.info.short)}${off}</span>`
   }).join('')}</div>`
 }
