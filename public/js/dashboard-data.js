@@ -477,7 +477,10 @@ export function buildView(stats, state) {
 
   const llmOffered = rows.filter((r) => !r.info.isBaseline).map((r) => r.offered)
   const maxOffered = Math.max(0, ...llmOffered)
+  // Competition ranking: models level on Avg and points share a rank
   let rank = 0
+  let position = 0
+  let previous = null
   for (const row of rows) {
     if (row.info.isBaseline) {
       row.listed = true
@@ -492,7 +495,16 @@ export function buildView(stats, state) {
       row.listed = true
       row.reason = null
     }
-    row.rank = row.listed && !row.info.isBaseline ? ++rank : null
+    if (row.listed && !row.info.isBaseline) {
+      position++
+      const tied =
+        previous && previous.avg0 === row.avg0 && previous.points === row.points
+      if (!tied) rank = position
+      row.rank = rank
+      previous = row
+    } else {
+      row.rank = null
+    }
     row.smallSample = !row.listed && !row.info.isBaseline
     row.lowCoverage = !!row.coverage && row.coverage.share < LOW_COVERAGE
   }
@@ -780,7 +792,7 @@ export function viewNotes(view) {
       kind: 'info',
       text: `Fair comparison: only the ${view.fairGroup.fixtures} matches offered to every ${
         view.fairGroup.group === 'established' ? 'established' : 'active'
-      } model.`,
+      } model.${view.hasBackfill ? ' Backfill tips always count here.' : ''}`,
     })
   } else if (!view.state.backfill && view.hasBackfill) {
     notes.push({

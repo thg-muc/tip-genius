@@ -145,8 +145,10 @@ function renderControls() {
   $('toggles').innerHTML = [
     toggle('showAll', 'Show all models', state.showAll, false,
       'Include inactive models and models with fewer than 80% of the matches'),
-    toggle('backfill', 'Allow backfill tips', state.backfill, !view?.hasBackfill || !!state.fair,
-      'Count the tips generated afterwards for late joiners (before their first live run)'),
+    toggle('backfill', 'Allow backfill tips', state.fair ? true : state.backfill, !view?.hasBackfill || !!state.fair,
+      state.fair
+        ? 'The fair comparison always counts backfill tips'
+        : 'Count the tips generated afterwards for late joiners (before their first live run)'),
     toggle('fair', 'Fair comparison', !!state.fair, !view?.fairGroups.length,
       'Only matches offered to every active model'),
   ].join('')
@@ -182,6 +184,7 @@ function bindControls() {
 
 function update(patch) {
   state = { ...state, ...patch }
+  ui.highlight = null
   D.writeState(state)
   render()
 }
@@ -231,8 +234,10 @@ function coverageCell(row) {
 
 function formCell(row) {
   if (!row.form) return '<span class="text-gray-400">–</span>'
+  // Form always includes backfill tips; a live-only Avg is no fair base for the arrow
   const d = row.form.avg0 - row.avg0
-  const arrow = Math.abs(d) < 0.05 ? '<span class="text-gray-400" aria-label="same">→</span>'
+  const arrow = row.liveOnly ? '<span class="text-gray-400" title="form includes backfill tips">·</span>'
+    : Math.abs(d) < 0.05 ? '<span class="text-gray-400" aria-label="same">→</span>'
     : d > 0 ? '<span class="text-green-700 dark:text-green-400" aria-label="better">▲</span>'
     : '<span class="text-red-700 dark:text-red-400" aria-label="worse">▼</span>'
   return `<span title="Avg of the last 5 ${view.slice.timeline.step === 'matchday' ? 'matchdays' : 'weeks'}: ${row.form.points} points from ${row.form.offered} matches">${D.fmt(row.form.avg0)} ${arrow}</span>`
@@ -248,7 +253,8 @@ function renderTable() {
   const rows = view.rows
   const lo = Math.min(...rows.map((r) => r.ciLow))
   const hi = Math.max(...rows.map((r) => r.ciHigh))
-  const pad = (hi - lo) * 0.05
+  // A zero span (every interval empty) would divide by zero in ciCell
+  const pad = hi > lo ? (hi - lo) * 0.05 : 0.1
   const scale = { min: lo - pad, max: hi + pad }
   const favAvg = view.fav?.avg0
   const standard = view.mode === 'standard'
@@ -257,7 +263,7 @@ function renderTable() {
   const head = `<thead class="bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wide">
     <tr>
       ${th('#', 'Rank among the listed models', `text-right ${stickyBg} bg-gray-100 dark:bg-slate-900`)}
-      ${th('Model', '', `text-left ${stickyBg} left-8 sm:left-10 bg-gray-100 dark:bg-slate-900`)}
+      ${th('Model', '', `text-left ${stickyBg} bg-gray-100 dark:bg-slate-900`)}
       ${th('Avg', 'Points per offered match (ranking key)', 'text-right')}
       ${th('± Fav', 'Difference to the odds favourite’s average', 'text-right')}
       ${th('Pts', 'Points', 'text-right')}
@@ -278,7 +284,7 @@ function renderTable() {
       : standard ? td('–', 'text-right') + td('–', 'text-right') + td('–', 'text-right') : ''
     return `<tr class="${rowBg} ${weight} ${base ? 'italic' : ''} border-t border-gray-100 dark:border-gray-700 ${muted}">
       ${td(row.rank ?? '', `text-right font-mono font-bold ${stickyBg} ${rowBg} w-8 sm:w-10`)}
-      ${td(modelCell(row), `${stickyBg} left-8 sm:left-10 ${rowBg} max-w-40 sm:max-w-none`)}
+      ${td(modelCell(row), `${stickyBg} ${rowBg} max-w-40 sm:max-w-none`)}
       ${td(D.fmt(row.avg0), 'text-right font-bold')}
       ${td(deltaCell(row), 'text-right')}
       ${td(row.points, 'text-right')}
@@ -290,6 +296,7 @@ function renderTable() {
     </tr>`
   }).join('')
   $('leaderboard').innerHTML = head + `<tbody>${body}</tbody>`
+  alignStickyColumns()
 
   const leagueLabel = D.LEAGUES.find((l) => l.value === state.league).label
   const seasonLabel = state.season === 'all' ? 'all seasons' : state.season
@@ -302,6 +309,16 @@ function renderTable() {
       ? `${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden (inactive or under 80% of the matches) – “Show all models”.`
       : '',
   ].filter(Boolean).map((t) => `<p class="mt-1 first:mt-0">${t}</p>`).join('') + glossaryHtml()
+}
+
+// The Model column sticks right of the rank column; its offset is the rank
+// column's rendered width, which depends on table layout, not a fixed class
+function alignStickyColumns() {
+  const table = $('leaderboard')
+  const first = table.querySelector('thead th')
+  if (!first) return
+  const left = `${first.getBoundingClientRect().width}px`
+  table.querySelectorAll('tr > :nth-child(2)').forEach((cell) => (cell.style.left = left))
 }
 
 // Visible explanations of the baselines and every column (tooltips alone do
@@ -341,18 +358,19 @@ function renderTimeline() {
   const diff = ui.timelineMode === 'diff'
   const c = D.chrome()
   const modeButton = (key, label) => `<button type="button" data-mode="${key}" aria-pressed="${ui.timelineMode === key}"
-    class="px-3 py-1 text-xs sm:text-sm ${ui.timelineMode === key ? 'bg-sky-700 dark:bg-sky-600 text-white' : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-gray-300'}">${label}</button>`
+    class="${segmentClasses(ui.timelineMode === key)}">${label}</button>`
   const backfillNote = !state.backfill && view.hasBackfill ? ' The trend always includes the backfill tips.' : ''
+  const range = diffRange(tl, diff)
   $('panel').innerHTML = `
     <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
       <h2 class="text-base sm:text-xl font-bold">${diff ? 'Points gap to the odds favourite' : 'Cumulative points'}</h2>
-      <div class="inline-flex rounded-md overflow-hidden" role="group">${modeButton('diff', 'Gap to favourite')}${modeButton('total', 'Total points')}</div>
+      <div class="inline-flex rounded-md shadow-sm overflow-hidden" role="group">${modeButton('diff', 'Gap to favourite')}${modeButton('total', 'Total points')}</div>
     </div>
     <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-3">${diff
       ? 'Above zero: more points than the odds favourite on the same matches since the model’s first tip.'
       : 'Points summed per ' + tl.stepName + '.'}${backfillNote}</p>
     <div class="relative h-72 sm:h-96"><canvas id="timeline-chart" aria-label="Line chart of points over time" role="img"></canvas></div>
-    ${legendHtml(tl.series.map((s) => ({ index: s.row.info.index, label: clippedLabel(tl, s, diff), ...D.modelStyle(s.row.info) })))}
+    ${legendHtml(tl.series.map((s) => ({ index: s.row.info.index, label: clippedLabel(s, range), ...D.modelStyle(s.row.info) })))}
     ${formTable()}`
 
   const datasets = tl.series.map((s) => {
@@ -373,7 +391,6 @@ function renderTimeline() {
       order: s.row.info.isFavourite ? 0 : 1,
     }
   })
-  const range = diffRange(tl, diff)
   const chart = new Chart($('timeline-chart'), {
     type: 'line',
     data: { labels: tl.labels, datasets },
@@ -420,10 +437,10 @@ function diffRange(tl, diff) {
   return { min: Math.floor((lo - pad) / 5) * 5, max: Math.ceil((hi + pad) / 5) * 5 }
 }
 
-function clippedLabel(tl, s, diff) {
-  if (!diff || !diffRange(tl, diff).min) return s.row.info.short
+function clippedLabel(s, range) {
+  if (range.min == null) return s.row.info.short
   const last = s.diff.filter((v) => v != null).at(-1)
-  return last < diffRange(tl, diff).min ? `${s.row.info.short} (${D.fmtSigned(last, 0)}, off chart)` : s.row.info.short
+  return last < range.min ? `${s.row.info.short} (${D.fmtSigned(last, 0)}, off chart)` : s.row.info.short
 }
 
 function formTable() {
@@ -523,7 +540,9 @@ function renderRecent() {
   }).join('')}</tr>`
   const blocks = recent.matchdays.map((day) => {
     const totals = models.map((_, i) => day.fixtures.reduce((s, f) => s + (f.tips[i]?.points ?? 0), 0))
-    const best = Math.max(...totals)
+    const top = Math.max(...totals)
+    // No star when nobody scored or every model is level
+    const best = top > 0 && totals.some((t) => t !== top) ? top : null
     const rows = day.fixtures.map((f) => `<tr class="border-t border-gray-100 dark:border-gray-700">
       <td class="px-2 py-1.5 sticky left-0 z-10 bg-white dark:bg-gray-800 min-w-32 max-w-56"><div class="font-medium">${esc(f.home)} – ${esc(f.away)}</div><div class="text-gray-400 text-xs">${esc(D.fmtKickoff(f.kickoff))}</div></td>
       <td class="px-1 py-1.5 text-center font-mono font-bold whitespace-nowrap">${f.homeGoals}:${f.awayGoals}</td>
@@ -583,10 +602,14 @@ async function init() {
   render()
   $('footer-meta').textContent = `Updated: ${D.fmtGenerated(stats)} · Results through ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} matches, ${stats.meta.tips} tips`
   D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
+  window.addEventListener('resize', alignStickyColumns)
   document.body.classList.add('loaded')
 }
 
-window.addEventListener('load', init)
+// Module scripts run after the deferred Chart.js script, so there is no need to
+// wait for every image; fall back to 'load' if the CDN script is still missing
+if (window.Chart) init()
+else window.addEventListener('load', init)
 </script>
 </body>
 </html>
