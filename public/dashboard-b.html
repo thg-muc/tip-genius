@@ -390,11 +390,9 @@ function renderTimeline() {
 
   $('tl-legend').innerHTML = `<div class="flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-3">${tl.series.map((s) => {
     const st = D.modelStyle(s.row.info)
-    const lastValue = s.diff.filter((v) => v != null).at(-1)
-    const off = clip && lastValue < range.min ? ` (${D.fmtSigned(lastValue, 0)})` : ''
     const isFocus = s.row.info.index === focused
     return `<button type="button" data-model="${s.row.info.index}" aria-pressed="${isFocus}" class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 border ${isFocus ? 'border-sky-500 bg-sky-50 dark:bg-slate-900 font-semibold' : 'border-transparent'}">
-      <svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${st.color}" stroke-width="${Math.min(st.width, 3)}" stroke-dasharray="${st.dash.join(' ')}" stroke-linecap="round"/></svg>${esc(s.row.info.short)}${off}</button>`
+      <svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${st.color}" stroke-width="${Math.min(st.width, 3)}" stroke-dasharray="${st.dash.join(' ')}" stroke-linecap="round"/></svg>${esc(s.row.info.short)}</button>`
   }).join('')}</div>`
   $('tl-legend').onclick = (e) => {
     const b = e.target.closest('[data-model]')
