@@ -5,43 +5,22 @@
 // pages only differ in presentation. Rows in the JSON refer to models by their
 // index in `models`; everything returned here carries the resolved model info.
 
-// Display names and logos, matching LLM_PROVIDERS in main.js where a model is
-// still offered on the main page
-const MODEL_DISPLAY = {
-  'Deepseek-Chat': { name: 'DeepSeek V4.1 Flash', short: 'DeepSeek', logo: 'DeepSeek' },
-  'Google-Gemma-Medium': { name: 'Gemma 4', short: 'Gemma', logo: 'Google' },
-  'Meta-Llama-Mid': { name: 'Llama 4 Maverick', short: 'Llama', logo: 'Meta' },
-  'Microsoft-Phi-Medium': { name: 'Phi 4 Medium', short: 'Phi', logo: 'Microsoft' },
-  'Mistral-Ministral': { name: 'Ministral 14B', short: 'Ministral', logo: 'Mistral' },
-  'Nvidia-Nemotron-Lightning': {
-    name: 'Nemotron 3.5 Lightning',
-    short: 'Nemotron',
-    logo: 'NVIDIA',
-  },
-  'OpenRouter-GPT-OSS-Large': {
-    name: 'GPT-OSS 120b',
-    short: 'GPT-OSS',
-    logo: 'OpenAI',
-  },
-  'Google-Gemini-Flash': { name: 'Gemini Flash', short: 'Gemini', logo: 'Google' },
-  'Meta-Llama-70b': { name: 'Llama 70B', short: 'Llama 70B', logo: 'Meta' },
-  'Mistral-Large': { name: 'Mistral Large', short: 'Mistral L', logo: 'Mistral' },
-  'Mistral-Medium': { name: 'Mistral Medium', short: 'Mistral M', logo: 'Mistral' },
-  'OpenAI-GPT-Mini': { name: 'GPT Mini', short: 'GPT Mini', logo: 'OpenAI' },
-  'OpenRouter-Gemini-Flash-Lite': {
-    name: 'Gemini Flash Lite',
-    short: 'Gemini Lite',
-    logo: 'Google',
-  },
-  'OpenRouter-GPT-Mini': {
-    name: 'GPT Mini (OpenRouter)',
-    short: 'GPT Mini OR',
-    logo: 'OpenAI',
-  },
-  'OpenRouter-Grok': { name: 'Grok', short: 'Grok', logo: 'xAI' },
+// Display names and logos: models from the shared list in models.js (also used
+// by the main page's picker), the baselines only exist on the dashboard
+const BASELINE_DISPLAY = {
   'Odds-Favourite': { name: 'Favourite 2:1', short: 'Favourite 2:1', icon: '⭐' },
   'Always-2:1': { name: 'Always 2:1', short: 'Always 2:1', icon: '🏠' },
   Consensus: { name: 'Model consensus', short: 'Consensus', icon: '🤖' },
+}
+
+const MODEL_DISPLAY = {
+  ...Object.fromEntries(
+    (globalThis.TIP_GENIUS_MODELS || []).map((model) => [
+      model.value,
+      { name: model.label, short: model.short, logo: model.logo },
+    ])
+  ),
+  ...BASELINE_DISPLAY,
 }
 
 const BASELINE_HINTS = {
@@ -307,7 +286,7 @@ export function modelInfo(stats, index) {
     id: model.id,
     name: display.name,
     short: display.short,
-    logo: display.logo ? `/images/llm-logos/${display.logo}.png` : null,
+    logo: display.logo || null,
     kind: model.kind,
     isBaseline: model.kind === 'baseline',
     isFavourite: model.id === FAVOURITE,

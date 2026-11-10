@@ -1,59 +1,11 @@
 // Main JavaScript for Tip Genius PWA
 // Handles UI, data fetching, caching and interactions
 
-// LLM provider configuration with PNG logos
-const LLM_PROVIDERS = [
-  {
-    value: 'Deepseek-Chat',
-    label: 'DeepSeek V4.1 Flash',
-    logo: `/images/llm-logos/DeepSeek.png`,
-  },
-  // {
-  //   value: 'Google-Gemini-Flash-Lite',
-  //   label: 'Gemini 2.5 Flash Lite',
-  //   logo: `/images/llm-logos/Google.png`,
-  // },
-  {
-    value: 'Google-Gemma-Medium',
-    label: 'Gemma 4',
-    logo: `/images/llm-logos/Google.png`,
-  },
-  {
-    value: 'OpenRouter-GPT-OSS-Large',
-    label: 'GPT-OSS 120b',
-    logo: `/images/llm-logos/OpenAI.png`,
-  },
-  {
-    value: 'Nvidia-Nemotron-Lightning',
-    label: 'Nemotron 3.5 Lightning',
-    logo: `/images/llm-logos/NVIDIA.png`,
-  },
-  {
-    value: 'Mistral-Ministral',
-    label: 'Ministral 14B',
-    logo: `/images/llm-logos/Mistral.png`,
-  },
-  {
-    value: 'Meta-Llama-Mid',
-    label: 'Llama 4 Maverick',
-    logo: `/images/llm-logos/Meta.png`,
-  },
-  {
-    value: 'Microsoft-Phi-Medium',
-    label: 'Phi 4 Medium',
-    logo: `/images/llm-logos/Microsoft.png`,
-  },
-  // {
-  //   value: 'OpenRouter-Grok',
-  //   label: 'Grok 4.3',
-  //   logo: `/images/llm-logos/xAI.png`,
-  // },
-  // {
-  //   value: 'OpenRouter-Claude-Haiku',
-  //   label: 'Claude Haiku 4.5',
-  //   logo: `/images/llm-logos/Anthropic.png`,
-  // },
-]
+// LLM providers offered in the model picker, from the shared model list in
+// models.js (loaded before this file; the stats dashboard reads the same list)
+const LLM_PROVIDERS = (window.TIP_GENIUS_MODELS || [])
+  .filter((model) => model.offered)
+  .map(({ value, label, logo }) => ({ value, label, logo }))
 
 // Leagues shown as tabs, mirroring sports_list in tip_genius_config.yaml.
 // Fixed rather than read from the predictions, so a provider that failed for
