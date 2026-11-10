@@ -150,8 +150,6 @@ function renderControls() {
       <input type="checkbox" data-toggle="${key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
         class="accent-sky-700 w-4 h-4"> ${label}</label>`
   $('toggles').innerHTML = [
-    toggle('showAll', '<span class="sm:hidden">Show all</span><span class="hidden sm:inline">Show all models</span>', state.showAll, false,
-      'Include inactive models and models with fewer than 80% of the matches'),
     toggle('backfill', '<span class="sm:hidden">Allow backfill</span><span class="hidden sm:inline">Allow backfill tips</span>', state.fair ? true : state.backfill, !view?.hasBackfill || !!state.fair,
       state.fair
         ? 'The fair comparison always counts backfill tips'
@@ -333,10 +331,20 @@ function renderTable() {
 
   const hiddenCount = view.hidden.length
   $('table-legend').innerHTML = [
-    !state.showAll && hiddenCount
-      ? `${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden<span class="hidden sm:inline"> (inactive or under 80% of the matches)</span> · <button type="button" data-show-all class="font-semibold text-sky-700 dark:text-sky-400 hover:underline">Show all</button>`
-      : '',
+    hiddenCount ? hiddenModelsNote(hiddenCount) : '',
   ].filter(Boolean).map((t) => `<p class="mt-1 first:mt-0">${t}</p>`).join('') + glossaryHtml()
+}
+
+// Under the table, the switch for models that do not count for the ranking
+// (inactive or under 80% of the matches): shown greyed out or hidden
+function hiddenModelsNote(count) {
+  const models = `model${count === 1 ? '' : 's'}`
+  const reason = '<span class="hidden sm:inline"> (inactive or under 80% of the matches)</span>'
+  const link = (show, label) =>
+    `<button type="button" data-show-all="${show ? '1' : '0'}" class="font-semibold text-sky-700 dark:text-sky-400 hover:underline">${label}</button>`
+  return state.showAll
+    ? `${count} greyed-out ${models} shown${reason} · ${link(false, 'Hide greyed out')}`
+    : `${count} more ${models} hidden${reason} · ${link(true, 'Show all')}`
 }
 
 // The Model column sticks right of the rank column; its offset is the rank
@@ -668,9 +676,10 @@ async function init() {
   $('table-legend').addEventListener('toggle', (e) => {
     if (e.target.id === 'glossary') ui.glossaryOpen = e.target.open
   }, true)
-  // The "Show all" link under the table does what the checkbox does
+  // The Show all / Hide greyed out link under the table
   $('table-legend').addEventListener('click', (e) => {
-    if (e.target.closest('[data-show-all]')) update({ showAll: true })
+    const link = e.target.closest('[data-show-all]')
+    if (link) update({ showAll: link.dataset.showAll === '1' })
   })
   document.body.classList.add('loaded')
 }
