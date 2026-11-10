@@ -334,7 +334,7 @@ function renderTable() {
   const hiddenCount = view.hidden.length
   $('table-legend').innerHTML = [
     !state.showAll && hiddenCount
-      ? `<span class="sm:hidden">${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden.</span><span class="hidden sm:inline">${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden (inactive or under 80% of the matches) – “Show all models”.</span>`
+      ? `${hiddenCount} more model${hiddenCount === 1 ? '' : 's'} hidden<span class="hidden sm:inline"> (inactive or under 80% of the matches)</span> · <button type="button" data-show-all class="font-semibold text-sky-700 dark:text-sky-400 hover:underline">Show all</button>`
       : '',
   ].filter(Boolean).map((t) => `<p class="mt-1 first:mt-0">${t}</p>`).join('') + glossaryHtml()
 }
@@ -668,6 +668,10 @@ async function init() {
   $('table-legend').addEventListener('toggle', (e) => {
     if (e.target.id === 'glossary') ui.glossaryOpen = e.target.open
   }, true)
+  // The "Show all" link under the table does what the checkbox does
+  $('table-legend').addEventListener('click', (e) => {
+    if (e.target.closest('[data-show-all]')) update({ showAll: true })
+  })
   document.body.classList.add('loaded')
 }
 
