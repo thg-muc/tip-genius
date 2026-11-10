@@ -53,29 +53,30 @@
 
         <div id="error" class="hidden bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8" role="alert"></div>
 
-        <!-- Leaderboard -->
-        <!-- Collapsible from its header row; the state is remembered (see bindCards) -->
-        <details id="table-card" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl overflow-hidden mb-8 sm:mb-10" open>
-            <summary class="summary-plain flex items-center justify-between gap-2 px-3 sm:px-5 pt-3 pb-3 open-pb-2 cursor-pointer select-none">
-                <span class="flex items-center gap-2"><h2 id="table-title" class="text-base sm:text-xl font-bold">Table</h2><svg class="w-4 h-4 text-gray-400 card-chevron shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg></span>
+        <!-- Leaderboard; folds from its header row (see bindCards), the state is remembered -->
+        <section id="table-card" data-open="true" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl overflow-hidden mb-8 sm:mb-10" aria-labelledby="table-title">
+            <div class="card-head flex items-center justify-between gap-2 px-3 sm:px-5 pt-3 pb-3 open-pb-2 cursor-pointer select-none" data-card-toggle="table-card">
+                <h2 id="table-title" class="text-base sm:text-xl font-bold"><button type="button" class="inline-flex items-center gap-2" aria-expanded="true" aria-controls="table-body">Table<svg class="w-4 h-4 text-gray-500 dark:text-gray-400 card-chevron shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg></button></h2>
                 <p id="table-meta" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400"></p>
-            </summary>
-            <div class="overflow-x-auto">
-                <table id="leaderboard" class="w-full text-xs sm:text-sm tabular-nums"></table>
             </div>
-            <div id="table-legend" class="px-3 sm:px-5 py-3 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700"></div>
-        </details>
+            <div id="table-body">
+                <div class="overflow-x-auto">
+                    <table id="leaderboard" class="w-full text-xs sm:text-sm tabular-nums"></table>
+                </div>
+                <div id="table-legend" class="px-3 sm:px-5 py-3 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700"></div>
+            </div>
+        </section>
 
         <!-- Detail tabs -->
-        <div class="flex justify-center mb-3">
+        <div id="view-switch" class="flex justify-center mb-3">
             <div id="view-tabs" class="inline-flex rounded-md shadow-sm overflow-hidden" role="tablist" aria-label="View"></div>
         </div>
-        <details id="panel-card" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl mb-6" open>
-            <summary class="summary-plain flex items-center gap-2 px-3 sm:px-4 lg:px-5 pt-3 pb-3 open-pb-0 cursor-pointer select-none">
-                <h2 id="panel-title" class="text-base sm:text-xl font-bold"></h2><svg class="w-4 h-4 text-gray-400 card-chevron shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-            </summary>
+        <section id="panel-card" data-open="true" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl mb-6" aria-labelledby="panel-title">
+            <div class="card-head flex items-center gap-2 px-3 sm:px-4 lg:px-5 pt-3 pb-3 open-pb-0 cursor-pointer select-none" data-card-toggle="panel-card">
+                <h2 class="text-base sm:text-xl font-bold"><button type="button" class="inline-flex items-center gap-2" aria-expanded="true" aria-controls="panel"><span id="panel-title"></span><svg class="w-4 h-4 text-gray-500 dark:text-gray-400 card-chevron shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg></button></h2>
+            </div>
             <div id="panel" class="px-3 sm:px-4 lg:px-5 pt-2 pb-3 sm:pb-4 lg:pb-5" role="tabpanel"></div>
-        </details>
+        </section>
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
@@ -182,30 +183,48 @@ function bindControls() {
     const b = e.target.closest('[data-view]')
     if (!b) return
     ui.tab = b.dataset.view
-    $('panel-card').open = true
+    setCardOpen('panel-card', true)
     renderControls()
     renderPanel()
   })
 }
 
-// Folded cards are remembered per browser; a folded table is re-measured on opening
+// Cards fold from their header row: a button inside the heading carries
+// aria-expanded, so the heading stays a heading for screen readers. Folded
+// cards are remembered per browser; a folded table is re-measured on opening
 const CARDS_KEY = 'dashboardFoldedCards'
+let foldedCards = {}
+
+function isCardOpen(id) {
+  return $(id).dataset.open === 'true'
+}
+
+function setCardOpen(id, open, save = true) {
+  const card = $(id)
+  card.dataset.open = String(open)
+  const button = card.querySelector('[data-card-toggle] button')
+  button.setAttribute('aria-expanded', String(open))
+  $(button.getAttribute('aria-controls')).hidden = !open
+  if (save) {
+    foldedCards[id] = !open
+    try {
+      localStorage.setItem(CARDS_KEY, JSON.stringify(foldedCards))
+    } catch {
+      // Storage can be unavailable (private mode); folding still works
+    }
+  }
+  if (id === 'table-card' && open) alignStickyColumns()
+}
 
 function bindCards() {
-  let folded = {}
   try {
-    folded = JSON.parse(localStorage.getItem(CARDS_KEY)) || {}
+    foldedCards = JSON.parse(localStorage.getItem(CARDS_KEY)) || {}
   } catch {
-    folded = {}
+    foldedCards = {}
   }
   for (const id of ['table-card', 'panel-card']) {
-    const card = $(id)
-    if (folded[id]) card.open = false
-    card.addEventListener('toggle', () => {
-      folded[id] = !card.open
-      localStorage.setItem(CARDS_KEY, JSON.stringify(folded))
-      if (id === 'table-card' && card.open) alignStickyColumns()
-    })
+    if (foldedCards[id]) setCardOpen(id, false, false)
+    $(id).querySelector('[data-card-toggle]').addEventListener('click', () => setCardOpen(id, !isCardOpen(id)))
   }
 }
 
@@ -245,7 +264,7 @@ function ciCell(row, scale, favAvg) {
 }
 
 function coverageCell(row) {
-  if (!row.coverage) return '<span class="text-gray-400">–</span>'
+  if (!row.coverage) return '<span class="text-gray-500 dark:text-gray-400">–</span>'
   const c = row.coverage
   const title = c.source === 'live'
     ? `${c.delivered} of ${c.expected} matches tipped before kickoff` +
@@ -254,22 +273,23 @@ function coverageCell(row) {
   const warn = row.lowCoverage
     ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warning: low coverage">⚠︎</span> '
     : ''
-  return `<span title="${esc(title)}">${warn}${D.pct(c.share)}</span>`
+  const digits = row.lowCoverage && c.share >= 0.895 ? 1 : 0
+  return `<span title="${esc(title)}">${warn}${D.pct(c.share, digits)}</span>`
 }
 
 function formCell(row) {
-  if (!row.form) return '<span class="text-gray-400">–</span>'
+  if (!row.form) return '<span class="text-gray-500 dark:text-gray-400">–</span>'
   // Form always includes backfill tips; a live-only Avg is no fair base for the arrow
   const d = row.form.avg0 - row.avg0
-  const arrow = row.liveOnly ? '<span class="text-gray-400" title="form includes backfill tips">·</span>'
-    : Math.abs(d) < 0.05 ? '<span class="text-gray-400" aria-label="same">→</span>'
+  const arrow = row.liveOnly ? '<span class="text-gray-500 dark:text-gray-400" title="form includes backfill tips">·</span>'
+    : Math.abs(d) < 0.05 ? '<span class="text-gray-500 dark:text-gray-400" aria-label="same">→</span>'
     : d > 0 ? '<span class="text-green-700 dark:text-green-400" aria-label="better">▲</span>'
     : '<span class="text-red-700 dark:text-red-400" aria-label="worse">▼</span>'
-  return `<span title="Avg of the last 5 ${view.slice.timeline.step === 'matchday' ? 'matchdays' : 'weeks'}: ${row.form.points} points from ${row.form.offered} matches">${D.fmt(row.form.avg0)} ${arrow}</span>`
+  return `<span title="Avg of the last 5 ${D.formUnit(state)}: ${row.form.points} points from ${row.form.offered} matches">${D.fmt(row.form.avg0)} ${arrow}</span>`
 }
 
 function deltaCell(row) {
-  if (row.info.isFavourite) return '<span class="text-gray-400">0</span>'
+  if (row.info.isFavourite) return '<span class="text-gray-500 dark:text-gray-400">0</span>'
   const cls = row.deltaFav > 0.0005 ? 'text-green-700 dark:text-green-400' : row.deltaFav < -0.0005 ? 'text-red-700 dark:text-red-400' : 'text-gray-500'
   return `<span class="${cls}">${D.fmtSigned(row.deltaFav)}</span>`
 }
@@ -356,7 +376,7 @@ function alignStickyColumns() {
   const table = $('leaderboard')
   const box = table.parentElement
   const heads = [...table.querySelectorAll('thead th')]
-  if (!heads.length || !$('table-card').open) return
+  if (!heads.length || !isCardOpen('table-card')) return
   const modelCells = table.querySelectorAll('tr > :nth-child(2)')
   // An overflowing table shrinks every column to its minimum and ignores cell
   // widths, so the width goes on the cell's content as a minimum instead
@@ -403,9 +423,9 @@ function destroyCharts() {
   charts = []
 }
 
-function legendHtml(items, interactive = true) {
-  return `<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-3" ${interactive ? 'data-legend' : ''}>${items
-    .map((it) => `<button type="button" data-model="${it.index}" class="inline-flex items-center gap-1.5 rounded px-1 ${ui.highlight === it.index ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : ''}" ${interactive ? '' : 'disabled'}>
+function legendHtml(items) {
+  return `<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-3" data-legend>${items
+    .map((it) => `<button type="button" data-model="${it.index}" class="inline-flex items-center gap-1.5 rounded px-1 ${ui.highlight === it.index ? 'bg-gray-100 dark:bg-gray-700 font-semibold' : ''}">
       <svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${it.color}" stroke-width="${Math.min(it.width, 3)}" stroke-dasharray="${it.dash.join(' ')}" stroke-linecap="round"/></svg>${D.modelLabelHtml(it.info, { size: 'w-4 h-4' })}</button>`)
     .join('')}</div>`
 }
@@ -455,7 +475,7 @@ function renderTimeline() {
       order: s.row.info.isFavourite ? 0 : 1,
     }
   })
-  const chart = new Chart($('timeline-chart'), {
+  if (!chartsMissing('timeline-chart')) charts.push(new Chart($('timeline-chart'), {
     type: 'line',
     data: { labels: tl.labels, datasets },
     options: {
@@ -478,8 +498,7 @@ function renderTimeline() {
         },
       },
     },
-  })
-  charts.push(chart)
+  }))
   $('panel').querySelector('[role=group]').addEventListener('click', (e) => {
     const b = e.target.closest('[data-mode]')
     if (b) { ui.timelineMode = b.dataset.mode; renderPanel() }
@@ -488,7 +507,7 @@ function renderTimeline() {
 }
 
 // In the gap view "Always 2:1" falls far behind and would squash the lines
-// that matter; clip the axis to the other series and say so in the legend
+// that matter; clip the axis to the other series (its line runs off the bottom)
 function diffRange(tl, diff) {
   if (!diff) return {}
   const values = (pred) => tl.series.filter(pred).flatMap((s) => s.diff).filter((v) => v != null)
@@ -504,7 +523,7 @@ function diffRange(tl, diff) {
 function formTable() {
   const rows = view.rows.filter((r) => r.form).sort((a, b) => b.form.avg0 - a.form.avg0)
   if (!rows.length || view.mode !== 'standard') return ''
-  const unit = view.slice.timeline.step === 'matchday' ? 'matchdays' : 'weeks'
+  const unit = D.formUnit(state)
   return `<h3 class="text-sm sm:text-base font-bold mt-6 mb-2">Form table (last 5 ${unit})</h3>
     <div class="overflow-x-auto"><table class="w-full text-xs sm:text-sm tabular-nums">
     <thead class="text-gray-500 dark:text-gray-400 text-xs uppercase"><tr><th class="text-right px-2 py-1">#</th><th class="text-left px-2 py-1">Model</th><th class="text-right px-2 py-1">M</th><th class="text-right px-2 py-1">Pts</th><th class="text-right px-2 py-1">Avg</th></tr></thead>
@@ -541,13 +560,13 @@ function renderHits() {
     <h3 class="text-sm sm:text-base font-semibold mt-6 mb-2">Hit counts per model</h3>
     <div class="overflow-x-auto"><table class="w-full text-xs tabular-nums">
       <thead class="text-gray-500 dark:text-gray-400 uppercase"><tr><th class="text-left px-2 py-1">Model</th>${D.HIT_TYPES.map((h) => `<th class="text-right px-2 py-1">${h.label}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map((r) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.listed ? '' : 'opacity-50'}"><td class="px-2 py-1 whitespace-nowrap">${D.modelLabelHtml(r.info, { size: 'w-4 h-4' })}</td>${D.HIT_TYPES.map((h) => `<td class="text-right px-2 py-1">${r.hits[h.key]} <span class="text-gray-400">(${D.pct(r.hits[h.key] / r.offered)})</span></td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${rows.map((r) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.listed ? '' : 'opacity-50'}"><td class="px-2 py-1 whitespace-nowrap">${D.modelLabelHtml(r.info, { size: 'w-4 h-4' })}</td>${D.HIT_TYPES.map((h) => `<td class="text-right px-2 py-1">${r.hits[h.key]} <span class="text-gray-500 dark:text-gray-400">(${D.pct(r.hits[h.key] / r.offered)})</span></td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>`
-  const mobile = !D.startsExpanded()
-  const chart = new Chart($('hits-chart'), {
+  const phone = D.isPhone()
+  if (!chartsMissing('hits-chart')) charts.push(new Chart($('hits-chart'), {
     type: 'bar',
     data: {
-      labels: rows.map((r) => (mobile ? r.info.short : r.info.name)),
+      labels: rows.map((r) => (phone ? r.info.short : r.info.name)),
       datasets: D.HIT_TYPES.map((h) => ({
         label: h.label,
         data: rows.map((r) => (r.hits[h.key] / r.offered) * 100),
@@ -575,8 +594,15 @@ function renderHits() {
       },
     },
     plugins: [rowIconsPlugin],
-  })
-  charts.push(chart)
+  }))
+}
+
+// Without Chart.js (CDN blocked) a chart becomes a short note; tables still work
+function chartsMissing(canvasId) {
+  if (window.Chart) return false
+  $(canvasId).parentElement.outerHTML =
+    '<p class="text-sm text-gray-500 dark:text-gray-400 text-center py-8">The chart could not be loaded.</p>'
+  return true
 }
 
 // Draws each row's logo (or baseline symbol) left of its label on the y axis,
@@ -601,7 +627,8 @@ const rowIconsPlugin = {
       const [textX, y] = item.options.translation
       // Labels of a left y axis are right-aligned at textX
       const x = textX - ctx.measureText(label).width - ICON_SPACE - ICON_SIZE
-      const image = D.modelIconImage(info, () => chart.draw())
+      const image = D.modelIconImage(info)
+      if (image && !image.complete) redrawWhenLoaded(chart, image)
       if (image && image.complete && image.naturalWidth) {
         ctx.drawImage(image, x, y - ICON_SIZE / 2, ICON_SIZE, ICON_SIZE)
       } else if (info.icon) {
@@ -613,6 +640,17 @@ const rowIconsPlugin = {
     })
     ctx.restore()
   },
+}
+
+const waitingImages = new WeakMap() // chart -> images it waits for
+
+function redrawWhenLoaded(chart, image) {
+  let images = waitingImages.get(chart)
+  if (!images) waitingImages.set(chart, (images = new Set()))
+  if (images.has(image)) return
+  images.add(image)
+  // A destroyed chart has no context any more
+  image.addEventListener('load', () => chart.ctx && chart.draw(), { once: true })
 }
 
 function pointsBadge(points, backfill) {
@@ -639,9 +677,9 @@ function renderRecent() {
     // No star when nobody scored or every model is level
     const best = top > 0 && totals.some((t) => t !== top) ? top : null
     const rows = day.fixtures.map((f) => `<tr class="border-t border-gray-100 dark:border-gray-700">
-      <td class="px-2 py-1.5 sticky left-0 z-10 bg-white dark:bg-gray-800 min-w-32 max-w-56"><div class="font-medium">${esc(f.home)} – ${esc(f.away)}</div><div class="text-gray-400 text-xs">${esc(D.fmtKickoff(f.kickoff))}</div></td>
+      <td class="px-2 py-1.5 sticky left-0 z-10 bg-white dark:bg-gray-800 min-w-32 max-w-56"><div class="font-medium">${esc(f.home)} – ${esc(f.away)}</div><div class="text-gray-500 dark:text-gray-400 text-xs">${esc(D.fmtKickoff(f.kickoff))}</div></td>
       <td class="px-1 py-1.5 text-center font-mono font-bold whitespace-nowrap">${f.homeGoals}:${f.awayGoals}</td>
-      ${f.tips.map((t) => `<td class="px-1 py-1.5 text-center whitespace-nowrap">${t ? `<span class="font-mono">${t.home}:${t.away}</span>${t.backfill ? '<sup class="text-gray-400" title="backfill tip">BF</sup>' : ''} ${pointsBadge(t.points, t.backfill)}` : '<span class="text-gray-400" title="no tip">–</span>'}</td>`).join('')}
+      ${f.tips.map((t) => `<td class="px-1 py-1.5 text-center whitespace-nowrap">${t ? `<span class="font-mono">${t.home}:${t.away}</span>${t.backfill ? '<sup class="text-gray-500 dark:text-gray-400" title="backfill tip">BF</sup>' : ''} ${pointsBadge(t.points, t.backfill)}` : '<span class="text-gray-500 dark:text-gray-400" title="no tip">–</span>'}</td>`).join('')}
     </tr>`).join('')
     return `<div class="mb-6 last:mb-0">
       <h3 class="flex items-center gap-2 text-sm sm:text-base font-bold mb-2">${day.league.logo ? `<img src="${day.league.logo}" alt="" class="w-5 h-5 object-contain">` : ''}${esc(day.league.label)} · matchday from ${D.fmtDate(day.date)}</h3>
@@ -673,8 +711,11 @@ function renderPanel() {
 function render() {
   view = D.buildView(stats, state)
   renderControls()
+  for (const id of ['table-card', 'view-switch', 'panel-card']) $(id).classList.toggle('hidden', !view)
   if (!view) {
-    $('error').textContent = 'No data for this selection.'
+    destroyCharts()
+    $('notes').innerHTML = ''
+    $('error').textContent = 'No data for this selection yet.'
     $('error').classList.remove('hidden')
     return
   }
@@ -694,14 +735,29 @@ async function init() {
     document.body.classList.add('loaded')
     return
   }
-  state = D.readState(stats)
-  D.applyChartDefaults(Chart)
-  bindControls()
-  bindCards()
-  render()
-  $('footer-meta').innerHTML = D.footerMetaHtml(stats)
-  D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
+  try {
+    state = D.readState(stats)
+    if (window.Chart) D.applyChartDefaults(Chart)
+    bindControls()
+    bindCards()
+    render()
+    $('footer-meta').innerHTML = D.footerMetaHtml(stats)
+  } catch (err) {
+    console.error('Failed to render the stats', err)
+    $('error').textContent = 'The stats could not be shown. Please try again later.'
+    $('error').classList.remove('hidden')
+    document.body.classList.add('loaded')
+    return
+  }
+  D.onSchemeChange(() => {
+    if (window.Chart) D.applyChartDefaults(Chart)
+    render()
+  })
   window.addEventListener('resize', alignStickyColumns)
+  // Chart labels switch between short and full names at the phone breakpoint
+  D.onPhoneChange(() => {
+    if (ui.tab === 'hits') renderPanel()
+  })
   // 'toggle' does not bubble, so listen in the capture phase
   $('table-legend').addEventListener('toggle', (e) => {
     if (e.target.id === 'glossary') ui.glossaryOpen = e.target.open

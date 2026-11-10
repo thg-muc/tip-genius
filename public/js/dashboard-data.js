@@ -779,9 +779,26 @@ export function footerMetaHtml(stats) {
   )}</span> · ${escapeHtml(counts)}`
 }
 
+// Phones are below Tailwind's sm breakpoint (640 px)
+const PHONE_QUERY = '(max-width: 639.98px)'
+
+export function isPhone() {
+  return window.matchMedia(PHONE_QUERY).matches
+}
+
+export function onPhoneChange(callback) {
+  window.matchMedia(PHONE_QUERY).addEventListener('change', callback)
+}
+
 // Glossaries start open where there is room and closed on phones
 export function startsExpanded() {
-  return window.matchMedia('(min-width: 640px)').matches
+  return !isPhone()
+}
+
+// Form covers the last 5 matchdays of one league, or the last 5 weeks across
+// all leagues (form_step in lib/stats.py), whatever the timeline step is
+export function formUnit(state) {
+  return state.league === 'all' ? 'weeks' : 'matchdays'
 }
 
 // --- Model labels (one look everywhere) -----------------------------------
@@ -801,16 +818,16 @@ export function modelNameHtml(info) {
   return `<span class="sm:hidden">${escapeHtml(info.short)}</span><span class="hidden sm:inline">${escapeHtml(info.name)}</span>`
 }
 
-export function modelLabelHtml(info, { size = 'w-5 h-5', suffix = '' } = {}) {
+export function modelLabelHtml(info, { size = 'w-5 h-5' } = {}) {
   return `<span class="inline-flex items-center gap-2 min-w-0 ${info.isBaseline ? 'italic' : ''}">${modelIconHtml(
     info,
     size
-  )}<span class="truncate">${modelNameHtml(info)}${suffix}</span></span>`
+  )}<span class="truncate">${modelNameHtml(info)}</span></span>`
 }
 
-// Logo images for canvas charts, loaded once; onLoad redraws a waiting chart
+// Logo images for canvas charts, loaded once and shared
 const iconImages = new Map()
-export function modelIconImage(info, onLoad) {
+export function modelIconImage(info) {
   if (!info.logo) return null
   let image = iconImages.get(info.logo)
   if (!image) {
@@ -818,7 +835,6 @@ export function modelIconImage(info, onLoad) {
     image.src = info.logo
     iconImages.set(info.logo, image)
   }
-  if (!image.complete && onLoad) image.addEventListener('load', onLoad, { once: true })
   return image
 }
 

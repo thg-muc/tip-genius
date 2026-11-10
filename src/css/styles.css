@@ -90,30 +90,21 @@ html {
   }
 }
 
-/* Collapsible dashboard cards: <summary> rows without the browser's marker
-   (a chevron in the row shows the state instead) */
-.summary-plain {
-  list-style: none;
-}
-
-.summary-plain::-webkit-details-marker {
-  display: none;
-}
-
-/* The chevron points down when folded and up when open */
+/* Foldable dashboard cards (data-open on the card): the chevron points down
+   when folded and up when open */
 .card-chevron {
   transition: transform 0.2s ease;
 }
 
-details[open] > summary .card-chevron {
+[data-open='true'] .card-chevron {
   transform: rotate(180deg);
 }
 
 /* An open card's header sits closer to its content */
-details[open] > summary.open-pb-2 {
+[data-open='true'] > .card-head.open-pb-2 {
   padding-bottom: 0.5rem;
 }
 
-details[open] > summary.open-pb-0 {
+[data-open='true'] > .card-head.open-pb-0 {
   padding-bottom: 0;
 }
