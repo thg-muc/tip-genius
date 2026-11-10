@@ -706,8 +706,10 @@ def write_manifests_and_index(
     if index_changed:
         stats["uploads"] += 1
         stats["bytes"] += len(blob_archive.to_json(merged))
-        if not dry_run:
-            blob_archive.update_index(entries, reconstructed)
+        if not dry_run and not blob_archive.update_index(
+            entries, reconstructed, expected=index
+        ):
+            stats["failed"] += 1
     else:
         stats["existing"] += 1
 

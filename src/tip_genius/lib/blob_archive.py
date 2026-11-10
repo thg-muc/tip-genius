@@ -659,18 +659,8 @@ def update_index(  # noqa: PLR0913
         count = len(run_ts - {run.get("run_ts") for run in index.get("runs", [])})
         count += len(wanted - index_pathnames(index))
         for key, files, scan_key, scan in sections:
-            current = index.get(key, {})
-            for path, entry in files.items():
-                found = current.get(path)
-                # A newer entry (another writer) counts as present
-                count += found is None or (
-                    found.get("rows") != entry.get("rows")
-                    and str(found.get("updated_at") or "")
-                    <= str(entry.get("updated_at") or "")
-                )
-            states = index.get(scan_key)
-            states = states if isinstance(states, dict) else {}
-            count += sum(states.get(season) != state for season, state in scan.items())
+            count += _entries_missing(index, key, files)
+            count += _states_missing(index, scan_key, scan)
         return count
 
     ok = _verified_index_update(
@@ -690,6 +680,34 @@ def update_index(  # noqa: PLR0913
             INDEX_PATHNAME,
         )
     return ok
+
+
+def _entries_missing(
+    index: dict[str, Any], key: str, entries: dict[str, dict[str, Any]]
+) -> int:
+    """Count ``entries`` (``{path: {rows, updated_at}}``) not shown in ``key``.
+
+    An entry counts as shown with the same row count, or when the index holds
+    a newer one (another writer), which the merge would keep anyway.
+    """
+    current = index.get(key, {})
+    count = 0
+    for path, entry in entries.items():
+        found = current.get(path)
+        count += found is None or (
+            found.get("rows") != entry.get("rows")
+            and str(found.get("updated_at") or "") <= str(entry.get("updated_at") or "")
+        )
+    return count
+
+
+def _states_missing(
+    index: dict[str, Any], key: str, scan: dict[str, dict[str, Any] | None]
+) -> int:
+    """Count scan states of ``scan`` that ``key`` does not show (None: absent)."""
+    states = index.get(key)
+    states = states if isinstance(states, dict) else {}
+    return sum(states.get(season) != state for season, state in scan.items())
 
 
 def await_readback(
@@ -879,13 +897,9 @@ def update_results_index(
         return len((known - index_pathnames(index)) | lower)
 
     def missing(index: dict[str, Any]) -> int:
-        current = index.get(entries_key, {})
-        states = index.get(scan_key)
-        states = states if isinstance(states, dict) else {}
-        return sum(
-            current.get(path, {}).get("rows") != entry["rows"]
-            for path, entry in entries.items()
-        ) + sum(states.get(season) != state for season, state in (scan or {}).items())
+        return _entries_missing(index, entries_key, entries) + _states_missing(
+            index, scan_key, scan or {}
+        )
 
     ok = _verified_index_update(
         lambda index: merge_results_scan(

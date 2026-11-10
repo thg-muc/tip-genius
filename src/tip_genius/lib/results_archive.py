@@ -1248,7 +1248,15 @@ def update_results_archive(  # noqa: C901, PLR0912, PLR0913, PLR0915
             file_report.status = "write-failed"
 
     if not dry_run:
-        report.scan_state = _next_scan_state(report, plans, fixtures, now)
+        # Rows read from Blob this run, plus those written and read back
+        in_blob = {row["match_key"] for rows in existing.values() for row in rows}
+        in_blob.update(
+            row["match_key"]
+            for f in report.files
+            if f.status == "written"
+            for row in new_rows.get(f.pathname, [])
+        )
+        report.scan_state = _next_scan_state(report, plans, fixtures, in_blob, now)
         if rebuild:
             # Rows may have been dropped: the next workflow run scans fully
             report.scan_state = dict.fromkeys(seasons)
@@ -1275,6 +1283,7 @@ def _next_scan_state(
     report: ArchiveReport,
     plans: list[ScanPlan],
     fixtures: set[Fixture],
+    done: set[str],
     now: datetime,
 ) -> dict[str, dict[str, Any] | None] | None:
     """Return the scan state after an incremental-mode run, else None.
@@ -1283,11 +1292,12 @@ def _next_scan_state(
     was unreadable (its fixtures are unknown, so the next run repeats this
     one) or a file refused to shrink.
 
-    Open fixtures are those of this run without a row in their file's final
-    content (not played yet, unmatched, or waiting for a rescheduled
-    pairing's row). A stale file (not read) or an unverified write keeps its
-    new fixtures open instead of blocking the state, so the next run checks
-    just those again rather than every prediction file.
+    Open fixtures are those of this run whose ``match_key`` is not in
+    ``done`` (the rows read from Blob or written and read back): not played
+    yet, unmatched, or waiting for a rescheduled pairing's row. A stale file
+    (not read) or an unverified write keeps its new fixtures open instead of
+    blocking the state, so the next run checks just those again rather than
+    every prediction file.
     """
     if (
         not any(plan.runs for plan in plans)
@@ -1295,17 +1305,6 @@ def _next_scan_state(
         or any(f.status == "shrink-refused" for f in report.files)
     ):
         return None
-    # Rows read from Blob this run, or written and read back
-    in_blob = {
-        f.pathname: f.existing if f.status == "write-failed" else f.rows
-        for f in report.files
-        if f.status != "stale"
-    }
-    done = {
-        row["match_key"]
-        for pathname, rows in report.contents.items()
-        for row in rows[: in_blob.get(pathname, 0)]
-    }
     states: dict[str, dict[str, Any] | None] = {}
     for plan in plans:
         still_open = [

@@ -479,3 +479,21 @@ def test_backfill_index_gives_up_after_bounded_attempts(
     assert not ok
     assert len([p for p in fake_blob.puts if p["pathname"] == "index.json"]) == 3
     assert "NOT verified after 3 attempts" in caplog.text
+
+
+def test_update_index_accepts_a_newer_foreign_entry(fake_blob: FakeBlob) -> None:
+    path = "stats/predictions_2026-27.csv"
+    newer = {path: {"rows": 9, "updated_at": "2026-11-10 12:00:00"}}
+    fake_blob.files["index.json"] = blob_archive.to_json(
+        blob_archive.merge_results_index(None, newer, key=blob_archive.STATS_KEY)
+    )
+    older = {path: {"rows": 3, "updated_at": "2026-11-10 11:00:00"}}
+    # Stats only (no run entry): the newer entry stays and counts as shown
+    assert blob_archive.update_index([], stats=older, wait=0)
+    index = json.loads(fake_blob.files["index.json"])
+    assert index[blob_archive.STATS_KEY] == newer
+    # Same timestamp, other row count: not shown, so it is written
+    same = {path: {"rows": 5, "updated_at": "2026-11-10 12:00:00"}}
+    assert blob_archive.update_index([], stats=same, wait=0)
+    index = json.loads(fake_blob.files["index.json"])
+    assert index[blob_archive.STATS_KEY] == same
