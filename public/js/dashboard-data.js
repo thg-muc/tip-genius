@@ -39,22 +39,70 @@ const MODEL_DISPLAY = {
     logo: 'OpenAI',
   },
   'OpenRouter-Grok': { name: 'Grok', short: 'Grok', logo: 'xAI' },
-  'Odds-Favourite': { name: 'Quoten-Favorit', short: 'Favorit' },
-  'Always-2:1': { name: 'Immer 2:1', short: 'Immer 2:1' },
-  Consensus: { name: 'Modell-Konsens', short: 'Konsens' },
+  'Odds-Favourite': { name: 'Odds favourite', short: 'Favourite' },
+  'Always-2:1': { name: 'Always 2:1', short: 'Always 2:1' },
+  Consensus: { name: 'Model consensus', short: 'Consensus' },
 }
 
 const BASELINE_HINTS = {
   'Odds-Favourite':
-    'Tippt 2:1 auf den Heim- bzw. 0:1 auf den Auswärtsfavoriten der Quoten',
-  'Always-2:1': 'Tippt jedes Spiel 2:1 für die Heimmannschaft',
-  Consensus: 'Median aller Modelltipps je Spiel',
+    'Baseline without AI: tips 2:1 when the bookmakers make the home team the favourite, 0:1 when the away team is (never a draw)',
+  'Always-2:1': 'Baseline without AI: tips 2:1 for the home team in every match',
+  Consensus:
+    'Baseline built from the models: per match the median of all model tips (home and away goals separately, .5 rounded up)',
 }
 
 export const FAVOURITE = 'Odds-Favourite'
 
+// Plain-language explanations shown on every page; `key` lets a page pick
+// the terms it actually uses
+export const GLOSSARY = [
+  {
+    key: 'favourite',
+    term: 'Odds favourite',
+    text: BASELINE_HINTS['Odds-Favourite'] + '.',
+  },
+  { key: 'consensus', term: 'Model consensus', text: BASELINE_HINTS.Consensus + '.' },
+  { key: 'always', term: 'Always 2:1', text: BASELINE_HINTS['Always-2:1'] + '.' },
+  {
+    key: 'avg',
+    term: 'Avg',
+    text: 'Points per match the model was offered; a missing tip counts 0. Models are ranked by it.',
+  },
+  {
+    key: 'delta',
+    term: '± Fav',
+    text: 'Avg minus the odds favourite’s Avg. Positive means better than simply backing the favourite.',
+  },
+  {
+    key: 'interval',
+    term: '95% interval',
+    text: 'The range the model’s true Avg most likely lies in. Where two intervals overlap a lot, the difference can be chance.',
+  },
+  {
+    key: 'hits',
+    term: '4 / 3 / 2',
+    text: 'Number of exact scores (4 points), correct goal differences (3) and correct outcomes (2).',
+  },
+  {
+    key: 'coverage',
+    term: 'Cov.',
+    text: 'Coverage: share of the expected tips the model delivered before kickoff; ⚠︎ below 90%.',
+  },
+  {
+    key: 'form',
+    term: 'Form',
+    text: 'Avg over the last 5 matchdays (last 5 weeks when all leagues are shown): who is in good shape right now.',
+  },
+  {
+    key: 'backfill',
+    term: 'BF',
+    text: 'Includes backfill tips: generated afterwards for models that joined late, for the matches before their first live run.',
+  },
+]
+
 export const LEAGUES = [
-  { value: 'all', code: 'all', label: 'Alle Ligen', short: 'Alle' },
+  { value: 'all', code: 'all', label: 'All leagues', short: 'All' },
   {
     value: 'Bundesliga - Germany',
     code: 'bl',
@@ -136,20 +184,20 @@ const HIT_COLORS = {
 }
 
 export const HIT_TYPES = [
-  { key: 'exact', label: 'Exakt', points: 4, long: 'Exaktes Ergebnis (4 Punkte)' },
+  { key: 'exact', label: 'Exact', points: 4, long: 'Exact score (4 points)' },
   {
     key: 'diff',
-    label: 'Tordifferenz',
+    label: 'Goal difference',
     points: 3,
-    long: 'Richtige Tordifferenz (3 Punkte)',
+    long: 'Correct goal difference (3 points)',
   },
-  { key: 'tendency', label: 'Tendenz', points: 2, long: 'Richtige Tendenz (2 Punkte)' },
-  { key: 'wrong', label: 'Daneben', points: 0, long: 'Falscher Tipp (0 Punkte)' },
+  { key: 'tendency', label: 'Outcome', points: 2, long: 'Correct outcome (2 points)' },
+  { key: 'wrong', label: 'Wrong', points: 0, long: 'Wrong tip (0 points)' },
   {
     key: 'missed',
-    label: 'Kein Tipp',
+    label: 'No tip',
     points: 0,
-    long: 'Kein Tipp abgegeben (0 Punkte)',
+    long: 'No tip given (0 points)',
   },
 ]
 
@@ -204,7 +252,7 @@ export function seasonOptions(stats) {
   const seasons = [...stats.meta.seasons].sort().reverse()
   return [
     ...seasons.map((s) => ({ value: s, label: s })),
-    { value: 'all', label: 'Alle' },
+    { value: 'all', label: 'All' },
   ]
 }
 
@@ -436,10 +484,10 @@ export function buildView(stats, state) {
       row.reason = null
     } else if (!row.info.active) {
       row.listed = false
-      row.reason = 'inaktiv'
+      row.reason = 'inactive'
     } else if (row.offered < MIN_SHARE_OF_MAX * maxOffered) {
       row.listed = false
-      row.reason = 'wenige Spiele'
+      row.reason = 'few matches'
     } else {
       row.listed = true
       row.reason = null
@@ -508,40 +556,42 @@ export function headline(view) {
 const MONTHS = [
   'Jan',
   'Feb',
-  'Mär',
+  'Mar',
   'Apr',
-  'Mai',
+  'May',
   'Jun',
   'Jul',
   'Aug',
   'Sep',
-  'Okt',
+  'Oct',
   'Nov',
-  'Dez',
+  'Dec',
 ]
 const MONTHS_LONG = [
-  'Januar',
-  'Februar',
-  'März',
+  'January',
+  'February',
+  'March',
   'April',
-  'Mai',
-  'Juni',
-  'Juli',
+  'May',
+  'June',
+  'July',
   'August',
   'September',
-  'Oktober',
+  'October',
   'November',
-  'Dezember',
+  'December',
 ]
 
 export function stepLabel(step, value, long = false) {
   if (step === 'matchday') {
     const [y, m, d] = value.split('-')
-    return long ? `Spieltag ab ${d}.${m}.${y}` : `${d}.${m}.`
+    return long
+      ? `Matchday from ${MONTHS[Number(m) - 1]} ${Number(d)}, ${y}`
+      : `${MONTHS[Number(m) - 1]} ${Number(d)}`
   }
   if (step === 'week') {
     const [y, w] = value.split('-W')
-    return long ? `KW ${Number(w)}/${y}` : `KW ${Number(w)}`
+    return long ? `Week ${Number(w)}, ${y}` : `W${Number(w)}`
   }
   const [y, m] = value.split('-')
   return long
@@ -590,7 +640,8 @@ export function timeline(stats, view) {
     labels: tl.steps.map((s) => stepLabel(tl.step, s)),
     longLabels: tl.steps.map((s) => stepLabel(tl.step, s, true)),
     series,
-    stepName: { matchday: 'Spieltag', week: 'Kalenderwoche', month: 'Monat' }[tl.step],
+    stepName: { matchday: 'matchday', week: 'week', month: 'month' }[tl.step],
+    stepPlural: { matchday: 'matchdays', week: 'weeks', month: 'months' }[tl.step],
   }
 }
 
@@ -645,7 +696,7 @@ export function recentMatchdays(stats, state) {
   }
 }
 
-// --- Formatting (German) -------------------------------------------------------
+// --- Formatting (English, as on the main page) -------------------------------------------------------
 
 const numberFormats = new Map()
 export function fmt(value, digits = 2) {
@@ -653,7 +704,7 @@ export function fmt(value, digits = 2) {
   if (!numberFormats.has(digits)) {
     numberFormats.set(
       digits,
-      new Intl.NumberFormat('de-DE', {
+      new Intl.NumberFormat('en-US', {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
       })
@@ -665,42 +716,45 @@ export function fmt(value, digits = 2) {
 export function fmtSigned(value, digits = 2) {
   if (value == null) return '–'
   const text = fmt(Math.abs(value), digits)
-  if (Number(text.replace(',', '.')) === 0) return `±${text}`
+  if (Number(text) === 0) return `±${text}`
   return `${value > 0 ? '+' : '−'}${text}`
 }
 
 export function pct(value, digits = 0) {
   if (value == null) return '–'
-  return `${fmt(value * 100, digits)} %`
+  return `${fmt(value * 100, digits)}%`
 }
 
 export function fmtDate(iso, withYear = true) {
   const [y, m, d] = iso.slice(0, 10).split('-')
-  return withYear ? `${d}.${m}.${y}` : `${d}.${m}.`
+  const day = `${MONTHS[Number(m) - 1]} ${Number(d)}`
+  return withYear ? `${day}, ${y}` : day
 }
 
 export function fmtKickoff(iso) {
   // Kickoffs are UTC ("2026-10-30T19:30Z"); show them in Berlin time
   const date = new Date(iso.replace('Z', ':00Z'))
-  return date.toLocaleString('de-DE', {
+  return date.toLocaleString('en-US', {
     timeZone: 'Europe/Berlin',
     weekday: 'short',
-    day: '2-digit',
-    month: '2-digit',
+    month: 'short',
+    day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   })
 }
 
 export function fmtGenerated(stats) {
   const date = new Date(stats.meta.generated_at)
-  return date.toLocaleString('de-DE', {
+  return date.toLocaleString('en-US', {
     timeZone: 'Europe/Berlin',
-    day: '2-digit',
-    month: '2-digit',
+    month: 'short',
+    day: 'numeric',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   })
 }
 
@@ -718,20 +772,20 @@ export function viewNotes(view) {
   if (view.smallSlice) {
     notes.push({
       kind: 'sample',
-      text: `Kleine Stichprobe: nur ${view.fixtures} Spiele. Unterschiede innerhalb der Fehlerbalken sind Zufall.`,
+      text: `Small sample: only ${view.fixtures} matches. Differences within the error bars are chance.`,
     })
   }
   if (view.mode === 'fair') {
     notes.push({
       kind: 'info',
-      text: `Fairer Vergleich: nur die ${view.fairGroup.fixtures} Spiele, die allen ${
-        view.fairGroup.group === 'established' ? 'etablierten' : 'aktiven'
-      } Modellen angeboten wurden.`,
+      text: `Fair comparison: only the ${view.fairGroup.fixtures} matches offered to every ${
+        view.fairGroup.group === 'established' ? 'established' : 'active'
+      } model.`,
     })
   } else if (!view.state.backfill && view.hasBackfill) {
     notes.push({
       kind: 'info',
-      text: 'Ohne Backfill: nachträglich erzeugte Tipps zählen nicht, die Spätstarter haben dadurch weniger Spiele.',
+      text: 'Without backfill: tips generated afterwards do not count, so the late joiners have fewer matches.',
     })
   }
   return notes

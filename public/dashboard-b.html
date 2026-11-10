@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="de" class="scroll-smooth">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="description" content="Schlagen die KI-Modelle den Quoten-Favoriten? Die Auswertung aller Tipps von Tip Genius.">
-    <title>Statistik (Variante B: Story) – Tip Genius</title>
+    <meta name="description" content="Do the AI models beat the odds favourite? An evaluation of every Tip Genius tip.">
+    <title>Stats (variant B: story) – Tip Genius</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <link rel="stylesheet" href="/css/tailwind.css">
     <!-- Chart.js 4 (UMD build, exposes window.Chart) -->
@@ -22,8 +22,8 @@
                     <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                 </a>
                 <nav class="flex items-center gap-1 text-sm sm:text-base">
-                    <a href="/" class="px-2 sm:px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tipps</a>
-                    <span class="px-2 sm:px-3 py-1 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Statistik</span>
+                    <a href="/" class="px-2 sm:px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tips</a>
+                    <span class="px-2 sm:px-3 py-1 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Stats</span>
                 </nav>
             </div>
         </div>
@@ -36,10 +36,10 @@
         <!-- Filters -->
         <div class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md shadow-md rounded-2xl px-3 sm:px-4 py-3 mb-4 sm:mb-6">
             <div class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-4">
-                <label class="flex flex-col text-xs text-gray-500 dark:text-gray-400">Saison
+                <label class="flex flex-col text-xs text-gray-500 dark:text-gray-400">Season
                     <select id="season" class="mt-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 text-sm px-2 py-1.5"></select>
                 </label>
-                <label class="flex flex-col text-xs text-gray-500 dark:text-gray-400">Liga
+                <label class="flex flex-col text-xs text-gray-500 dark:text-gray-400">League
                     <select id="league" class="mt-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 text-sm px-2 py-1.5"></select>
                 </label>
                 <div id="toggles" class="col-span-2 flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-600 dark:text-gray-300 sm:pb-1.5"></div>
@@ -51,49 +51,55 @@
 
         <!-- 1: dot plot with confidence intervals -->
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6" aria-labelledby="dots-title">
-            <h2 id="dots-title" class="text-lg sm:text-2xl font-bold mb-1">Punkte pro Spiel</h2>
+            <h2 id="dots-title" class="text-lg sm:text-2xl font-bold mb-1">Points per match</h2>
             <p id="dots-lede" class="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-3"></p>
-            <div id="dots-wrap" class="relative"><canvas id="dots-chart" role="img" aria-label="Punkte pro Spiel je Modell mit 95-%-Konfidenzintervall"></canvas></div>
-            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Punkt = Ø Punkte pro angebotenem Spiel, Balken = 95-%-Konfidenzintervall, gestrichelt = Quoten-Favorit. Rauten sind Vergleichsstrategien ohne KI.</p>
+            <div id="dots-wrap" class="relative"><canvas id="dots-chart" role="img" aria-label="Points per match per model with 95% confidence interval"></canvas></div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Dot = average points per offered match, bar = 95% confidence interval, dashed = odds favourite. Diamonds are baselines without AI.</p>
             <details class="mt-3 text-sm">
-                <summary class="cursor-pointer text-sky-700 dark:text-sky-400">Als Tabelle anzeigen</summary>
+                <summary class="cursor-pointer text-sky-700 dark:text-sky-400">Show as a table</summary>
                 <div id="dots-table" class="overflow-x-auto mt-2"></div>
             </details>
         </section>
 
         <!-- 2: timeline -->
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6" aria-labelledby="tl-title">
-            <h2 id="tl-title" class="text-lg sm:text-2xl font-bold mb-1">Abstand zum Favoriten im Verlauf</h2>
+            <h2 id="tl-title" class="text-lg sm:text-2xl font-bold mb-1">Gap to the favourite over time</h2>
             <p id="tl-lede" class="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-3"></p>
-            <div class="relative h-64 sm:h-80"><canvas id="tl-chart" role="img" aria-label="Punkte-Abstand zum Quoten-Favoriten im Verlauf"></canvas></div>
+            <div class="relative h-64 sm:h-80"><canvas id="tl-chart" role="img" aria-label="Points gap to the odds favourite over time"></canvas></div>
             <div id="tl-legend"></div>
         </section>
 
         <!-- 3: hit types -->
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6" aria-labelledby="hits-title">
-            <h2 id="hits-title" class="text-lg sm:text-2xl font-bold mb-1">Woher die Punkte kommen</h2>
+            <h2 id="hits-title" class="text-lg sm:text-2xl font-bold mb-1">Where the points come from</h2>
             <p id="hits-lede" class="text-sm sm:text-base text-gray-600 dark:text-gray-300 mb-3"></p>
             <div id="hits-legend" class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mb-2"></div>
-            <div id="hits-wrap" class="relative"><canvas id="hits-chart" role="img" aria-label="Trefferarten je Modell als gestapelte Balken"></canvas></div>
+            <div id="hits-wrap" class="relative"><canvas id="hits-chart" role="img" aria-label="Hit types per model as stacked bars"></canvas></div>
         </section>
 
         <!-- 4: last matchdays -->
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6" aria-labelledby="recent-title">
-            <h2 id="recent-title" class="text-lg sm:text-2xl font-bold mb-1">Die letzten Spieltage</h2>
+            <h2 id="recent-title" class="text-lg sm:text-2xl font-bold mb-1">The last matchdays</h2>
             <div id="recent"></div>
         </section>
 
         <!-- 5: reliability -->
         <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-6" aria-labelledby="rel-title">
-            <h2 id="rel-title" class="text-lg sm:text-2xl font-bold mb-1">Zuverlässigkeit</h2>
-            <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">Wie viele der erwarteten Tipps ein Modell vor Anpfiff tatsächlich geliefert hat. Fehlende Tipps zählen 0 Punkte.</p>
+            <h2 id="rel-title" class="text-lg sm:text-2xl font-bold mb-1">Reliability</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mb-3">How many of the expected tips a model actually delivered before kickoff. Missing tips score 0 points.</p>
             <div id="rel"></div>
+        </section>
+
+        <!-- 6: glossary -->
+        <section class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-6" aria-labelledby="glossary-title">
+            <h2 id="glossary-title" class="text-lg sm:text-2xl font-bold mb-3">What the terms mean</h2>
+            <div id="glossary"></div>
         </section>
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 space-y-2 max-w-4xl">
-            <p><strong class="font-semibold">So wird gezählt:</strong> Kicktipp-Punkte nach 90 Minuten: 4 exaktes Ergebnis, 3 richtige Tordifferenz, 2 richtige Tendenz. Gewertet wird der letzte Tipp vor Anpfiff; fehlende Tipps zählen 0. Der Quoten-Favorit tippt 2:1 auf den Heim- bzw. 0:1 auf den Auswärtsfavoriten, der Konsens den Median aller Modelltipps.</p>
+            <p><strong class="font-semibold">How it is scored:</strong> Kicktipp points after 90 minutes: 4 exact score, 3 correct goal difference, 2 correct outcome. The last tip before kickoff counts; missing tips score 0. The odds favourite tips 2:1 for the home or 0:1 for the away favourite, the consensus the median of all model tips.</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -121,40 +127,40 @@ function rgba(hex, alpha) {
 function heroHtml() {
   const h = D.headline(view)
   const leagueLabel = D.LEAGUES.find((l) => l.value === state.league).label
-  const seasonLabel = state.season === 'all' ? 'Alle Saisons' : `Saison ${state.season}`
+  const seasonLabel = state.season === 'all' ? 'All seasons' : `Season ${state.season}`
   const games = view.mode === 'fair' ? view.fairGroup.fixtures : view.fixtures
-  const eyebrow = `${seasonLabel} · ${leagueLabel} · ${games} Spiele`
-  if (!h) return `<p class="text-sm text-gray-500">${esc(eyebrow)}</p><h1 class="text-2xl font-bold">Noch keine Auswertung</h1>`
+  const eyebrow = `${seasonLabel} · ${leagueLabel} · ${games} matches`
+  if (!h) return `<p class="text-sm text-gray-500">${esc(eyebrow)}</p><h1 class="text-2xl font-bold">No evaluation yet</h1>`
   const name = esc(h.best.info.name)
   const title = {
-    ahead: `${name} schlägt den Quoten-Favoriten`,
-    'ahead-noise': `${name} liegt knapp vor dem Quoten-Favoriten`,
-    'behind-noise': 'Kein Modell schlägt den Quoten-Favoriten',
-    behind: 'Der Quoten-Favorit tippt besser als jedes Modell',
+    ahead: `${name} beats the odds favourite`,
+    'ahead-noise': `${name} is just ahead of the odds favourite`,
+    'behind-noise': 'No model beats the odds favourite',
+    behind: 'The odds favourite tips better than every model',
   }[h.verdict]
   const cls = h.delta > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
   const beat = h.beating === 0
-    ? `Keines der ${h.total} Modelle liegt vor dem Favoriten.`
-    : `${h.beating} von ${h.total} Modellen ${h.beating === 1 ? 'liegt' : 'liegen'} vor dem Favoriten.`
+    ? `None of the ${h.total} models is ahead of the favourite.`
+    : `${h.beating} of ${h.total} models ${h.beating === 1 ? 'is' : 'are'} ahead of the favourite.`
   const noise = h.overlap
-    ? `Der Abstand liegt innerhalb der Fehlerbalken – nach ${games} Spielen ist er nicht von Zufall zu unterscheiden.`
-    : 'Der Abstand ist größer als die Fehlerbalken.'
-  const gap = h.verdict.startsWith('behind') ? `Bestes Modell: ${name}. ` : ''
+    ? `The gap is within the error bars – after ${games} matches it cannot be told apart from chance.`
+    : 'The gap is larger than the error bars.'
+  const gap = h.verdict.startsWith('behind') ? `Best model: ${name}. ` : ''
   return `
     <p class="text-xs sm:text-sm uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-2">${esc(eyebrow)}</p>
     <h1 class="text-2xl sm:text-4xl font-bold tracking-wide text-gray-800 dark:text-gray-100 mb-3 sm:mb-4">${title}</h1>
     <div class="flex items-end justify-center gap-3 mb-3">
       <span class="text-5xl sm:text-7xl font-bold ${cls}">${D.fmtSigned(h.delta)}</span>
-      <span class="text-left text-sm sm:text-base text-gray-500 dark:text-gray-400 pb-1 sm:pb-2 leading-tight">Punkte pro Spiel<br>gegenüber dem Favoriten</span>
+      <span class="text-left text-sm sm:text-base text-gray-500 dark:text-gray-400 pb-1 sm:pb-2 leading-tight">points per match<br>versus the favourite</span>
     </div>
-    <p class="text-sm sm:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">${gap}${D.fmt(h.best.avg0)} gegen ${D.fmt(h.fav.avg0)} Punkte pro Spiel (${h.best.points} : ${h.fav.points} Punkte). ${beat} ${noise}</p>`
+    <p class="text-sm sm:text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">${gap}${D.fmt(h.best.avg0)} vs. ${D.fmt(h.fav.avg0)} points per match (${h.best.points} : ${h.fav.points} points). ${beat} ${noise}</p>`
 }
 
 // --- Filters ----------------------------------------------------------------------
 
 function renderControls() {
   $('season').innerHTML = D.seasonOptions(stats)
-    .map((s) => `<option value="${esc(s.value)}" ${s.value === state.season ? 'selected' : ''}>${s.value === 'all' ? 'Alle Saisons' : esc(s.label)}</option>`)
+    .map((s) => `<option value="${esc(s.value)}" ${s.value === state.season ? 'selected' : ''}>${s.value === 'all' ? 'All seasons' : esc(s.label)}</option>`)
     .join('')
   $('league').innerHTML = D.LEAGUES
     .map((l) => `<option value="${esc(l.value)}" ${l.value === state.league ? 'selected' : ''}>${esc(l.label)}</option>`)
@@ -163,9 +169,9 @@ function renderControls() {
     `<label class="inline-flex items-center gap-1.5 ${disabled ? 'opacity-50' : 'cursor-pointer'}" title="${esc(title)}">
       <input type="checkbox" data-toggle="${key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} class="accent-sky-700 w-4 h-4"> ${label}</label>`
   $('toggles').innerHTML = [
-    toggle('showAll', 'Alle Modelle anzeigen', state.showAll, false, 'Auch inaktive Modelle und Modelle mit weniger als 80 % der Spiele'),
-    toggle('backfill', 'Backfill-Tipps zählen', state.backfill, !view?.hasBackfill || !!state.fair, 'Nachträglich erzeugte Tipps der Spätstarter mitzählen'),
-    toggle('fair', 'Fairer Vergleich', !!state.fair, !view?.fairGroups.length, 'Nur Spiele, die allen aktiven Modellen angeboten wurden'),
+    toggle('showAll', 'Show all models', state.showAll, false, 'Include inactive models and models with fewer than 80% of the matches'),
+    toggle('backfill', 'Count backfill tips', state.backfill, !view?.hasBackfill || !!state.fair, 'Count the tips generated afterwards for late joiners'),
+    toggle('fair', 'Fair comparison', !!state.fair, !view?.fairGroups.length, 'Only matches offered to every active model'),
   ].join('')
 }
 
@@ -237,7 +243,7 @@ function renderDots() {
   $('dots-wrap').style.height = `${rows.length * 34 + 48}px`
   const h = D.headline(view)
   $('dots-lede').textContent = h
-    ? `Die Intervalle von ${h.best.info.short} und dem Favoriten überlappen ${h.overlap ? 'fast vollständig' : 'nicht'}: ${h.overlap ? 'die Reihenfolge der Spitze kann sich mit jedem Spieltag ändern.' : 'ein belastbarer Unterschied.'}`
+    ? `The intervals of ${h.best.info.short} and the favourite ${h.overlap ? 'overlap almost entirely' : 'do not overlap'}: ${h.overlap ? 'the order at the top can change with every matchday.' : 'a robust difference.'}`
     : ''
   const labelOf = (r) => {
     const base = mobile ? r.info.short : r.info.name
@@ -250,7 +256,7 @@ function renderDots() {
       datasets: [
         {
           type: 'bar',
-          label: '95-%-Intervall',
+          label: '95% interval',
           data: rows.map((r) => [r.ciLow, r.ciHigh]),
           backgroundColor: styles.map((s, i) => rgba(s.color, rows[i].listed ? 0.35 : 0.15)),
           barThickness: 6,
@@ -259,7 +265,7 @@ function renderDots() {
         },
         {
           type: 'line',
-          label: 'Ø',
+          label: 'Avg',
           data: rows.map((r) => r.avg0),
           showLine: false,
           pointRadius: rows.map((r) => (r.info.isBaseline ? 7 : 6)),
@@ -280,7 +286,7 @@ function renderDots() {
           max: Math.ceil((hi + span * 0.12) * 20) / 20,
           grid: { color: c.grid },
           ticks: { callback: (v) => D.fmt(v) },
-          title: { display: !mobile, text: 'Punkte pro Spiel' },
+          title: { display: !mobile, text: 'Points per match' },
         },
         y: {
           grid: { display: false },
@@ -299,10 +305,10 @@ function renderDots() {
             label: (item) => {
               const r = rows[item.dataIndex]
               return [
-                ` Ø ${D.fmt(r.avg0, 3)} (95 %: ${D.fmt(r.ciLow)}–${D.fmt(r.ciHigh)})`,
-                ` ${r.points} Punkte aus ${r.offered} Spielen`,
-                r.info.isFavourite ? ' Referenz' : ` ${D.fmtSigned(r.deltaFav)} gegenüber dem Favoriten`,
-                ...(r.backfillTips ? [` enthält ${r.backfillTips} Backfill-Tipps`] : []),
+                ` Avg ${D.fmt(r.avg0, 3)} (95%: ${D.fmt(r.ciLow)}–${D.fmt(r.ciHigh)})`,
+                ` ${r.points} points from ${r.offered} matches`,
+                r.info.isFavourite ? ' Baseline' : ` ${D.fmtSigned(r.deltaFav)} versus the favourite`,
+                ...(r.backfillTips ? [` includes ${r.backfillTips} backfill tips`] : []),
               ]
             },
           },
@@ -314,9 +320,9 @@ function renderDots() {
   charts.push(chart)
 
   $('dots-table').innerHTML = `<table class="w-full text-xs sm:text-sm tabular-nums">
-    <thead class="text-gray-500 dark:text-gray-400 text-xs uppercase"><tr><th class="text-left px-2 py-1">Modell</th><th class="text-right px-2 py-1">Spiele</th><th class="text-right px-2 py-1">Punkte</th><th class="text-right px-2 py-1">Ø</th><th class="text-right px-2 py-1">95 %</th><th class="text-right px-2 py-1">± Fav.</th></tr></thead>
+    <thead class="text-gray-500 dark:text-gray-400 text-xs uppercase"><tr><th class="text-left px-2 py-1">Model</th><th class="text-right px-2 py-1">Matches</th><th class="text-right px-2 py-1">Points</th><th class="text-right px-2 py-1">Avg</th><th class="text-right px-2 py-1">95%</th><th class="text-right px-2 py-1">± Fav</th></tr></thead>
     <tbody>${rows.map((r) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.info.isBaseline ? 'italic' : ''} ${r.listed ? '' : 'opacity-50'}">
-      <td class="px-2 py-1">${esc(r.info.name)}${r.backfillTips ? ' <span class="text-gray-400" title="enthält Backfill-Tipps">(BF)</span>' : ''}</td><td class="text-right px-2 py-1">${r.offered}</td><td class="text-right px-2 py-1">${r.points}</td>
+      <td class="px-2 py-1">${esc(r.info.name)}${r.backfillTips ? ' <span class="text-gray-400" title="includes backfill tips">(BF)</span>' : ''}</td><td class="text-right px-2 py-1">${r.offered}</td><td class="text-right px-2 py-1">${r.points}</td>
       <td class="text-right px-2 py-1 font-bold">${D.fmt(r.avg0)}</td><td class="text-right px-2 py-1 whitespace-nowrap">${D.fmt(r.ciLow)}–${D.fmt(r.ciHigh)}</td><td class="text-right px-2 py-1">${r.info.isFavourite ? '–' : D.fmtSigned(r.deltaFav)}</td></tr>`).join('')}</tbody></table>`
 }
 
@@ -328,9 +334,9 @@ function renderTimeline() {
   const focused = focus ?? view.best?.info.index ?? null
   const focusSeries = tl.series.find((s) => s.row.info.index === focused)
   const last = focusSeries?.diff.filter((v) => v != null).at(-1)
-  const backfillNote = !state.backfill && view.hasBackfill ? ' Der Verlauf enthält immer die Backfill-Tipps.' : ''
+  const backfillNote = !state.backfill && view.hasBackfill ? ' The trend always includes the backfill tips.' : ''
   $('tl-lede').textContent = focusSeries
-    ? `${focusSeries.row.info.name} steht nach ${tl.steps.length} ${tl.stepName === 'Monat' ? 'Monaten' : tl.stepName === 'Kalenderwoche' ? 'Wochen' : 'Spieltagen'} bei ${D.fmtSigned(last, 0)} Punkten gegenüber dem Favoriten. Über der Nulllinie liegt ein Modell vorn. Für ein anderes Modell den Namen antippen.${backfillNote}`
+    ? `After ${tl.steps.length} ${tl.stepPlural}, ${focusSeries.row.info.name} stands at ${D.fmtSigned(last, 0)} points versus the favourite. Above zero a model is ahead. Tap a name to follow another model.${backfillNote}`
     : ''
   // Clip "Always 2:1" when it falls far behind, so the lines that matter stay readable
   const core = tl.series.filter((s) => s.row.info.id !== 'Always-2:1').flatMap((s) => s.diff).filter((v) => v != null)
@@ -383,7 +389,7 @@ function renderTimeline() {
   $('tl-legend').innerHTML = `<div class="flex flex-wrap gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-3">${tl.series.map((s) => {
     const st = D.modelStyle(s.row.info)
     const lastValue = s.diff.filter((v) => v != null).at(-1)
-    const off = clip && lastValue < range.min ? ` (${D.fmtSigned(lastValue, 0)}, außerhalb)` : ''
+    const off = clip && lastValue < range.min ? ` (${D.fmtSigned(lastValue, 0)}, off chart)` : ''
     const isFocus = s.row.info.index === focused
     return `<button type="button" data-model="${s.row.info.index}" aria-pressed="${isFocus}" class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 border ${isFocus ? 'border-sky-500 bg-sky-50 dark:bg-slate-900 font-semibold' : 'border-transparent'}">
       <svg width="18" height="8" aria-hidden="true"><line x1="1" y1="4" x2="17" y2="4" stroke="${st.color}" stroke-width="${Math.min(st.width, 3)}" stroke-dasharray="${st.dash.join(' ')}" stroke-linecap="round"/></svg>${esc(s.row.info.short)}${off}</button>`
@@ -403,7 +409,7 @@ function renderHits() {
   const c = D.chrome()
   const rows = view.rows.filter((r) => r.hits)
   if (!rows.length) {
-    $('hits-lede').textContent = 'Im fairen Vergleich nicht verfügbar – „Fairer Vergleich“ ausschalten.'
+    $('hits-lede').textContent = 'Not available in the fair comparison – turn off “Fair comparison”.'
     $('hits-legend').innerHTML = ''
     $('hits-wrap').style.height = '0px'
     return
@@ -414,12 +420,12 @@ function renderHits() {
   const fav = view.fav
   if (fav && llms.length) {
     // Name the hit type where models and favourite differ most
-    const named = { exact: 'exakte Ergebnisse', diff: 'die richtige Tordifferenz', tendency: 'nur die Tendenz' }
+    const named = { exact: 'the exact score', diff: 'the goal difference', tendency: 'only the outcome' }
     const gaps = Object.keys(named).map((key) => ({ key, m: mean(key), f: share(fav, key) }))
     const top = gaps.sort((a, b) => Math.abs(b.m - b.f) - Math.abs(a.m - a.f))[0]
-    const who = top.m > top.f ? 'Die Modelle treffen' : 'Der Favorit trifft'
+    const who = top.m > top.f ? 'The models hit' : 'The favourite hits'
     const wrongM = mean('wrong') + mean('missed'), wrongF = share(fav, 'wrong') + share(fav, 'missed')
-    $('hits-lede').textContent = `${who} öfter ${named[top.key]} (Modelle im Schnitt ${D.pct(top.m)}, Favorit ${D.pct(top.f)}). Daneben liegen die Modelle bei ${D.pct(wrongM)} der Spiele, der Favorit bei ${D.pct(wrongF)}. Jedes Spiel zählt genau einmal, mit der besten erreichten Stufe.`
+    $('hits-lede').textContent = `${who} ${named[top.key]} more often (models on average ${D.pct(top.m)}, favourite ${D.pct(top.f)}). The models miss ${D.pct(wrongM)} of the matches, the favourite ${D.pct(wrongF)}. Each match counts once, at the best level reached.`
   }
   $('hits-legend').innerHTML = D.HIT_TYPES.map((h) => `<span class="inline-flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm border border-gray-300 dark:border-gray-600" style="background:${colors[h.key]}"></span>${h.label}${h.points ? ` (${h.points})` : ''}</span>`).join('')
   $('hits-wrap').style.height = `${rows.length * 30 + 40}px`
@@ -466,10 +472,10 @@ const MOBILE_CARDS = 4
 
 function renderRecent() {
   const recent = D.recentMatchdays(stats, state)
-  if (!recent?.matchdays.length) { $('recent').innerHTML = '<p class="text-sm text-gray-500">Keine Spieltage vorhanden.</p>'; return }
+  if (!recent?.matchdays.length) { $('recent').innerHTML = '<p class="text-sm text-gray-500">No matchdays available.</p>'; return }
   const intro = [
-    recent.otherSeason ? `Nur für die laufende Saison ${recent.season}.` : '',
-    state.league === 'all' ? 'Je Liga der letzte Spieltag; eine Liga wählen für die letzten drei.' : '',
+    recent.otherSeason ? `Only for the current season ${recent.season}.` : '',
+    state.league === 'all' ? 'The latest matchday per league; pick a league for the last three.' : '',
   ].filter(Boolean).join(' ')
   const days = recent.matchdays.map((day, di) => {
     const totals = recent.models.map((m, i) => ({ m, pts: day.fixtures.reduce((s, f) => s + (f.tips[i]?.points ?? 0), 0) }))
@@ -482,13 +488,13 @@ function renderRecent() {
         <ul class="flex flex-wrap gap-1 mt-2">${f.tips.map((t, i) => {
           const m = recent.models[i]
           if (!t) return `<li class="inline-flex items-center gap-1 rounded-full bg-gray-50 dark:bg-gray-900 px-2 py-0.5 text-xs text-gray-400">${esc(m.short)} –</li>`
-          return `<li class="inline-flex items-center gap-1 rounded-full bg-gray-50 dark:bg-gray-900 px-2 py-0.5 text-xs ${m.isBaseline ? 'italic' : ''}" title="${esc(m.name)}${t.backfill ? ' (Backfill-Tipp)' : ''}">
+          return `<li class="inline-flex items-center gap-1 rounded-full bg-gray-50 dark:bg-gray-900 px-2 py-0.5 text-xs ${m.isBaseline ? 'italic' : ''}" title="${esc(m.name)}${t.backfill ? ' (backfill tip)' : ''}">
             <span class="text-gray-500 dark:text-gray-400">${esc(m.short)}</span><span class="font-mono">${t.home}:${t.away}</span>${pointsBadge(t.points)}</li>`
         }).join('')}</ul></li>`).join('')
     return `<details class="mt-3" ${di === 0 ? 'open' : ''}>
-      <summary class="cursor-pointer flex flex-wrap items-center gap-2 text-sm sm:text-base font-bold">${day.league.logo ? `<img src="${day.league.logo}" alt="" class="w-5 h-5 object-contain">` : ''}${esc(day.league.label)} · ab ${D.fmtDate(day.date)}
-        <span class="font-normal text-xs text-gray-500 dark:text-gray-400">Spieltagssieger: ${esc(totals[0].m.short)} (${totals[0].pts} Pkt.)</span></summary>
-      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">${cards}</ul>${day.fixtures.length > MOBILE_CARDS ? `<button type="button" data-more class="sm:hidden mt-2 w-full rounded-lg border border-gray-200 dark:border-gray-700 py-1.5 text-sm text-sky-700 dark:text-sky-400">Alle ${day.fixtures.length} Spiele zeigen</button>` : ''}</details>`
+      <summary class="cursor-pointer flex flex-wrap items-center gap-2 text-sm sm:text-base font-bold">${day.league.logo ? `<img src="${day.league.logo}" alt="" class="w-5 h-5 object-contain">` : ''}${esc(day.league.label)} · from ${D.fmtDate(day.date)}
+        <span class="font-normal text-xs text-gray-500 dark:text-gray-400">Matchday winner: ${esc(totals[0].m.short)} (${totals[0].pts} pts)</span></summary>
+      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">${cards}</ul>${day.fixtures.length > MOBILE_CARDS ? `<button type="button" data-more class="sm:hidden mt-2 w-full rounded-lg border border-gray-200 dark:border-gray-700 py-1.5 text-sm text-sky-700 dark:text-sky-400">Show all ${day.fixtures.length} matches</button>` : ''}</details>`
   }).join('')
   $('recent').onclick = (e) => {
     const b = e.target.closest('[data-more]')
@@ -507,12 +513,21 @@ function renderReliability() {
   $('rel').innerHTML = `<ul class="space-y-2">${rows.map((r) => {
     const cov = r.coverage
     const width = Math.max(0, Math.min(100, cov.share * 100))
-    const extra = cov.runs ? ` · ${cov.runs - cov.missedRuns}/${cov.runs} Läufe` : ''
+    const extra = cov.runs ? ` · ${cov.runs - cov.missedRuns}/${cov.runs} runs` : ''
     return `<li class="grid grid-cols-12 items-center gap-2 text-xs sm:text-sm ${r.listed ? '' : 'opacity-50'}">
       <span class="col-span-4 sm:col-span-3 truncate">${esc(r.info.short)}</span>
       <span class="col-span-5 sm:col-span-6 h-2 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden" role="img" aria-label="${D.pct(cov.share)}"><span class="block h-full rounded-full ${r.lowCoverage ? 'bg-amber-500' : 'bg-sky-600'}" style="width:${width}%"></span></span>
-      <span class="col-span-3 text-right tabular-nums whitespace-nowrap">${r.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warnung">⚠︎</span> ' : ''}${D.pct(cov.share)}<span class="hidden sm:inline text-gray-400">${extra}</span></span></li>`
+      <span class="col-span-3 text-right tabular-nums whitespace-nowrap">${r.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warning">⚠︎</span> ' : ''}${D.pct(cov.share)}<span class="hidden sm:inline text-gray-400">${extra}</span></span></li>`
   }).join('')}</ul>`
+}
+
+// --- Glossary (visible, since tooltips do not work on phones) ---------------
+
+function renderGlossary(keys) {
+  const items = D.GLOSSARY.filter((g) => keys.includes(g.key))
+  $('glossary').innerHTML = `<dl class="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300">${items.map((g) => `<div>
+    <dt class="font-semibold text-gray-800 dark:text-gray-200">${esc(g.term)}</dt>
+    <dd>${esc(g.text)}</dd></div>`).join('')}</dl>`
 }
 
 // --- Page -----------------------------------------------------------------------------
@@ -529,7 +544,7 @@ function render() {
   view = D.buildView(stats, state)
   renderControls()
   if (!view) {
-    $('error').textContent = 'Für diese Auswahl gibt es keine Daten.'
+    $('error').textContent = 'No data for this selection.'
     $('error').classList.remove('hidden')
     return
   }
@@ -539,6 +554,7 @@ function render() {
   rerenderCharts()
   renderRecent()
   renderReliability()
+  renderGlossary(['favourite', 'consensus', 'always', 'avg', 'delta', 'interval', 'coverage', 'backfill'])
 }
 
 async function init() {
@@ -546,7 +562,7 @@ async function init() {
     stats = await D.loadStats()
   } catch (err) {
     console.error('Failed to load stats', err)
-    $('error').textContent = 'Die Statistik konnte nicht geladen werden. Bitte später erneut versuchen.'
+    $('error').textContent = 'Failed to load the stats. Please try again later.'
     $('error').classList.remove('hidden')
     document.body.classList.add('loaded')
     return
@@ -555,7 +571,7 @@ async function init() {
   D.applyChartDefaults(Chart)
   bindControls()
   render()
-  $('footer-meta').textContent = `Stand: ${D.fmtGenerated(stats)} · Ergebnisse bis ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} Spiele, ${stats.meta.tips} Tipps`
+  $('footer-meta').textContent = `Updated: ${D.fmtGenerated(stats)} · Results through ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} matches, ${stats.meta.tips} tips`
   D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
   let wasMobile = isMobile()
   window.addEventListener('resize', () => { if (isMobile() !== wasMobile) { wasMobile = isMobile(); rerenderCharts() } })

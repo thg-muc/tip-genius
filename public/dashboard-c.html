@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="de" class="scroll-smooth">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0f172a" media="(prefers-color-scheme: dark)">
-    <meta name="description" content="Kennzahlen und Diagramme zu den KI-Tipps von Tip Genius.">
-    <title>Statistik (Variante C: Kacheln) – Tip Genius</title>
+    <meta name="description" content="Key figures and charts on the Tip Genius AI tips.">
+    <title>Stats (variant C: tiles) – Tip Genius</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <link rel="stylesheet" href="/css/tailwind.css">
     <!-- Chart.js 4 (UMD build, exposes window.Chart) -->
@@ -24,8 +24,8 @@
                         <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                     </a>
                     <nav class="flex items-center gap-1 text-sm sm:text-base">
-                        <a href="/" class="px-2 sm:px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tipps</a>
-                        <span class="px-2 sm:px-3 py-1 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Statistik</span>
+                        <a href="/" class="px-2 sm:px-3 py-1 rounded-lg text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400">Tips</a>
+                        <span class="px-2 sm:px-3 py-1 rounded-lg font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-slate-900" aria-current="page">Stats</span>
                     </nav>
                 </div>
             </div>
@@ -33,8 +33,8 @@
         <div class="bg-gray-50 bg-opacity-90 dark:bg-slate-900 dark:bg-opacity-90 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 shadow-sm">
             <div class="container mx-auto px-3 sm:px-4 py-2 flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4 max-w-7xl">
                 <div class="flex items-center gap-2">
-                    <div id="league-control" class="flex flex-1 lg:flex-none rounded-lg bg-white dark:bg-gray-800 shadow-sm overflow-hidden" role="group" aria-label="Liga"></div>
-                    <div id="season-control" class="flex rounded-lg bg-white dark:bg-gray-800 shadow-sm overflow-hidden" role="group" aria-label="Saison"></div>
+                    <div id="league-control" class="flex flex-1 lg:flex-none rounded-lg bg-white dark:bg-gray-800 shadow-sm overflow-hidden" role="group" aria-label="League"></div>
+                    <div id="season-control" class="flex rounded-lg bg-white dark:bg-gray-800 shadow-sm overflow-hidden" role="group" aria-label="Season"></div>
                 </div>
                 <div id="toggles" class="flex gap-x-4 overflow-x-auto whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-gray-300 pb-0.5"></div>
             </div>
@@ -43,7 +43,7 @@
 
     <main class="container mx-auto px-3 sm:px-4 py-1 flex-grow max-w-7xl">
         <div class="flex flex-wrap items-baseline justify-between gap-x-4 mb-3">
-            <h1 class="text-xl sm:text-3xl font-bold tracking-wide">Modell-Statistik</h1>
+            <h1 class="text-xl sm:text-3xl font-bold tracking-wide">Model stats</h1>
             <p id="scope" class="text-xs sm:text-sm text-gray-500 dark:text-gray-400"></p>
         </div>
 
@@ -51,52 +51,57 @@
         <div id="error" class="hidden bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-4 py-3 rounded-lg text-center my-8" role="alert"></div>
 
         <!-- KPI tiles -->
-        <section id="kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-3 sm:mb-4" aria-label="Kennzahlen"></section>
+        <section id="kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-3 sm:mb-4" aria-label="Key figures"></section>
 
         <!-- Chart grid -->
         <div class="grid lg:grid-cols-2 gap-3 sm:gap-4 mb-6">
             <section class="min-w-0 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="gap-title">
-                <h2 id="gap-title" class="text-sm sm:text-base font-bold">Abstand zum Quoten-Favoriten</h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Ø Punkte pro Spiel minus Favorit, mit 95-%-Intervall des Modells</p>
-                <div id="gap-wrap" class="relative"><canvas id="gap-chart" role="img" aria-label="Balken: Abstand jedes Modells zum Quoten-Favoriten"></canvas></div>
+                <h2 id="gap-title" class="text-sm sm:text-base font-bold">Gap to the odds favourite</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Average points per match minus favourite, with the model’s 95% interval</p>
+                <div id="gap-wrap" class="relative"><canvas id="gap-chart" role="img" aria-label="Bars: gap of each model to the odds favourite"></canvas></div>
             </section>
 
             <section class="min-w-0 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="tl-title">
                 <div class="flex items-start justify-between gap-2">
                     <div>
-                        <h2 id="tl-title" class="text-sm sm:text-base font-bold">Verlauf</h2>
+                        <h2 id="tl-title" class="text-sm sm:text-base font-bold">Trend</h2>
                         <p id="tl-sub" class="text-xs text-gray-500 dark:text-gray-400 mb-2"></p>
                     </div>
                     <div id="tl-mode" class="inline-flex rounded-md overflow-hidden text-xs shrink-0" role="group"></div>
                 </div>
-                <div class="relative h-64 sm:h-72"><canvas id="tl-chart" role="img" aria-label="Punkteverlauf"></canvas></div>
+                <div class="relative h-64 sm:h-72"><canvas id="tl-chart" role="img" aria-label="Points over time"></canvas></div>
                 <div id="tl-legend"></div>
             </section>
 
             <section class="min-w-0 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="hits-title">
-                <h2 id="hits-title" class="text-sm sm:text-base font-bold">Trefferarten</h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Anteil der angebotenen Spiele, jedes Spiel genau einmal</p>
+                <h2 id="hits-title" class="text-sm sm:text-base font-bold">Hit types</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Share of offered matches, each match counted once</p>
                 <div id="hits-legend" class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mb-2"></div>
-                <div id="hits-wrap" class="relative"><canvas id="hits-chart" role="img" aria-label="Trefferarten je Modell"></canvas></div>
+                <div id="hits-wrap" class="relative"><canvas id="hits-chart" role="img" aria-label="Hit types per model"></canvas></div>
             </section>
 
             <section class="min-w-0 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="form-title">
-                <h2 id="form-title" class="text-sm sm:text-base font-bold">Form &amp; Abdeckung</h2>
+                <h2 id="form-title" class="text-sm sm:text-base font-bold">Form &amp; coverage</h2>
                 <p id="form-sub" class="text-xs text-gray-500 dark:text-gray-400 mb-2"></p>
                 <div id="form" class="overflow-x-auto"></div>
             </section>
 
             <section class="min-w-0 lg:col-span-2 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="recent-title">
                 <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <h2 id="recent-title" class="text-sm sm:text-base font-bold">Spieltag</h2>
-                    <select id="matchday" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm px-2 py-1" aria-label="Spieltag wählen"></select>
+                    <h2 id="recent-title" class="text-sm sm:text-base font-bold">Matchday</h2>
+                    <select id="matchday" class="rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-sm px-2 py-1" aria-label="Pick a matchday"></select>
                 </div>
                 <div id="recent"></div>
             </section>
 
+            <section class="min-w-0 lg:col-span-2 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="glossary-title">
+                <h2 id="glossary-title" class="text-sm sm:text-base font-bold mb-2">What the terms mean</h2>
+                <div id="glossary"></div>
+            </section>
+
             <section class="min-w-0 lg:col-span-2 bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-4" aria-labelledby="table-title">
                 <details>
-                    <summary id="table-title" class="cursor-pointer text-sm sm:text-base font-bold">Alle Werte als Tabelle</summary>
+                    <summary id="table-title" class="cursor-pointer text-sm sm:text-base font-bold">All values as a table</summary>
                     <div id="table" class="overflow-x-auto mt-3"></div>
                 </details>
             </section>
@@ -105,7 +110,7 @@
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
         <div class="container mx-auto px-6 py-4 text-xs sm:text-sm text-gray-500 dark:text-gray-400 space-y-2 max-w-7xl">
-            <p><strong class="font-semibold">Wertung:</strong> Kicktipp-Punkte nach 90 Minuten (4 exakt, 3 Tordifferenz, 2 Tendenz), fehlende Tipps 0. Rangfolge nach Ø Punkten pro angebotenem Spiel. Quoten-Favorit: 2:1 auf den Heim-, 0:1 auf den Auswärtsfavoriten.</p>
+            <p><strong class="font-semibold">Scoring:</strong> Kicktipp points after 90 minutes (4 exact, 3 goal difference, 2 outcome), missing tips 0. Ranked by average points per offered match. Odds favourite: 2:1 for the home, 0:1 for the away favourite.</p>
             <p id="footer-meta"></p>
         </div>
     </footer>
@@ -145,15 +150,15 @@ function renderControls() {
     l.label
   )).join('')
   $('season-control').innerHTML = D.seasonOptions(stats).map((s) => segButton(
-    s.value === state.season, `data-season="${esc(s.value)}"`, s.value === 'all' ? 'Alle' : esc(s.label)
+    s.value === state.season, `data-season="${esc(s.value)}"`, s.value === 'all' ? 'All' : esc(s.label)
   )).join('')
   const toggle = (key, label, checked, disabled = false, title = '') =>
     `<label class="inline-flex items-center gap-1.5 ${disabled ? 'opacity-50' : 'cursor-pointer'}" title="${esc(title)}">
       <input type="checkbox" data-toggle="${key}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} class="accent-sky-700 w-4 h-4"> ${label}</label>`
   $('toggles').innerHTML = [
-    toggle('showAll', 'Alle Modelle', state.showAll, false, 'Auch inaktive Modelle und Modelle mit weniger als 80 % der Spiele'),
-    toggle('backfill', 'Backfill zählen', state.backfill, !view?.hasBackfill || !!state.fair, 'Nachträglich erzeugte Tipps der Spätstarter mitzählen'),
-    toggle('fair', 'Fairer Vergleich', !!state.fair, !view?.fairGroups.length, 'Nur Spiele, die allen aktiven Modellen angeboten wurden'),
+    toggle('showAll', 'All models', state.showAll, false, 'Include inactive models and models with fewer than 80% of the matches'),
+    toggle('backfill', 'Count backfill', state.backfill, !view?.hasBackfill || !!state.fair, 'Count the tips generated afterwards for late joiners'),
+    toggle('fair', 'Fair comparison', !!state.fair, !view?.fairGroups.length, 'Only matches offered to every active model'),
   ].join('')
 }
 
@@ -222,38 +227,38 @@ function renderKpis() {
     const series = tl.series.find((s) => s.row.info.index === best.info.index)
     const cls = best.deltaFav > 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'
     tiles.push(tile(
-      'Spitzenreiter',
+      'Leader',
       `<span class="inline-flex items-center gap-2 min-w-0">${best.info.logo ? `<img src="${best.info.logo}" alt="" class="w-6 h-6 sm:w-7 sm:h-7 object-contain shrink-0">` : ''}<span class="truncate">${esc(best.info.short)}</span></span>`,
-      `${D.fmt(best.avg0)} Pkt./Spiel · <span class="${cls}">${D.fmtSigned(best.deltaFav)}</span> vs. Favorit`,
+      `${D.fmt(best.avg0)} pts/match · <span class="${cls}">${D.fmtSigned(best.deltaFav)}</span> vs. favourite`,
       series ? sparkline(series.diff, D.modelStyle(best.info).color) : ''
     ))
   }
   if (fav) {
     const beaten = llms.filter((r) => r.avg0 < fav.avg0).length
     tiles.push(tile(
-      'Quoten-Favorit',
-      `${D.fmt(fav.avg0)} <span class="text-sm sm:text-base font-normal text-gray-500 dark:text-gray-400">Pkt./Spiel</span>`,
-      `besser als ${beaten} von ${llms.length} Modellen`
+      'Odds favourite',
+      `${D.fmt(fav.avg0)} <span class="text-sm sm:text-base font-normal text-gray-500 dark:text-gray-400">pts/match</span>`,
+      `better than ${beaten} of ${llms.length} models`
     ))
   }
   if (view.mode === 'standard' && llms.length) {
     const top = [...llms].sort((a, b) => b.hits.exact / b.offered - a.hits.exact / a.offered)[0]
     tiles.push(tile(
-      'Beste Exakt-Quote',
+      'Best exact-score rate',
       D.pct(top.hits.exact / top.offered, 1),
-      `${esc(top.info.short)} · Favorit ${fav ? D.pct(fav.hits.exact / fav.offered, 1) : '–'}`
+      `${esc(top.info.short)} · favourite ${fav ? D.pct(fav.hits.exact / fav.offered, 1) : '–'}`
     ))
   } else {
-    tiles.push(tile('Spiele im Vergleich', view.fairGroup?.fixtures ?? view.fixtures, 'allen Modellen angeboten'))
+    tiles.push(tile('Matches compared', view.fairGroup?.fixtures ?? view.fixtures, 'offered to every model'))
   }
   const withCov = llms.filter((r) => r.coverage)
   if (withCov.length) {
     const low = [...withCov].sort((a, b) => a.coverage.share - b.coverage.share)[0]
-    const warn = low.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warnung">⚠︎</span> ' : ''
+    const warn = low.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warning">⚠︎</span> ' : ''
     tiles.push(tile(
-      'Geringste Abdeckung',
+      'Lowest coverage',
       `${warn}${D.pct(low.coverage.share)}`,
-      `${esc(low.info.short)} · ${low.coverage.delivered} von ${low.coverage.expected} Tipps`
+      `${esc(low.info.short)} · ${low.coverage.delivered} of ${low.coverage.expected} tips`
     ))
   }
   $('kpis').innerHTML = tiles.join('')
@@ -320,7 +325,7 @@ function renderGap() {
             title: (items) => rows[items[0].dataIndex].info.name,
             label: (item) => {
               const r = rows[item.dataIndex]
-              return [` ${D.fmtSigned(r.deltaFav, 3)} Pkt./Spiel vs. Favorit`, ` Ø ${D.fmt(r.avg0, 3)} (95 %: ${D.fmt(r.ciLow)}–${D.fmt(r.ciHigh)})`, ` ${r.points} Punkte aus ${r.offered} Spielen`, ...(r.reason ? [` ausgeblendet: ${r.reason}`] : [])]
+              return [` ${D.fmtSigned(r.deltaFav, 3)} pts/match vs. favourite`, ` Avg ${D.fmt(r.avg0, 3)} (95%: ${D.fmt(r.ciLow)}–${D.fmt(r.ciHigh)})`, ` ${r.points} points from ${r.offered} matches`, ...(r.reason ? [` hidden: ${r.reason}`] : [])]
             },
           },
         },
@@ -337,10 +342,10 @@ function renderTimeline() {
   const tl = D.timeline(stats, view)
   const diff = ui.timeline === 'diff'
   const c = D.chrome()
-  $('tl-mode').innerHTML = [['diff', 'vs. Favorit'], ['total', 'Punkte']].map(([k, l]) =>
+  $('tl-mode').innerHTML = [['diff', 'vs. favourite'], ['total', 'Points']].map(([k, l]) =>
     `<button type="button" data-mode="${k}" aria-pressed="${ui.timeline === k}" class="px-2 py-1 ${ui.timeline === k ? 'bg-sky-700 dark:bg-sky-600 text-white' : 'bg-gray-100 dark:bg-slate-900 text-gray-600 dark:text-gray-300'}">${l}</button>`).join('')
-  $('tl-sub').textContent = (diff ? 'Punkte mehr oder weniger als der Favorit, kumuliert je ' : 'Punkte kumuliert je ') + tl.stepName +
-    (!state.backfill && view.hasBackfill ? ' (inkl. Backfill)' : '')
+  $('tl-sub').textContent = (diff ? 'Points more or fewer than the favourite, cumulative per ' : 'Cumulative points per ') + tl.stepName +
+    (!state.backfill && view.hasBackfill ? ' (incl. backfill)' : '')
   let range = {}
   if (diff) {
     const core = tl.series.filter((s) => s.row.info.id !== 'Always-2:1').flatMap((s) => s.diff).filter((v) => v != null)
@@ -392,7 +397,7 @@ function renderTimeline() {
   $('tl-legend').innerHTML = `<div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-gray-300 mt-2">${tl.series.map((s) => {
     const st = D.modelStyle(s.row.info)
     const last = s.diff.filter((v) => v != null).at(-1)
-    const off = range.min != null && last < range.min ? ` (${D.fmtSigned(last, 0)}, außerhalb)` : ''
+    const off = range.min != null && last < range.min ? ` (${D.fmtSigned(last, 0)}, off chart)` : ''
     return `<span class="inline-flex items-center gap-1.5"><svg width="16" height="8" aria-hidden="true"><line x1="1" y1="4" x2="15" y2="4" stroke="${st.color}" stroke-width="${Math.min(st.width, 3)}" stroke-dasharray="${st.dash.join(' ')}" stroke-linecap="round"/></svg>${esc(s.row.info.short)}${off}</span>`
   }).join('')}</div>`
 }
@@ -404,7 +409,7 @@ function renderHits() {
   const c = D.chrome()
   const rows = view.rows.filter((r) => r.hits)
   if (!rows.length) {
-    $('hits-legend').innerHTML = '<span>Im fairen Vergleich nicht verfügbar.</span>'
+    $('hits-legend').innerHTML = '<span>Not available in the fair comparison.</span>'
     $('hits-wrap').style.height = '0px'
     return
   }
@@ -439,14 +444,14 @@ function renderHits() {
 // --- Form and coverage -------------------------------------------------------------------
 
 function renderForm() {
-  const unit = view.slice.timeline.step === 'matchday' ? 'Spieltage' : 'Wochen'
-  $('form-sub').textContent = `Form = Ø der letzten 5 ${unit}; Abdeckung = gelieferte von erwarteten Tipps`
+  const unit = view.slice.timeline.step === 'matchday' ? 'matchdays' : 'weeks'
+  $('form-sub').textContent = `Form = average over the last 5 ${unit}; coverage = delivered of expected tips`
   const rows = view.rows
   const forms = rows.filter((r) => r.form).map((r) => r.form.avg0)
   const max = Math.max(2, ...forms)
   const favForm = view.fav?.form?.avg0
   $('form').innerHTML = `<table class="w-full text-xs sm:text-sm tabular-nums">
-    <thead class="text-gray-500 dark:text-gray-400 text-xs"><tr><th class="text-left px-1 py-1 font-semibold">Modell</th><th class="text-left px-1 py-1 font-semibold">Form</th><th class="text-right px-1 py-1 font-semibold">Saison</th><th class="text-right px-1 py-1 font-semibold">Abd.</th></tr></thead>
+    <thead class="text-gray-500 dark:text-gray-400 text-xs"><tr><th class="text-left px-1 py-1 font-semibold">Model</th><th class="text-left px-1 py-1 font-semibold">Form</th><th class="text-right px-1 py-1 font-semibold">Season</th><th class="text-right px-1 py-1 font-semibold">Cov.</th></tr></thead>
     <tbody>${rows.map((r) => {
       const st = D.modelStyle(r.info)
       const f = r.form
@@ -456,12 +461,12 @@ function renderForm() {
         </div>` : ''
       const cov = r.coverage
       return `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.listed ? '' : 'opacity-50'} ${r.info.isBaseline ? 'italic' : ''}">
-        <td class="px-1 py-1 whitespace-nowrap">${esc(r.info.short)}${r.backfillTips ? ' <span class="text-gray-400 text-xs" title="enthält Backfill-Tipps">BF</span>' : ''}</td>
+        <td class="px-1 py-1 whitespace-nowrap">${esc(r.info.short)}${r.backfillTips ? ' <span class="text-gray-400 text-xs" title="includes backfill tips">BF</span>' : ''}</td>
         <td class="px-1 py-1"><div class="flex items-center gap-2">${bar}<span class="whitespace-nowrap">${f ? D.fmt(f.avg0) : '–'}</span></div></td>
         <td class="px-1 py-1 text-right">${D.fmt(r.avg0)}</td>
-        <td class="px-1 py-1 text-right whitespace-nowrap">${cov ? `${r.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warnung">⚠︎</span> ' : ''}${D.pct(cov.share)}` : '–'}</td></tr>`
+        <td class="px-1 py-1 text-right whitespace-nowrap">${cov ? `${r.lowCoverage ? '<span class="text-amber-600 dark:text-amber-400" aria-label="Warning">⚠︎</span> ' : ''}${D.pct(cov.share)}` : '–'}</td></tr>`
     }).join('')}</tbody></table>
-    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Senkrechter Strich = Form des Quoten-Favoriten.</p>`
+    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Vertical line = form of the odds favourite.</p>`
 }
 
 // --- Matchday matrix ---------------------------------------------------------------------
@@ -476,23 +481,23 @@ function pointsBadge(points) {
 function renderRecent() {
   const all = D.recentMatchdays(stats, { ...state, league: state.league })
   const days = all?.matchdays || []
-  $('matchday').innerHTML = days.map((d, i) => `<option value="${i}" ${i === ui.matchday ? 'selected' : ''}>${esc(d.league.label)} · ab ${D.fmtDate(d.date)}</option>`).join('')
+  $('matchday').innerHTML = days.map((d, i) => `<option value="${i}" ${i === ui.matchday ? 'selected' : ''}>${esc(d.league.label)} · from ${D.fmtDate(d.date)}</option>`).join('')
   $('matchday').disabled = days.length < 2
   const day = days[ui.matchday]
-  if (!day) { $('recent').innerHTML = '<p class="text-sm text-gray-500">Keine Spieltage vorhanden.</p>'; return }
+  if (!day) { $('recent').innerHTML = '<p class="text-sm text-gray-500">No matchdays available.</p>'; return }
   const models = all.models
   const totals = models.map((_, i) => day.fixtures.reduce((s, f) => s + (f.tips[i]?.points ?? 0), 0))
   const best = Math.max(...totals)
-  const note = all.otherSeason ? `<p class="text-xs text-amber-700 dark:text-amber-300 mb-2">Nur für die laufende Saison ${all.season}.</p>` : ''
+  const note = all.otherSeason ? `<p class="text-xs text-amber-700 dark:text-amber-300 mb-2">Only for the current season ${all.season}.</p>` : ''
   $('recent').innerHTML = `${note}<div class="overflow-x-auto"><table class="w-full text-xs sm:text-sm tabular-nums">
     <thead class="bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 text-xs"><tr>
-      <th class="text-left px-2 py-1.5 sticky left-0 z-10 bg-gray-100 dark:bg-slate-900">Spiel</th><th class="px-2 py-1.5">Erg.</th>
+      <th class="text-left px-2 py-1.5 sticky left-0 z-10 bg-gray-100 dark:bg-slate-900">Match</th><th class="px-2 py-1.5">Score</th>
       ${models.map((m) => `<th class="px-2 py-1.5 whitespace-nowrap ${m.isBaseline ? 'italic' : ''}" title="${esc(m.name)}">${esc(m.short)}</th>`).join('')}</tr></thead>
     <tbody>${day.fixtures.map((f) => `<tr class="border-t border-gray-100 dark:border-gray-700">
       <td class="px-2 py-1 sticky left-0 z-10 bg-white dark:bg-gray-800 whitespace-nowrap">${esc(f.home)} – ${esc(f.away)}</td>
       <td class="px-2 py-1 text-center font-mono font-bold">${f.homeGoals}:${f.awayGoals}</td>
       ${f.tips.map((t) => `<td class="px-2 py-1 text-center whitespace-nowrap">${t ? `<span class="font-mono">${t.home}:${t.away}</span> ${pointsBadge(t.points)}` : '<span class="text-gray-400">–</span>'}</td>`).join('')}</tr>`).join('')}
-      <tr class="border-t-2 border-gray-300 dark:border-gray-600 font-bold"><td class="px-2 py-1 sticky left-0 z-10 bg-white dark:bg-gray-800">Punkte</td><td></td>${totals.map((t) => `<td class="px-2 py-1 text-center ${t === best ? 'text-sky-700 dark:text-sky-400' : ''}">${t}</td>`).join('')}</tr>
+      <tr class="border-t-2 border-gray-300 dark:border-gray-600 font-bold"><td class="px-2 py-1 sticky left-0 z-10 bg-white dark:bg-gray-800">Points</td><td></td>${totals.map((t) => `<td class="px-2 py-1 text-center ${t === best ? 'text-sky-700 dark:text-sky-400' : ''}">${t}</td>`).join('')}</tr>
     </tbody></table></div>`
 }
 
@@ -500,7 +505,7 @@ function renderRecent() {
 
 function renderTable() {
   const std = view.mode === 'standard'
-  const cols = ['Modell', 'Sp.', 'Pkt.', 'Ø', '95 %', '± Fav.', ...(std ? ['Exakt', 'Tordiff.', 'Tendenz', 'Daneben', 'Kein Tipp'] : []), 'Abd.']
+  const cols = ['Model', 'M', 'Pts', 'Avg', '95%', '± Fav', ...(std ? ['Exact', 'Goal diff.', 'Outcome', 'Wrong', 'No tip'] : []), 'Cov.']
   $('table').innerHTML = `<table class="w-full text-xs sm:text-sm tabular-nums">
     <thead class="text-gray-500 dark:text-gray-400 text-xs uppercase"><tr>${cols.map((c, i) => `<th class="${i ? 'text-right' : 'text-left'} px-2 py-1">${c}</th>`).join('')}</tr></thead>
     <tbody>${view.rows.map((r) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.listed ? '' : 'opacity-50'} ${r.info.isBaseline ? 'italic' : ''}">
@@ -509,6 +514,15 @@ function renderTable() {
       <td class="text-right px-2 py-1 whitespace-nowrap">${D.fmt(r.ciLow)}–${D.fmt(r.ciHigh)}</td><td class="text-right px-2 py-1">${r.info.isFavourite ? '–' : D.fmtSigned(r.deltaFav)}</td>
       ${std ? ['exact', 'diff', 'tendency', 'wrong', 'missed'].map((k) => `<td class="text-right px-2 py-1">${r.hits[k]}</td>`).join('') : ''}
       <td class="text-right px-2 py-1">${r.coverage ? D.pct(r.coverage.share) : '–'}</td></tr>`).join('')}</tbody></table>`
+}
+
+// --- Glossary (visible, since tooltips do not work on phones) ---------------
+
+function renderGlossary(keys) {
+  const items = D.GLOSSARY.filter((g) => keys.includes(g.key))
+  $('glossary').innerHTML = `<dl class="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-xs sm:text-sm text-gray-600 dark:text-gray-300">${items.map((g) => `<div>
+    <dt class="font-semibold text-gray-800 dark:text-gray-200">${esc(g.term)}</dt>
+    <dd>${esc(g.text)}</dd></div>`).join('')}</dl>`
 }
 
 // --- Page -----------------------------------------------------------------------------
@@ -525,19 +539,20 @@ function render() {
   view = D.buildView(stats, state)
   renderControls()
   if (!view) {
-    $('error').textContent = 'Für diese Auswahl gibt es keine Daten.'
+    $('error').textContent = 'No data for this selection.'
     $('error').classList.remove('hidden')
     return
   }
   $('error').classList.add('hidden')
   const league = D.LEAGUES.find((l) => l.value === state.league).label
-  $('scope').textContent = `${state.season === 'all' ? 'Alle Saisons' : state.season} · ${league} · ${view.mode === 'fair' ? view.fairGroup.fixtures : view.fixtures} Spiele · ${view.matchdays} Spieltage`
+  $('scope').textContent = `${state.season === 'all' ? 'All seasons' : state.season} · ${league} · ${view.mode === 'fair' ? view.fairGroup.fixtures : view.fixtures} matches · ${view.matchdays} matchdays`
   renderNotes()
   renderKpis()
   rerenderCharts()
   renderForm()
   renderRecent()
   renderTable()
+  renderGlossary(D.GLOSSARY.map((g) => g.key).filter((k) => k !== 'hits'))
 }
 
 async function init() {
@@ -545,7 +560,7 @@ async function init() {
     stats = await D.loadStats()
   } catch (err) {
     console.error('Failed to load stats', err)
-    $('error').textContent = 'Die Statistik konnte nicht geladen werden. Bitte später erneut versuchen.'
+    $('error').textContent = 'Failed to load the stats. Please try again later.'
     $('error').classList.remove('hidden')
     document.body.classList.add('loaded')
     return
@@ -554,7 +569,7 @@ async function init() {
   D.applyChartDefaults(Chart)
   bindControls()
   render()
-  $('footer-meta').textContent = `Stand: ${D.fmtGenerated(stats)} · Ergebnisse bis ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} Spiele, ${stats.meta.tips} Tipps`
+  $('footer-meta').textContent = `Updated: ${D.fmtGenerated(stats)} · Results through ${D.fmtDate(stats.meta.data_through)} · ${stats.meta.matches} matches, ${stats.meta.tips} tips`
   D.onSchemeChange(() => { D.applyChartDefaults(Chart); render() })
   let wasMobile = isMobile()
   window.addEventListener('resize', () => { if (isMobile() !== wasMobile) { wasMobile = isMobile(); rerenderCharts() } })
