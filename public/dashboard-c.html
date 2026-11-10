@@ -315,7 +315,7 @@ function renderGap() {
     options: {
       indexAxis: 'y',
       scales: {
-        x: { min: -lim, max: lim, grid: { color: (ctx) => (ctx.tick.value === 0 ? c.favourite : c.grid) }, ticks: { callback: (v) => D.fmtSigned(v) } },
+        x: { min: -lim, max: lim, grid: { color: (ctx) => (ctx.tick?.value === 0 ? c.favourite : c.grid) }, ticks: { callback: (v) => D.fmtSigned(v) } },
         y: { grid: { display: false }, ticks: { color: (ctx) => (rows[ctx.index]?.listed ? c.text : c.muted), font: (ctx) => ({ style: rows[ctx.index]?.info.isBaseline ? 'italic' : 'normal' }) } },
       },
       plugins: {
@@ -380,7 +380,7 @@ function renderTimeline() {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 10 } },
-        y: { ...range, grid: { color: (ctx) => (diff && ctx.tick.value === 0 ? c.axis : c.grid) } },
+        y: { ...range, grid: { color: (ctx) => (diff && ctx.tick?.value === 0 ? c.axis : c.grid) } },
       },
       plugins: {
         tooltip: {

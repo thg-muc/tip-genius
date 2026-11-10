@@ -801,7 +801,10 @@ export function applyChartDefaults(Chart) {
   Chart.defaults.color = c.muted
   Chart.defaults.borderColor = c.grid
   Chart.defaults.maintainAspectRatio = false
-  Chart.defaults.animation = { duration: 250 }
+  // No animations: a chart is painted completely when it is created instead
+  // of over animation frames, which a throttled or background tab may never
+  // deliver (the chart then stays blank after a tab switch)
+  Chart.defaults.animation = false
   Object.assign(Chart.defaults.plugins.tooltip, {
     backgroundColor: isDark() ? '#111827' : '#ffffff',
     titleColor: c.text,

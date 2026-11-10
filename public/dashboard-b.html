@@ -371,7 +371,7 @@ function renderTimeline() {
       interaction: { mode: 'index', intersect: false },
       scales: {
         x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
-        y: { ...range, grid: { color: (ctx) => (ctx.tick.value === 0 ? c.axis : c.grid) }, ticks: { callback: (v) => D.fmtSigned(v, 0) } },
+        y: { ...range, grid: { color: (ctx) => (ctx.tick?.value === 0 ? c.axis : c.grid) }, ticks: { callback: (v) => D.fmtSigned(v, 0) } },
       },
       plugins: {
         tooltip: {
