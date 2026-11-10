@@ -65,7 +65,7 @@
 
         <!-- Detail tabs -->
         <div class="flex justify-center mb-3">
-            <div id="view-tabs" class="w-full sm:w-auto flex shadow-md rounded-md overflow-hidden" role="tablist" aria-label="View"></div>
+            <div id="view-tabs" class="inline-flex rounded-md shadow-sm overflow-hidden" role="tablist" aria-label="View"></div>
         </div>
         <section id="panel" class="bg-white dark:bg-gray-800 shadow-md rounded-2xl p-3 sm:p-5 mb-6" role="tabpanel"></section>
     </main>
@@ -108,6 +108,13 @@ function tabClasses(active, first, last) {
   ].join(' ')
 }
 
+// Segmented buttons (season and view switch share one look)
+function segmentClasses(active) {
+  return `px-3 sm:px-4 py-1.5 text-sm font-mono whitespace-nowrap ${active
+    ? 'bg-sky-700 dark:bg-sky-600 text-white font-semibold'
+    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`
+}
+
 function renderControls() {
   $('league-tabs').innerHTML = D.LEAGUES.map((l, i) => {
     const active = l.value === state.league
@@ -124,7 +131,7 @@ function renderControls() {
     .map((s) => {
       const active = s.value === state.season
       return `<button type="button" data-season="${esc(s.value)}" aria-pressed="${active}"
-        class="px-3 sm:px-4 py-1.5 text-sm font-mono ${active ? 'bg-sky-700 dark:bg-sky-600 text-white font-semibold' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}">
+        class="${segmentClasses(active)}">
         ${s.value === 'all' ? 'All seasons' : esc(s.label)}</button>`
     })
     .join('')
@@ -144,7 +151,7 @@ function renderControls() {
 
   $('view-tabs').innerHTML = VIEWS.map(
     (v, i) => `<button type="button" role="tab" data-view="${v.key}" aria-selected="${v.key === ui.tab}"
-      class="${tabClasses(v.key === ui.tab, i === 0, i === VIEWS.length - 1)}">${v.label}</button>`
+      class="${segmentClasses(v.key === ui.tab)}">${v.label}</button>`
   ).join('')
 }
 
