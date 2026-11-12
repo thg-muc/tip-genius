@@ -479,10 +479,8 @@ function glossaryHtml() {
 }
 
 function renderNotes() {
-  $('notes').innerHTML = D.notesWithPlaceholder(view).map((n) => `<div ${n.placeholder ? 'aria-hidden="true"' : ''} class="${n.placeholder ? 'invisible ' : ''}flex gap-2 items-center rounded-lg px-3 py-1 text-xs sm:text-sm ${n.kind === 'sample'
-    ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border border-amber-200 dark:border-amber-800'
-    : 'bg-sky-50 dark:bg-slate-800 text-sky-900 dark:text-sky-100 border border-sky-200 dark:border-slate-700'}">
-    <span aria-hidden="true">${n.kind === 'sample' ? '⚠︎' : 'ℹ︎'}</span><span><span class="sm:hidden">${esc(n.short)}</span><span class="hidden sm:inline">${esc(n.text)}</span></span></div>`).join('')
+  $('notes').innerHTML = D.notesWithPlaceholder(view).map((n) => `<div ${n.placeholder ? 'aria-hidden="true"' : ''} class="${n.placeholder ? 'invisible ' : ''}flex gap-2 items-center rounded-lg px-3 py-1 text-xs sm:text-sm bg-sky-50 dark:bg-slate-800 text-sky-900 dark:text-sky-100 border border-sky-200 dark:border-slate-700">
+    <span aria-hidden="true">ℹ︎</span><span><span class="sm:hidden">${esc(n.short)}</span><span class="hidden sm:inline">${esc(n.text)}</span></span></div>`).join('')
 }
 
 // --- Panels -------------------------------------------------------------------------

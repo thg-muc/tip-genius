@@ -806,7 +806,7 @@ export function viewNotes(view) {
   const notes = []
   if (view.smallSlice) {
     notes.push({
-      kind: 'sample',
+      kind: 'info',
       text: `Small sample: only ${view.fixtures} matches. Differences within the error bars are chance.`,
       short: `Small sample: ${view.fixtures} matches, gaps may be chance.`,
     })
@@ -819,12 +819,6 @@ export function viewNotes(view) {
       } model.${view.hasBackfill ? ' Backfill tips always count here.' : ''}`,
       short: `Fair comparison: ${view.fairGroup.fixtures} shared matches.`,
     })
-  } else if (!view.state.backfill && view.hasBackfill) {
-    notes.push({
-      kind: 'info',
-      text: 'Without backfill: tips generated afterwards do not count, so the late joiners have fewer matches.',
-      short: 'Without backfill: late joiners have fewer matches.',
-    })
   }
   return notes
 }
@@ -836,7 +830,7 @@ export function notesWithPlaceholder(view) {
   if (notes.length) return notes
   return [
     {
-      kind: 'sample',
+      kind: 'info',
       text: 'Small sample: only 100 matches. Differences within the error bars are chance.',
       short: 'Small sample: 100 matches, gaps may be chance.',
       placeholder: true,

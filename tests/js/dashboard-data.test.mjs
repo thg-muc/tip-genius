@@ -245,6 +245,32 @@ describe('data source', () => {
   })
 })
 
+describe('notices above the table', () => {
+  test('small sample is an info notice; turning backfill off adds none', () => {
+    const smallStats = makeStats({
+      leaderboard: [
+        lbRow({ model: 0, points: 100, offered: 72, avg0: 1.4, backfill: 10 }),
+        lbRow({ model: 5, points: 95, offered: 72, avg0: 1.3 }),
+      ],
+      live: [lbRow({ model: 0, points: 80, offered: 62, avg0: 1.3 })],
+    })
+    smallStats.slices[SLICE].fixtures = 72
+    const notes = D.viewNotes(D.buildView(smallStats, STATE))
+    assert.equal(notes.length, 1)
+    assert.equal(notes[0].kind, 'info')
+    assert.match(notes[0].text, /Small sample: only 72 matches/)
+
+    const noBackfill = D.viewNotes(D.buildView(STATS, { ...STATE, backfill: false }))
+    assert.deepEqual(noBackfill, [])
+  })
+
+  test('an empty slot keeps its height with an invisible placeholder', () => {
+    const notes = D.notesWithPlaceholder(D.buildView(STATS, STATE))
+    assert.equal(notes.length, 1)
+    assert.equal(notes[0].placeholder, true)
+  })
+})
+
 describe('helpers', () => {
   test('form covers weeks across all leagues, matchdays within one', () => {
     assert.equal(D.formUnit({ league: 'all' }), 'weeks')
