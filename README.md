@@ -58,7 +58,7 @@ minute.
 - Vanilla JavaScript
 - Tailwind CSS for styling
 - Chart.js for the statistics page charts
-- Service Workers for Progressive Web App (PWA) functionality
+- Service worker for the Progressive Web App (PWA): both pages open offline from stored copies, while online visitors always get the deployed files (network-first)
 - Smart image caching and preloading system
 
 ### Backend
@@ -145,7 +145,7 @@ uv run ruff format --check src/
 # Run type checking
 uv run pyright src/
 
-# Run the JS tests (dashboard data layer and the stats API route)
+# Run the JS tests (dashboard data layer, API routes, service worker)
 npm test
 
 # Check frontend formatting

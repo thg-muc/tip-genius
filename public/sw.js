@@ -1,219 +1,181 @@
-// Service Worker for Tip Genius PWA
-// Handles caching strategies and offline functionality
+// Service worker for the Tip Genius PWA: offline copies, never stale pages.
+//
+// - Pages, scripts, styles, the manifest and the API: network first. Online
+//   visitors always get the deployed files (no mix of an old page with new
+//   CSS after a deploy); the stored copy is used when the network fails, or
+//   after NETWORK_TIMEOUT_MS on a very slow connection
+// - Images (logos, icons): served from the cache at once, refreshed in the
+//   background
+// - Chart.js from jsDelivr: the URL names a fixed version and never changes,
+//   so it is cached for good
+// - Everything else (other origins, non-GET, version.json) is not touched
+//
+// Bump CACHE_VERSION when this file changes in a way that needs fresh caches;
+// old caches are deleted on activation.
 
-// Dynamic version management
-let VERSION = '2501010000' // Default fallback version (YYMMDDhhmm format)
-let CACHE_NAME
-let DYNAMIC_CACHE
+const CACHE_VERSION = 'v2'
+const PAGES_CACHE = `tip-genius-pages-${CACHE_VERSION}`
+const IMAGES_CACHE = `tip-genius-images-${CACHE_VERSION}`
+const CDN_CACHE = `tip-genius-cdn-${CACHE_VERSION}`
+const CACHES = [PAGES_CACHE, IMAGES_CACHE, CDN_CACHE]
 
-// Assets to cache
-const STATIC_ASSETS = [
-  // Core app files
+// Network wait before a stored copy is used instead (only when there is one)
+const NETWORK_TIMEOUT_MS = 4000
+
+// Stored at install, so both pages also open offline after the first visit.
+// One missing file does not stop the install (each is added on its own)
+const PRECACHE = [
   '/',
-  '/index.html',
-  '/manifest.json',
+  '/dashboard',
+  '/css/tailwind.css',
   '/js/models.js',
   '/js/main.js',
-  '/sw.js',
-  '/version.json',
-
-  // Image directories (will be matched by pattern)
-  '/images/icon-', // Will match all icon sizes
-  '/images/leagues/',
-  '/images/llm-logos/',
-
-  // External dependencies
-  'https://cdn.tailwindcss.com',
+  '/js/dashboard-data.js',
+  '/js/register-sw.js',
+  '/manifest.json',
+  '/images/icon-128x128.png',
+  '/images/icon-256x256.png',
+  '/images/icon-512x512.png',
 ]
 
-// Cache patterns for image directories
-const IMAGE_PATTERNS = [
-  new RegExp('^/images/icon-.*\\.png$'),
-  new RegExp('^/images/leagues/.*\\.png$'),
-  new RegExp('^/images/llm-logos/.*\\.png$'),
-  new RegExp('^/images/teams/.*\\.png$'),
-]
+const CDN_ORIGIN = 'https://cdn.jsdelivr.net'
 
-// Function to clean up old caches
-const deleteOldCaches = async () => {
-  const cacheKeepList = [CACHE_NAME, DYNAMIC_CACHE]
-  const keyList = await caches.keys()
-  const cachesToDelete = keyList.filter((key) => !cacheKeepList.includes(key))
-  return Promise.all(cachesToDelete.map((key) => caches.delete(key)))
-}
-
-// Helper function to handle API responses
-async function handleApiResponse(request, response) {
-  const cache = await caches.open(DYNAMIC_CACHE)
-  await cache.put(request, response.clone())
-  return response
-}
-
-// Helper function to handle offline fallback
-async function handleOfflineFallback(request) {
-  // If it's a page navigation, return index.html
-  if (request.mode === 'navigate') {
-    const cache = await caches.open(CACHE_NAME)
-    return cache.match('/index.html')
-  }
-  // For other requests, throw error
-  throw new Error('Network and cache unavailable')
-}
-
-// Install event - cache static assets and fetch version
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      try {
-        // Fetch version.json first to get the current version
-        const response = await fetch('/version.json?v=' + Date.now())
-        if (response.ok) {
-          const data = await response.json()
-          VERSION = data.version
-          console.log('Service worker using version:', VERSION)
-        }
-      } catch (error) {
-        console.warn('Could not load version, using fallback version:', VERSION)
+      const cache = await caches.open(PAGES_CACHE)
+      const results = await Promise.allSettled(
+        PRECACHE.map(async (path) => {
+          const response = await fetch(path, { cache: 'no-cache' })
+          if (!isStorable(response)) throw new Error(`${path}: HTTP ${response.status}`)
+          await cache.put(path, response)
+        })
+      )
+      const failed = results.filter((r) => r.status === 'rejected')
+      if (failed.length) {
+        console.warn(
+          'Service worker: not precached:',
+          failed.map((r) => r.reason.message)
+        )
       }
-
-      // Set cache names using the determined version
-      CACHE_NAME = `tip-genius-static-${VERSION}`
-      DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
-
-      try {
-        console.log('Caching static assets with version:', VERSION)
-        const cache = await caches.open(CACHE_NAME)
-        return cache.addAll(STATIC_ASSETS)
-      } catch (error) {
-        console.error('Error caching static assets:', error)
-      }
-
-      // Force the waiting service worker to become the active service worker
-      self.skipWaiting()
+      // Activate right away: the strategies below never serve stale code to
+      // online visitors, so there is nothing to wait for
+      await self.skipWaiting()
     })()
   )
 })
 
-// Activate event - cleanup old caches and claim clients
 self.addEventListener('activate', (event) => {
-  // Ensure cache names are set if activate happens without install
-  if (!CACHE_NAME || !DYNAMIC_CACHE) {
-    CACHE_NAME = `tip-genius-static-${VERSION}`
-    DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
-  }
-
   event.waitUntil(
-    Promise.all([
-      deleteOldCaches(),
-      // Force new service worker to take control immediately
-      self.clients.claim(),
-    ])
+    (async () => {
+      const names = await caches.keys()
+      await Promise.all(
+        names
+          .filter((name) => !CACHES.includes(name))
+          .map((name) => caches.delete(name))
+      )
+      // The browser starts a page's request while the worker boots
+      // (navigation preload); networkFirst uses that response
+      if (self.registration?.navigationPreload) {
+        await self.registration.navigationPreload.enable()
+      }
+      await self.clients.claim()
+    })()
   )
 })
 
-// Fetch event - handle requests
 self.addEventListener('fetch', (event) => {
-  // Ensure cache names are set
-  if (!CACHE_NAME || !DYNAMIC_CACHE) {
-    CACHE_NAME = `tip-genius-static-${VERSION}`
-    DYNAMIC_CACHE = `tip-genius-dynamic-${VERSION}`
-  }
-
   const { request } = event
+  if (request.method !== 'GET') return
   const url = new URL(request.url)
 
-  // Special handling for team logos - use cache-first strategy
-  if (url.pathname.startsWith('/images/teams/')) {
-    event.respondWith(
-      (async () => {
-        // Check cache first
-        const cachedResponse = await caches.match(request)
-        if (cachedResponse) {
-          return cachedResponse
-        }
-
-        // If not in cache, fetch from network and cache for long term
-        try {
-          const networkResponse = await fetch(request)
-          if (networkResponse.status === 200) {
-            const cache = await caches.open(CACHE_NAME)
-            cache.put(request, networkResponse.clone())
-          }
-          return networkResponse
-        } catch (error) {
-          console.error('Error fetching team logo:', error)
-          return new Response('', { status: 404 })
-        }
-      })()
-    )
+  if (url.origin === CDN_ORIGIN && url.pathname.startsWith('/npm/chart.js@')) {
+    event.respondWith(cacheFirst(request))
     return
   }
+  if (url.origin !== self.location.origin) return
+  if (url.pathname === '/version.json' || url.pathname === '/sw.js') return
 
-  // Special handling for version.json - network-first to ensure we get the latest
-  if (url.pathname === '/version.json') {
-    event.respondWith(
-      (async () => {
-        try {
-          // Always try network first for version.json
-          const networkResponse = await fetch(request)
-          if (networkResponse.ok) {
-            const cache = await caches.open(CACHE_NAME)
-            await cache.put(request, networkResponse.clone())
-            return networkResponse
-          }
-        } catch (error) {
-          console.warn('Failed to fetch version.json from network')
-        }
-
-        // Fall back to cached version if network fails
-        return caches.match(request)
-      })()
-    )
+  if (url.pathname.startsWith('/images/')) {
+    event.respondWith(staleWhileRevalidate(event, request))
     return
   }
-
-  // Handle static assets with improved cache-first strategy
-  event.respondWith(
-    (async () => {
-      try {
-        // Check if request matches any image pattern
-        const isImageRequest = IMAGE_PATTERNS.some((pattern) =>
-          pattern.test(url.pathname)
-        )
-
-        // Try to get from cache first
-        const cachedResponse = await caches.match(request)
-
-        // Start fetch in background for cache update
-        const networkResponsePromise = fetch(request).then(async (response) => {
-          // Cache the new version if it's a successful response
-          if (
-            response.status === 200 &&
-            (STATIC_ASSETS.includes(url.pathname) || isImageRequest)
-          ) {
-            const cache = await caches.open(CACHE_NAME)
-            await cache.put(request, response.clone())
-          }
-          return response
-        })
-
-        // If we have a cached response, use it but still update cache in background
-        if (cachedResponse) {
-          networkResponsePromise.catch(console.error)
-          return cachedResponse
-        }
-
-        // If no cached response, wait for the network response
-        const networkResponse = await networkResponsePromise
-        return networkResponse
-      } catch (error) {
-        // If network fails and we have a cached version, use it
-        const cachedResponse = await caches.match(request)
-        if (cachedResponse) return cachedResponse
-
-        // If nothing works, try offline fallback
-        return handleOfflineFallback(request)
-      }
-    })()
-  )
+  if (request.mode === 'navigate') {
+    // One stored copy per page: the query string only sets filters
+    event.respondWith(networkFirst(event, request, url.pathname, '/'))
+    return
+  }
+  event.respondWith(networkFirst(event, request, request))
 })
+
+// Only complete, direct answers are stored (a redirected response must not be
+// served for a navigation, and opaque or error responses are useless offline)
+function isStorable(response) {
+  return response.ok && !response.redirected && response.type !== 'opaque'
+}
+
+async function networkFirst(event, request, key, fallbackKey) {
+  // The request starts before anything else; a page navigation takes the
+  // response the browser already requested while the worker started
+  const cachePromise = caches.open(PAGES_CACHE)
+  const network = (async () => {
+    const preloaded =
+      request.mode === 'navigate' ? await event.preloadResponse : undefined
+    const response = preloaded || (await fetch(request))
+    if (isStorable(response)) {
+      const cache = await cachePromise
+      event.waitUntil(cache.put(key, response.clone()))
+    }
+    return response
+  })()
+  const cache = await cachePromise
+  const cached = await cache.match(key)
+
+  if (!cached) {
+    try {
+      return await network
+    } catch (error) {
+      const fallback = fallbackKey && (await cache.match(fallbackKey))
+      if (fallback) return fallback
+      throw error
+    }
+  }
+
+  // A stored copy exists: use it when the network fails or is very slow; the
+  // network answer still updates the cache in the background
+  let timer
+  const slow = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(cached), NETWORK_TIMEOUT_MS)
+  })
+  event.waitUntil(network.catch(() => undefined))
+  try {
+    return await Promise.race([network.catch(() => cached), slow])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function staleWhileRevalidate(event, request) {
+  const cache = await caches.open(IMAGES_CACHE)
+  const cached = await cache.match(request)
+  const network = fetch(request).then((response) => {
+    if (isStorable(response)) {
+      event.waitUntil(cache.put(request, response.clone()))
+    }
+    return response
+  })
+  if (cached) {
+    event.waitUntil(network.catch(() => undefined))
+    return cached
+  }
+  return network
+}
+
+async function cacheFirst(request) {
+  const cache = await caches.open(CDN_CACHE)
+  const cached = await cache.match(request)
+  if (cached) return cached
+  const response = await fetch(request)
+  if (isStorable(response)) await cache.put(request, response.clone())
+  return response
+}
