@@ -723,99 +723,20 @@ function setActiveTab(tabId) {
   })
 }
 
-// Create Tab helper function
-function createTab(league, index, totalLeagues) {
-  const button = document.createElement('button')
-  const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
-  button.id = tabId
-
-  // Base classes for tabs
-  const baseClasses = [
-    'flex',
-    'items-center',
-    'justify-center',
-    'sm:gap-2',
-    'px-3',
-    'sm:px-4',
-    'py-3',
-    'sm:py-4',
-    'sm:text-lg',
-    'focus:z-10',
-    'flex-1',
-    'lg:flex-none',
-    'lg:w-56',
-    'sm:min-w-32',
-    'sm:max-w-64',
-    'transition-all',
-    'duration-300',
-    'relative',
-    'border-b-2',
-    'border-transparent',
-    'tracking-wide',
-    'font-mono',
-  ]
-
-  // Conditional rounding classes
-  if (index === 0) baseClasses.push('rounded-l-md')
-  if (index === totalLeagues - 1) baseClasses.push('rounded-r-md')
-
-  // Interactive state classes
-  const stateClasses = [
-    'bg-gray-100',
-    'dark:bg-slate-900',
-    'text-gray-500',
-    'dark:text-gray-400',
-    'font-normal',
-    'hover:bg-gray-50',
-    'dark:hover:bg-gray-700',
-    'hover:text-sky-700',
-    'dark:hover:text-sky-400',
-    'hover:shadow-md',
-    'hover:-translate-y-0.5',
-  ]
-
-  button.className = [...baseClasses, ...stateClasses].join(' ')
-  return button
-}
-
-// Fallback for a league whose button is missing in index.html
-function buildTab(league, index, totalLeagues) {
-  const button = createTab(league, index, totalLeagues)
-  const img = document.createElement('img')
-  const logoFilename = league.name
-    .split(' - ')
-    .map((part) => part.replace(/\s+/g, ''))
-    .join('-')
-  img.src = `/images/leagues/${logoFilename}.png`
-  img.alt = `${league.name} logo`
-  img.className = 'w-7 h-7 sm:w-6 sm:h-6 object-contain'
-
-  // League name (hidden on mobile, visible on sm and up)
-  const span = document.createElement('span')
-  span.className = 'hidden sm:inline-block'
-  span.textContent = league.name
-    .replace(/UEFA\s+/, '') // Remove "UEFA" prefix
-    .split(' - ')[0] // Remove country suffix
-
-  button.appendChild(img)
-  button.appendChild(span)
-  return button
-}
-
 // Create Tabs function
 async function createTabs() {
-  const tabContainer = document.getElementById('league-tabs')
-
   try {
     const leagues = LEAGUES.map((name) => ({ name }))
 
-    leagues.forEach((league, index) => {
-      // The buttons are in index.html (part of the first paint); build one
-      // only if it is missing there
+    leagues.forEach((league) => {
+      // The buttons are static markup in index.html (part of the first
+      // paint); this only wires them up. LEAGUES and the markup must match
       const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
-      const button =
-        document.getElementById(tabId) || buildTab(league, index, leagues.length)
-      if (!button.isConnected) tabContainer.appendChild(button)
+      const button = document.getElementById(tabId)
+      if (!button) {
+        console.warn('No tab in index.html for league: %s', league.name)
+        return
+      }
 
       // Hide a logo that fails to load (also when it failed before this ran)
       const img = button.querySelector('img')

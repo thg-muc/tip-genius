@@ -5,14 +5,9 @@
 // in KV under `stats_kv_key` (src/tip_genius/cfg/vercel_config.yaml); this
 // route only reads it with the read-only token.
 
-// Configuration object
+import { handleCommon, internalError, rejectMissingEnv } from './_shared.js'
+
 const CONFIG = {
-  ALLOWED_ORIGINS: [
-    'http://localhost:3000',
-    'http://localhost:5000',
-    'http://localhost:8000',
-    'https://tip-genius.vercel.app',
-  ],
   // KV key of the dashboard JSON (stats_kv_key in vercel_config.yaml)
   KV_KEY: 'dashboard_stats',
   // The JSON only changes twice a week: the CDN keeps it for an hour and may
@@ -21,40 +16,22 @@ const CONFIG = {
   CACHE_CONTROL: 'public, max-age=300, s-maxage=3600, stale-while-revalidate=86400',
 }
 
-// Validate required environment variables
 const REQUIRED_ENV_VARS = ['KV_REST_API_URL', 'KV_REST_API_READ_ONLY_TOKEN']
 
 export default async function handler(req, res) {
-  // Set basic headers; errors are never cached (success overrides this below)
-  res.setHeader('X-Content-Type-Options', 'nosniff')
+  // Errors are never cached (a success overrides this below)
   res.setHeader('Cache-Control', 'no-store')
+  if (handleCommon(req, res)) return
 
-  // CORS handling
-  const origin = req.headers.origin
-  if (origin && CONFIG.ALLOWED_ORIGINS.some((allowed) => origin.includes(allowed))) {
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Access-Control-Allow-Methods', 'GET')
+  // The route takes no parameters. The CDN caches per URL, so a query string
+  // would turn every request into a KV read; refuse it before touching KV
+  if (Object.keys(req.query || {}).length > 0) {
+    return res.status(400).json({ error: 'This endpoint takes no parameters' })
   }
 
-  // Quick returns for non-GET requests
-  if (req.method === 'OPTIONS') return res.status(200).end()
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-
   try {
-    // Check for required environment variables
-    const missingVars = REQUIRED_ENV_VARS.filter((varName) => !process.env[varName])
-    if (missingVars.length > 0) {
-      console.error('Missing required environment variables:', missingVars)
-      return res.status(500).json({
-        error: 'Server configuration error',
-        details:
-          process.env.NODE_ENV === 'development'
-            ? `Missing environment variables: ${missingVars.join(', ')}`
-            : 'Server configuration error',
-      })
-    }
+    if (rejectMissingEnv(res, REQUIRED_ENV_VARS)) return
 
-    // Fetch the stats from KV (a fixed key: this route takes no parameters)
     const response = await fetch(
       `${process.env.KV_REST_API_URL}/get/${CONFIG.KV_KEY}`,
       {
@@ -82,15 +59,9 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: 'Unexpected stats format' })
     }
 
-    // Only successful responses are cacheable
     res.setHeader('Cache-Control', CONFIG.CACHE_CONTROL)
     return res.status(200).json(stats)
   } catch (error) {
-    console.error('API Error:', error)
-    return res.status(500).json({
-      error: 'Internal server error',
-      details:
-        process.env.NODE_ENV === 'development' ? error.message : 'Unexpected error',
-    })
+    return internalError(res, error)
   }
 }

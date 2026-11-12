@@ -210,11 +210,13 @@ const CHROME = {
 
 // Local development reads the sample file; production reads the API endpoint.
 // `?src=<url>` overrides both
+// Local development reads the sample (or the file named by ?src=); the live
+// site only ever reads /api/stats, so a shared link cannot load foreign JSON
 export function dataUrl() {
-  const override = new URLSearchParams(location.search).get('src')
-  if (override) return override
   const local = ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname)
-  return local ? '/samples/dashboard_stats.sample.json' : '/api/stats'
+  if (!local) return '/api/stats'
+  const override = new URLSearchParams(location.search).get('src')
+  return override || '/samples/dashboard_stats.sample.json'
 }
 
 export async function loadStats(url = dataUrl()) {
@@ -635,15 +637,16 @@ export function recentMatchdays(stats, state) {
           kickoff,
           home,
           away,
-          homeGoals: hg,
-          awayGoals: ag,
+          // Scores are numbers by contract; Number() keeps markup out of the page
+          homeGoals: Number(hg),
+          awayGoals: Number(ag),
           tips: tips.map((t, i) =>
             t
               ? {
                   info: models[i],
-                  home: t[0],
-                  away: t[1],
-                  points: t[2],
+                  home: Number(t[0]),
+                  away: Number(t[1]),
+                  points: Number(t[2]),
                   backfill: t[3] === 1,
                 }
               : null

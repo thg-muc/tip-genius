@@ -46,14 +46,14 @@
         <!-- League tabs (same look and width as the main page: five tabs share the width of its four, max-w-4xl = 4 x w-56) -->
         <div class="flex justify-center mb-4">
             <div class="w-full lg:max-w-4xl flex shadow-md rounded-md overflow-hidden">
-                <!-- Static tabs (same markup as renderLeagueTabs), so the bar is part of the first paint;
-                     the script replaces them right away with the URL's league marked -->
+                <!-- The tabs are static (part of the first paint, same look as the main page's);
+                     renderLeagueTabs only switches the active state (TAB_ACTIVE / TAB_INACTIVE) -->
                 <div id="league-tabs" class="flex w-full" role="tablist" aria-label="League">
-                    <button type="button" role="tab" aria-selected="true" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-l-md bg-white dark:bg-gray-800 text-sky-700 dark:text-sky-400 font-semibold border-sky-500 dark:border-sky-400 shadow-md" title="All leagues"><span class="w-7 h-7 sm:w-6 sm:h-6 inline-flex items-center justify-center text-2xl sm:text-xl leading-none" aria-hidden="true">🌍</span><span class="hidden md:inline-block">All leagues</span></button>
-                    <button type="button" role="tab" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="Premier League"><img src="/images/leagues/PremierLeague-England.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">Premier League</span></button>
-                    <button type="button" role="tab" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="Bundesliga"><img src="/images/leagues/Bundesliga-Germany.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">Bundesliga</span></button>
-                    <button type="button" role="tab" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="La Liga"><img src="/images/leagues/LaLiga-Spain.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">La Liga</span></button>
-                    <button type="button" role="tab" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-r-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="Champions League"><img src="/images/leagues/UEFAChampionsLeague.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">Champions League</span></button>
+                    <button type="button" role="tab" data-league="all" aria-selected="true" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-l-md bg-white dark:bg-gray-800 text-sky-700 dark:text-sky-400 font-semibold border-sky-500 dark:border-sky-400 shadow-md" title="All leagues"><span class="w-7 h-7 sm:w-6 sm:h-6 inline-flex items-center justify-center text-2xl sm:text-xl leading-none" aria-hidden="true">🌍</span><span class="hidden md:inline-block">All leagues</span></button>
+                    <button type="button" role="tab" data-league="Premier League - England" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="Premier League"><img src="/images/leagues/PremierLeague-England.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">Premier League</span></button>
+                    <button type="button" role="tab" data-league="Bundesliga - Germany" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="Bundesliga"><img src="/images/leagues/Bundesliga-Germany.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">Bundesliga</span></button>
+                    <button type="button" role="tab" data-league="La Liga - Spain" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="La Liga"><img src="/images/leagues/LaLiga-Spain.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">La Liga</span></button>
+                    <button type="button" role="tab" data-league="UEFA Champions League" aria-selected="false" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-r-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5" title="Champions League"><img src="/images/leagues/UEFAChampionsLeague.png" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden md:inline-block">Champions League</span></button>
                 </div>
             </div>
         </div>
@@ -110,8 +110,24 @@
         </div>
     </footer>
 
+<!-- Browsers without module support (the page needs it) -->
+<script nomodule>
+  document.getElementById('error').textContent = 'This page needs a newer browser.'
+  document.getElementById('error').classList.remove('hidden')
+  document.body.classList.add('loaded')
+</script>
 <script type="module">
-import * as D from '/js/dashboard-data.js'
+// Loaded dynamically so a failed load (blocked or offline) shows a message
+// instead of leaving the content below the league bar invisible
+let D
+try {
+  D = await import('/js/dashboard-data.js')
+} catch (err) {
+  document.getElementById('error').textContent = 'Failed to load the page. Please try again later.'
+  document.getElementById('error').classList.remove('hidden')
+  document.body.classList.add('loaded')
+  throw err
+}
 
 const VIEWS = [
   { key: 'timeline', label: 'Trends' },
@@ -130,18 +146,9 @@ const esc = D.escapeHtml
 
 // --- Controls -------------------------------------------------------------------
 
-function tabClasses(active, first, last) {
-  return [
-    // Same classes as createTab() in main.js
-    // Five tabs: names from md up (they do not fit below); sm:py-8 keeps the main page's 90 px bar height
-    'flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono',
-    first ? 'rounded-l-md' : '',
-    last ? 'rounded-r-md' : '',
-    active
-      ? 'bg-white dark:bg-gray-800 text-sky-700 dark:text-sky-400 font-semibold border-sky-500 dark:border-sky-400 shadow-md'
-      : 'bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5',
-  ].join(' ')
-}
+// State classes of the league tabs, as setActiveTab() in main.js switches them
+const TAB_ACTIVE = 'bg-white dark:bg-gray-800 text-sky-700 dark:text-sky-400 font-semibold border-sky-500 dark:border-sky-400 shadow-md'.split(' ')
+const TAB_INACTIVE = 'bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5'.split(' ')
 
 // Segmented buttons (season and view switch share one look)
 function segmentClasses(active) {
@@ -151,15 +158,12 @@ function segmentClasses(active) {
 }
 
 function renderLeagueTabs(activeLeague) {
-  $('league-tabs').innerHTML = D.LEAGUES.map((l, i) => {
-    const active = l.value === activeLeague
-    const icon = l.logo
-      ? `<img src="${l.logo}" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain">`
-      : '<span class="w-7 h-7 sm:w-6 sm:h-6 inline-flex items-center justify-center text-2xl sm:text-xl leading-none" aria-hidden="true">🌍</span>'
-    return `<button type="button" role="tab" aria-selected="${active}" data-league="${esc(l.value)}"
-      class="${tabClasses(active, i === 0, i === D.LEAGUES.length - 1)}" title="${esc(l.label)}">
-      ${icon}<span class="hidden md:inline-block">${esc(l.label)}</span></button>`
-  }).join('')
+  for (const tab of $('league-tabs').querySelectorAll('[data-league]')) {
+    const active = tab.dataset.league === activeLeague
+    tab.setAttribute('aria-selected', String(active))
+    tab.classList.remove(...(active ? TAB_INACTIVE : TAB_ACTIVE))
+    tab.classList.add(...(active ? TAB_ACTIVE : TAB_INACTIVE))
+  }
 }
 
 function renderControls() {
@@ -216,7 +220,8 @@ function bindControls() {
     const params = new URLSearchParams(location.search)
     if (ui.tab === VIEWS[0].key) params.delete('view')
     else params.set('view', ui.tab)
-    history.replaceState(null, '', params.size ? `?${params}` : location.pathname)
+    const query = params.toString()
+    history.replaceState(null, '', query ? `?${query}` : location.pathname)
     setCardOpen('panel-card', true)
     renderControls()
     renderPanel()

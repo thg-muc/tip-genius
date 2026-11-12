@@ -76,12 +76,15 @@ describe('api/stats', () => {
     )
   })
 
-  test('ignores query parameters: the key is fixed', async () => {
+  test('refuses query parameters without reading KV (no cache busting)', async () => {
     const calls = kvReturns(200, { result: JSON.stringify(STATS) })
     const req = request()
     req.query = { key: 'Match_Predictions_secret' }
-    await handler(req, mockResponse())
-    assert.equal(calls[0].url, 'https://kv.example/get/dashboard_stats')
+    const res = mockResponse()
+    await handler(req, res)
+    assert.equal(res.statusCode, 400)
+    assert.equal(res.headers['cache-control'], 'no-store')
+    assert.equal(calls.length, 0)
   })
 
   test('404 without caching when the key is missing', async () => {
@@ -143,8 +146,11 @@ describe('api/stats', () => {
       allowed.headers['access-control-allow-origin'],
       'https://tip-genius.vercel.app'
     )
-    const other = mockResponse()
-    await handler(request({ origin: 'https://example.com' }), other)
-    assert.equal(other.headers['access-control-allow-origin'], undefined)
+    assert.equal(allowed.headers.vary, 'Origin')
+    for (const origin of ['https://example.com', 'https://tip-genius.vercel.app.evil.com']) {
+      const other = mockResponse()
+      await handler(request({ origin }), other)
+      assert.equal(other.headers['access-control-allow-origin'], undefined, origin)
+    }
   })
 })

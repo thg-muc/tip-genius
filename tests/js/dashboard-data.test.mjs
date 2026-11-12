@@ -220,6 +220,31 @@ describe('filter state in the URL', () => {
   })
 })
 
+describe('data source', () => {
+  test('the live site always reads /api/stats, ?src= only works locally', () => {
+    globalThis.location = { hostname: 'tip-genius.vercel.app', search: '?src=https://evil.example/x.json' }
+    assert.equal(D.dataUrl(), '/api/stats')
+    globalThis.location = { hostname: 'localhost', search: '?src=/samples/other.json' }
+    assert.equal(D.dataUrl(), '/samples/other.json')
+    globalThis.location = { hostname: '127.0.0.1', search: '' }
+    assert.equal(D.dataUrl(), '/samples/dashboard_stats.sample.json')
+  })
+
+  test('scores of the last matchdays are numbers, never markup', () => {
+    const stats = structuredClone(SAMPLE)
+    const league = Object.keys(stats.recent.leagues)[0]
+    const fixture = stats.recent.leagues[league][0].fixtures[0]
+    fixture[3] = '<img src=x onerror=alert(1)>'
+    fixture[5] = fixture[5].map((tip) => (tip ? ['<b>1</b>', 2, '4', 0] : tip))
+    const recent = D.recentMatchdays(stats, { ...STATE, league, season: stats.recent.season })
+    const parsed = recent.matchdays[0].fixtures[0]
+    assert.ok(Number.isNaN(parsed.homeGoals))
+    const tip = parsed.tips.find(Boolean)
+    assert.ok(Number.isNaN(tip.home))
+    assert.equal(tip.points, 4)
+  })
+})
+
 describe('helpers', () => {
   test('form covers weeks across all leagues, matchdays within one', () => {
     assert.equal(D.formUnit({ league: 'all' }), 'weeks')
