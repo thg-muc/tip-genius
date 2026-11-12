@@ -22,6 +22,8 @@
         onerror="window.chartjsFailed = true; document.dispatchEvent(new Event('chartjs'))"></script>
     <!-- Shared model names and logos (window.TIP_GENIUS_MODELS) -->
     <script src="/js/models.js" defer></script>
+    <!-- Service worker (offline copies), registered from both pages -->
+    <script src="/js/register-sw.js" defer></script>
     <!-- Prefetch the other page on hover, so the switch is instant (Chromium only) -->
     <script type="speculationrules">{"prefetch": [{"urls": ["/"], "eagerness": "moderate"}]}</script>
 </head>
