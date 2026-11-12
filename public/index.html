@@ -22,6 +22,8 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <!-- Tailwind CSS -->
     <link rel="stylesheet" href="/css/tailwind.css">
+    <!-- Prefetch the other page on hover, so the switch is instant (Chromium only) -->
+    <script type="speculationrules">{"prefetch": [{"urls": ["/dashboard-a.html"], "eagerness": "moderate"}]}</script>
 </head>
 
 <body class="font-sans flex flex-col min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 dark:from-slate-900 dark:to-blue-950">
@@ -80,7 +82,8 @@
 
         <!-- Dynamic content containers -->
         <div class="flex justify-center mb-4">
-            <div class="w-full sm:w-auto sm:inline-flex flex shadow-md rounded-md overflow-hidden">
+            <!-- Full width up to four w-56 tabs (max-w-4xl); the stats page uses the same width -->
+            <div class="w-full lg:max-w-4xl flex shadow-md rounded-md overflow-hidden">
                 <div id="league-tabs" class="flex w-full"></div>
             </div>
         </div>

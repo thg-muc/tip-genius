@@ -13,6 +13,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
     <!-- Shared model names and logos (window.TIP_GENIUS_MODELS) -->
     <script src="/js/models.js" defer></script>
+    <!-- Prefetch the other page on hover, so the switch is instant (Chromium only) -->
+    <script type="speculationrules">{"prefetch": [{"urls": ["/"], "eagerness": "moderate"}]}</script>
 </head>
 
 <body class="font-sans flex flex-col min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 dark:from-slate-900 dark:to-blue-950 text-gray-800 dark:text-gray-200">
@@ -26,7 +28,7 @@
                 </a>
                 <div class="flex items-center gap-1 sm:gap-2">
                     <a href="/" class="w-20 sm:w-24 h-10 inline-flex items-center gap-1.5 pl-4 pr-1 sm:pl-6 text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400 transition duration-200"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Tips</a>
-                    <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="w-12 sm:w-16 justify-end h-10 inline-flex items-center text-gray-500 p-2 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
+                    <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="w-12 sm:w-16 justify-end h-10 inline-flex items-center text-gray-500 py-2 pl-1 pr-4 sm:pr-7 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                     </a>
                 </div>
@@ -34,19 +36,21 @@
         </div>
     </header>
 
-    <main class="container mx-auto px-3 sm:px-4 py-1 flex-grow max-w-6xl">
-        <div class="text-center mb-4 sm:mb-6">
-            <h1 class="text-2xl sm:text-4xl font-bold tracking-wide text-gray-800 dark:text-gray-200 mb-1">Statistics</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-lg italic">Do the AI models beat the baseline?</p>
+    <main class="container mx-auto px-4 py-1 flex-grow xl:max-w-6xl">
+        <!-- Title block and league bar: same classes as the main page, so nothing moves when switching -->
+        <div class="text-center mb-4 sm:mb-8">
+            <h1 class="text-2xl sm:text-4xl font-bold tracking-wide text-gray-800 dark:text-gray-200 mb-2">Statistics</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-xs sm:text-xl italic">Do the AI models beat the baseline?</p>
         </div>
 
-        <!-- League tabs (same look as the main page) -->
-        <div class="flex justify-center mb-3">
-            <div class="w-full sm:w-auto sm:inline-flex flex shadow-md rounded-md overflow-hidden">
+        <!-- League tabs (same look and width as the main page: five tabs share the width of its four, max-w-4xl = 4 x w-56) -->
+        <div class="flex justify-center mb-4">
+            <div class="w-full lg:max-w-4xl flex shadow-md rounded-md overflow-hidden">
                 <div id="league-tabs" class="flex w-full" role="tablist" aria-label="League"></div>
             </div>
         </div>
 
+        <div class="fade-in-content">
         <!-- Notice slot (reserved even when empty, see notesWithPlaceholder) -->
         <div id="notes" class="space-y-2 mb-3"></div>
 
@@ -82,6 +86,7 @@
             </div>
             <div id="panel" class="px-3 sm:px-4 lg:px-5 pt-2 pb-3 sm:pb-4 lg:pb-5" role="tabpanel"></div>
         </section>
+        </div>
     </main>
 
     <footer class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md mt-2">
@@ -120,7 +125,8 @@ const esc = D.escapeHtml
 function tabClasses(active, first, last) {
   return [
     // Same classes as createTab() in main.js
-    'flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 whitespace-nowrap transition-all duration-300 relative border-b-2 tracking-wide font-mono',
+    // Five tabs: names from md up (they do not fit below); sm:py-8 keeps the main page's 90 px bar height
+    'flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-8 md:py-4 sm:text-lg focus:z-10 flex-1 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono',
     first ? 'rounded-l-md' : '',
     last ? 'rounded-r-md' : '',
     active
@@ -136,16 +142,20 @@ function segmentClasses(active) {
     : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`
 }
 
-function renderControls() {
+function renderLeagueTabs(activeLeague) {
   $('league-tabs').innerHTML = D.LEAGUES.map((l, i) => {
-    const active = l.value === state.league
+    const active = l.value === activeLeague
     const icon = l.logo
       ? `<img src="${l.logo}" alt="" class="w-7 h-7 sm:w-6 sm:h-6 object-contain">`
       : '<span class="w-7 h-7 sm:w-6 sm:h-6 inline-flex items-center justify-center text-2xl sm:text-xl leading-none" aria-hidden="true">🌍</span>'
     return `<button type="button" role="tab" aria-selected="${active}" data-league="${esc(l.value)}"
       class="${tabClasses(active, i === 0, i === D.LEAGUES.length - 1)}" title="${esc(l.label)}">
-      ${icon}<span class="hidden sm:inline-block">${esc(l.label)}</span></button>`
+      ${icon}<span class="hidden md:inline-block">${esc(l.label)}</span></button>`
   }).join('')
+}
+
+function renderControls() {
+  renderLeagueTabs(state.league)
 
   const seasons = D.seasonOptions(stats)
   $('season-control').innerHTML = seasons
@@ -737,6 +747,8 @@ function render() {
 }
 
 async function init() {
+  // The league bar shows at once, like on the main page; the rest follows the data
+  renderLeagueTabs(D.LEAGUES.find((l) => l.code === new URLSearchParams(location.search).get('league'))?.value ?? 'all')
   try {
     stats = await D.loadStats()
   } catch (err) {

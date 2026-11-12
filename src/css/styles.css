@@ -2,17 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Body fade-in animation */
-body {
-  /* Initial state for fade-in animation */
+/* Header, title and league bar show at once; only the content that waits
+   for data fades in (.fade-in-content until body.loaded; the main page's
+   match list fades itself in loadLeagueData) */
+.fade-in-content {
   opacity: 0;
-  /* Smooth fade-in transition */
-  transition: opacity 0.4s ease-in;
+  transition: opacity 0.3s ease-in;
 }
 
-/* Animation class for content fade-in */
-body.loaded {
+body.loaded .fade-in-content {
   opacity: 1;
+}
+
+/* Tips <-> Stats: the browser cross-fades the two pages instead of blanking
+   (cross-document view transitions; Chromium and Safari 18.2+, others switch
+   as before). The header keeps its place during the fade. */
+@view-transition {
+  navigation: auto;
+}
+
+header {
+  view-transition-name: site-header;
+}
+
+#league-tabs {
+  view-transition-name: league-bar;
 }
 
 /* Smooth scrolling behavior for the entire page */
