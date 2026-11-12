@@ -212,6 +212,11 @@ function bindControls() {
     const b = e.target.closest('[data-view]')
     if (!b) return
     ui.tab = b.dataset.view
+    // The view is part of the link (?view=hits|recent; Trends is the default)
+    const params = new URLSearchParams(location.search)
+    if (ui.tab === VIEWS[0].key) params.delete('view')
+    else params.set('view', ui.tab)
+    history.replaceState(null, '', params.size ? `?${params}` : location.pathname)
     setCardOpen('panel-card', true)
     renderControls()
     renderPanel()
@@ -553,9 +558,9 @@ function formTable() {
   const rows = view.rows.filter((r) => r.form).sort((a, b) => b.form.avg0 - a.form.avg0)
   if (!rows.length || view.mode !== 'standard') return ''
   const unit = D.formUnit(state)
-  return `<h3 class="text-sm sm:text-base font-bold mt-6 mb-2">Form table (last 5 ${unit})</h3>
+  return `<h3 class="text-sm sm:text-base font-semibold mt-6 mb-2">Form table (last 5 ${unit})</h3>
     <div class="overflow-x-auto"><table class="w-full text-xs sm:text-sm tabular-nums">
-    <thead class="text-gray-500 dark:text-gray-400 text-xs uppercase"><tr><th class="text-right px-2 py-1">#</th><th class="text-left px-2 py-1">Model</th><th class="text-right px-2 py-1">M</th><th class="text-right px-2 py-1">Pts</th><th class="text-right px-2 py-1">Avg</th></tr></thead>
+    <thead class="text-gray-500 dark:text-gray-400 text-xs uppercase"><tr><th class="w-8 text-right px-2 py-1">#</th><th class="w-full text-left px-2 py-1">Model</th><th class="text-right px-2 py-1">M</th><th class="text-right px-2 py-1">Pts</th><th class="text-right px-2 py-1">Avg</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.info.isBaseline ? 'italic bg-gray-50 dark:bg-gray-800' : ''} ${r.listed ? '' : 'opacity-50'}">
       <td class="text-right px-2 py-1 font-mono">${i + 1}</td><td class="px-2 py-1">${D.modelLabelHtml(r.info)}</td>
       <td class="text-right px-2 py-1">${r.form.offered}</td><td class="text-right px-2 py-1">${r.form.points}</td><td class="text-right px-2 py-1 font-bold">${D.fmt(r.form.avg0)}</td></tr>`).join('')}</tbody></table></div>`
@@ -588,8 +593,8 @@ function renderHits() {
     <div class="relative" style="height:${rows.length * 30 + 40}px"><canvas id="hits-chart" role="img" aria-label="Stacked bars of hit types per model"></canvas></div>
     <h3 class="text-sm sm:text-base font-semibold mt-6 mb-2">Hit counts per model</h3>
     <div class="overflow-x-auto"><table class="w-full text-xs tabular-nums">
-      <thead class="text-gray-500 dark:text-gray-400 uppercase"><tr><th class="text-left px-2 py-1">Model</th>${D.HIT_TYPES.map((h) => `<th class="text-right px-2 py-1">${h.label}</th>`).join('')}</tr></thead>
-      <tbody>${rows.map((r) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.listed ? '' : 'opacity-50'}"><td class="px-2 py-1 whitespace-nowrap">${D.modelLabelHtml(r.info, { size: 'w-4 h-4' })}</td>${D.HIT_TYPES.map((h) => `<td class="text-right px-2 py-1">${r.hits[h.key]} <span class="text-gray-500 dark:text-gray-400">(${D.pct(r.hits[h.key] / r.offered)})</span></td>`).join('')}</tr>`).join('')}</tbody>
+      <thead class="text-gray-500 dark:text-gray-400 uppercase"><tr><th class="w-full text-left px-2 py-1">Model</th>${D.HIT_TYPES.map((h) => `<th class="${h.key === 'missed' ? 'hidden sm:table-cell ' : ''}text-right px-2 py-1 whitespace-nowrap" title="${esc(h.long)}"><span class="sm:hidden">${h.points || h.label}</span><span class="hidden sm:inline">${h.key === 'diff' ? 'Goal difference' : h.label}</span></th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r) => `<tr class="border-t border-gray-100 dark:border-gray-700 ${r.listed ? '' : 'opacity-50'}"><td class="px-2 py-1 whitespace-nowrap">${D.modelLabelHtml(r.info, { size: 'w-4 h-4' })}</td>${D.HIT_TYPES.map((h) => `<td class="${h.key === 'missed' ? 'hidden sm:table-cell ' : ''}text-right px-2 py-1 whitespace-nowrap">${r.hits[h.key]}<span class="hidden sm:inline text-gray-500 dark:text-gray-400"> (${D.pct(r.hits[h.key] / r.offered)})</span></td>`).join('')}</tr>`).join('')}</tbody>
     </table></div>`
   const phone = D.isPhone()
   if (!chartsMissing('hits-chart')) charts.push(new Chart($('hits-chart'), {
@@ -711,7 +716,7 @@ function renderRecent() {
       ${f.tips.map((t) => `<td class="px-1 py-1.5 text-center whitespace-nowrap">${t ? `<span class="font-mono">${t.home}:${t.away}</span>${t.backfill ? '<sup class="text-gray-500 dark:text-gray-400" title="backfill tip">BF</sup>' : ''} ${pointsBadge(t.points, t.backfill)}` : '<span class="text-gray-500 dark:text-gray-400" title="no tip">–</span>'}</td>`).join('')}
     </tr>`).join('')
     return `<div class="mb-6 last:mb-0">
-      <h3 class="flex items-center gap-2 text-sm sm:text-base font-bold mb-2">${day.league.logo ? `<img src="${day.league.logo}" alt="" class="w-5 h-5 object-contain">` : ''}${esc(day.league.label)} · matchday from ${D.fmtDate(day.date)}</h3>
+      <h3 class="flex items-center gap-2 text-sm sm:text-base font-semibold mb-2">${day.league.logo ? `<img src="${day.league.logo}" alt="" class="w-5 h-5 object-contain">` : ''}${esc(day.league.label)} · matchday from ${D.fmtDate(day.date)}</h3>
       <div class="overflow-x-auto"><table class="w-full text-xs sm:text-sm tabular-nums">
         <thead class="bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 text-xs">${head}</thead>
         <tbody>${rows}
@@ -768,6 +773,8 @@ async function init() {
   }
   try {
     state = D.readState(stats)
+    const linkedView = new URLSearchParams(location.search).get('view')
+    if (VIEWS.some((v) => v.key === linkedView)) ui.tab = linkedView
     if (window.Chart) D.applyChartDefaults(Chart)
     bindControls()
     bindCards()
