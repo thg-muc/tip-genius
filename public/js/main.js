@@ -669,11 +669,14 @@ async function fetchLeagueData() {
   console.log('Cache invalidated or empty, fetching fresh data')
   cachedLeagueData = null
 
-  // Clear KV cache if using service worker
+  // Clear KV cache if using service worker (only an existing cache: open()
+  // would create an empty one, e.g. under the fallback version name)
   if ('caches' in window) {
     try {
-      const cache = await caches.open(CONFIG.DYNAMIC_CACHE)
-      await cache.delete(CONFIG.API_URL)
+      if (await caches.has(CONFIG.DYNAMIC_CACHE)) {
+        const cache = await caches.open(CONFIG.DYNAMIC_CACHE)
+        await cache.delete(CONFIG.API_URL)
+      }
     } catch (error) {
       console.warn('Cache clear failed:', error)
     }
@@ -706,6 +709,27 @@ async function fetchLeagueData() {
 function setActiveTab(tabId) {
   document.querySelectorAll('#league-tabs [role="tab"]').forEach((tab) => {
     tab.setAttribute('aria-selected', String(tab.id === tabId))
+  })
+}
+
+// Arrow keys, Home and End move between the league tabs and select the tab,
+// as expected from elements announced as tabs (same handler on the stats page)
+function bindTabKeys(tablist) {
+  tablist.addEventListener('keydown', (event) => {
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')]
+    const index = tabs.indexOf(document.activeElement)
+    if (index < 0) return
+    const target = {
+      ArrowRight: index + 1,
+      ArrowLeft: index - 1,
+      Home: 0,
+      End: tabs.length - 1,
+    }[event.key]
+    if (target === undefined) return
+    event.preventDefault()
+    const tab = tabs[(target + tabs.length) % tabs.length]
+    tab.focus()
+    tab.click()
   })
 }
 
@@ -747,6 +771,7 @@ async function createTabs() {
         setActiveTab(button.id)
       })
     })
+    bindTabKeys(document.getElementById('league-tabs'))
 
     // Initialize with default or stored league
     if (!currentLeague || !leagues.some((l) => l.name === currentLeague)) {

@@ -9,10 +9,15 @@
     <title>Stats – Tip Genius</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <link rel="stylesheet" href="/css/tailwind.css">
-    <!-- Chart.js 4 (UMD build, exposes window.Chart) -->
-    <!-- async: the statistics load and the table renders while Chart.js downloads;
+    <!-- Chart.js 4 (UMD build, exposes window.Chart). The published dist/chart.umd.js
+         is already minified (jsDelivr's .min.js would be generated on the fly, which
+         can change and break the hash); integrity = sha384 of the npm package's file,
+         so the browser refuses anything else. To upgrade, change version and hash.
+         async: the statistics load and the table renders while Chart.js downloads;
          the charts are drawn once it has arrived ('chartjs' event) -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" async
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.js" async
+        integrity="sha384-zYPBGXwO4633CABX/5Spf6emCKUJCfoOkhOMYyxMsatqQZPnDblmmOewfjsIVWCM"
+        crossorigin="anonymous"
         onload="document.dispatchEvent(new Event('chartjs'))"
         onerror="window.chartjsFailed = true; document.dispatchEvent(new Event('chartjs'))"></script>
     <!-- Shared model names and logos (window.TIP_GENIUS_MODELS) -->
@@ -206,7 +211,24 @@ function renderControls() {
   ).join('')
 }
 
+// Arrow keys, Home and End move between the league tabs and select the tab,
+// as expected from elements announced as tabs (same handler on the stats page)
+function bindTabKeys(tablist) {
+  tablist.addEventListener('keydown', (event) => {
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')]
+    const index = tabs.indexOf(document.activeElement)
+    if (index < 0) return
+    const target = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: tabs.length - 1 }[event.key]
+    if (target === undefined) return
+    event.preventDefault()
+    const tab = tabs[(target + tabs.length) % tabs.length]
+    tab.focus()
+    tab.click()
+  })
+}
+
 function bindControls() {
+  bindTabKeys($('league-tabs'))
   $('league-tabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-league]')
     if (b) update({ league: b.dataset.league })
