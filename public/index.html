@@ -22,11 +22,13 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚽️</text></svg>">
     <!-- Tailwind CSS -->
     <link rel="stylesheet" href="/css/tailwind.css">
+    <!-- Prefetch the other page on hover, so the switch is instant (Chromium only) -->
+    <script type="speculationrules">{"prefetch": [{"urls": ["/dashboard"], "eagerness": "moderate"}]}</script>
 </head>
 
 <body class="font-sans flex flex-col min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 dark:from-slate-900 dark:to-blue-950">
     <!-- Sticky header with navigation -->
-    <header class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-10 mb-3 sm:mb-6">
+    <header class="bg-white bg-opacity-80 dark:bg-gray-800 dark:bg-opacity-80 backdrop-blur-md shadow-md sticky top-0 z-30 mb-3 sm:mb-6">
         <div class="container mx-auto px-4 py-2 sm:py-3">
             <div class="flex items-center justify-between">
                 <!-- Logo and site title -->
@@ -34,16 +36,13 @@
                     <span class="text-base sm:text-2xl mr-2 hover:animate-bounce">⚽️</span>
                     <span class="text-base sm:text-2xl font-bold text-gray-800 dark:text-gray-200 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">Tip Genius</span>
                 </a>
-                <!-- Header right section with GitHub and LLM menu -->
-                <div class="flex items-center space-x-0 sm:space-x-1">
-                    <!-- GitHub link -->
-                    <a href="http://github.com/thg-muc/tip-genius" target="_blank" rel="noopener noreferrer" class="text-gray-500 p-1 dark:text-gray-400 sm:hover:text-sky-700 dark:hover:text-sky-400 transition duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-label="GitHub">
-                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                        </svg>
-                    </a>
-                    <!-- LLM Logo Button (replaces Hamburger button) -->
-                    <div class="relative">
+                <!-- Header right section: the switch to the stats page and the LLM menu (GitHub is linked from the stats page) -->
+                <div class="flex items-center gap-1 sm:gap-2">
+                    <!-- Switch to the statistics page (/dashboard, rewritten to dashboard.html in vercel.json) -->
+                    <a href="/dashboard" class="w-20 sm:w-24 h-10 inline-flex items-center gap-1.5 pl-4 pr-1 sm:pl-6 text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400 transition duration-200"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M3 20h18"/></svg>Stats</a>
+                    <!-- LLM Logo Button (replaces Hamburger button); fixed slot width so the
+                         Stats link sits where the stats page puts its Tips link -->
+                    <div class="relative w-12 sm:w-16 flex justify-end">
                         <button id="menuButton" class="flex items-center p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition duration-200" aria-label="Select LLM provider">
                             <!-- LLM Logo will be inserted here dynamically -->
                             <div id="activeLlmLogo" class="w-6 h-6 flex items-center justify-center">
@@ -53,6 +52,22 @@
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
                             </div>
+                            <script>
+                                // The logo main.js showed last time, if it is still the model it
+                                // will pick (chosen in the menu, or this session's random pick)
+                                ;(() => {
+                                    try {
+                                        const logo = JSON.parse(localStorage.getItem('activeLlmLogo'))
+                                        const current = localStorage.getItem('lastUsedLLM') || sessionStorage.getItem('sessionLLM')
+                                        if (!logo || logo.value !== current) return
+                                        const img = document.createElement('img')
+                                        img.src = logo.src
+                                        img.alt = logo.alt
+                                        img.className = 'w-6 h-6 object-contain'
+                                        document.getElementById('activeLlmLogo').replaceChildren(img)
+                                    } catch {}
+                                })()
+                            </script>
                             <!-- Dropdown indicator -->
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-2 sm:h-4 w-2 sm:w-4 sm:ml-1 text-gray-500 dark:text-gray-400 " fill="none" viewBox="0 0 24 24" stroke="currentColor">
 
@@ -83,8 +98,29 @@
 
         <!-- Dynamic content containers -->
         <div class="flex justify-center mb-4">
-            <div class="w-full sm:w-auto sm:inline-flex flex shadow-md rounded-md overflow-hidden">
-                <div id="league-tabs" class="flex w-full"></div>
+            <!-- Full width up to four w-56 tabs (max-w-4xl); the stats page uses the same width -->
+            <div class="w-full lg:max-w-4xl flex shadow-md rounded-md overflow-hidden">
+                <!-- The league tabs are static (part of the first paint, so the bar does not pop in);
+                     the active look comes from the aria-selected:* classes, so marking a tab is one
+                     attribute (the script below, then setActiveTab() in main.js). The stats page has
+                     the same bar with an extra "All leagues" tab -->
+                <div id="league-tabs" class="flex w-full" role="tablist" aria-label="League">
+                    <button type="button" role="tab" aria-selected="false" id="tab-premier-league---england" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-l-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/PremierLeague-England.png" alt="Premier League - England logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Premier League</span></button>
+                    <button type="button" role="tab" aria-selected="false" id="tab-bundesliga---germany" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/Bundesliga-Germany.png" alt="Bundesliga - Germany logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Bundesliga</span></button>
+                    <button type="button" role="tab" aria-selected="false" id="tab-la-liga---spain" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/LaLiga-Spain.png" alt="La Liga - Spain logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">La Liga</span></button>
+                    <button type="button" role="tab" aria-selected="false" id="tab-uefa-champions-league" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-r-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/UEFAChampionsLeague.png" alt="UEFA Champions League logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Champions League</span></button>
+                </div>
+                <script>
+                    // Mark the saved league before the first paint (same rule as main.js:
+                    // the stored league, else the first tab)
+                    ;(() => {
+                        let league = null
+                        try { league = localStorage.getItem('lastUsedLeague') } catch {}
+                        const id = league && 'tab-' + league.replace(/\s+/g, '-').toLowerCase()
+                        const tab = (id && document.getElementById(id)) || document.querySelector('#league-tabs [role="tab"]')
+                        tab.setAttribute('aria-selected', 'true')
+                    })()
+                </script>
             </div>
         </div>
         <!-- Error message container -->
@@ -114,6 +150,7 @@
     </footer>
 
 <!-- Core JavaScript -->
+<script src="/js/models.js" defer></script>
 <script src="/js/main.js" defer></script>
 
 </body>

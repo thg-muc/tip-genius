@@ -41,6 +41,7 @@ minute.
 - 🎯 Match predictions using advanced LLMs
 - 🌐 Clean, responsive web interface with dark mode support
 - 📊 Real-time odds data integration
+- 📈 Statistics page (`/dashboard`): how each AI model scores against simple baselines such as always backing the favourite 2:1, per league and season
 - 🎮 Team logo integration with fuzzy name matching
 - ⚡️ Fast, serverless architecture using Vercel
 - 📱 Mobile-friendly design with PWA support
@@ -56,6 +57,7 @@ minute.
 - HTML5 with semantic markup
 - Vanilla JavaScript
 - Tailwind CSS for styling
+- Chart.js for the statistics page charts
 - Service Workers for Progressive Web App (PWA) functionality
 - Smart image caching and preloading system
 
@@ -143,6 +145,9 @@ uv run ruff format --check src/
 # Run type checking
 uv run pyright src/
 
+# Run the JS tests (dashboard data layer and the stats API route)
+npm test
+
 # Check frontend formatting
 npx prettier --check "public/**/*.{js,css,json}"
 
@@ -156,7 +161,7 @@ uv run pre-commit install
 uv run pre-commit install --hook-type commit-msg
 ```
 
-Unit tests (no network, Blob and KV mocked) run with `uv run pytest tests/unit`; the prediction workflow runs them too. `npm test` is a placeholder and exits with an error.
+Unit tests (no network, Blob and KV mocked) run with `uv run pytest tests/unit`, the JS tests with `npm test` (Node's built-in test runner, no extra dependencies); the prediction workflow runs both.
 
 ### Generated Files
 
@@ -183,7 +188,7 @@ Tip Genius is designed to run completely on Vercel's free tier:
 3. **Environment Configuration**:
    - GitHub Actions uses repository secrets for API and KV credentials, and `BLOB_READ_WRITE_TOKEN` (Production and Preview environments) for the Blob archive
    - GitHub Actions uses repository variables for debug controls such as `DEBUG_MODE` and `DEBUG_PROCESSING_LIMIT`
-   - Vercel needs the API route variables used by `api/predictions.js`: `KV_REST_API_URL`, `KV_REST_API_READ_ONLY_TOKEN`, and `KV_DEFAULT_KEY`
+   - Vercel needs the API route variables used by `api/predictions.js`: `KV_REST_API_URL`, `KV_REST_API_READ_ONLY_TOKEN`, and `KV_DEFAULT_KEY`; `api/stats.js` (the statistics page) uses the first two
 
 4. **Monitoring**:
    - Access request logs and performance metrics in Vercel dashboard

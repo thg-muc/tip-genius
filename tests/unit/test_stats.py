@@ -73,7 +73,7 @@ def at(day: int, hour: int = 15) -> datetime:
 
 def test_odds_favourite_never_tips_a_draw() -> None:
     assert st.odds_favourite((1.5, 4.0, 6.0)) == (2, 1)
-    assert st.odds_favourite((5.0, 4.0, 1.6)) == (0, 1)
+    assert st.odds_favourite((5.0, 4.0, 1.6)) == (1, 2)
     assert st.odds_favourite((2.8, 3.0, 2.8)) == (2, 1)  # tie: home
     assert st.odds_favourite(None) is None
 

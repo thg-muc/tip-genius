@@ -1,59 +1,11 @@
 // Main JavaScript for Tip Genius PWA
 // Handles UI, data fetching, caching and interactions
 
-// LLM provider configuration with PNG logos
-const LLM_PROVIDERS = [
-  {
-    value: 'Deepseek-Chat',
-    label: 'DeepSeek V4.1 Flash',
-    logo: `/images/llm-logos/DeepSeek.png`,
-  },
-  // {
-  //   value: 'Google-Gemini-Flash-Lite',
-  //   label: 'Gemini 2.5 Flash Lite',
-  //   logo: `/images/llm-logos/Google.png`,
-  // },
-  {
-    value: 'Google-Gemma-Medium',
-    label: 'Gemma 4',
-    logo: `/images/llm-logos/Google.png`,
-  },
-  {
-    value: 'OpenRouter-GPT-OSS-Large',
-    label: 'GPT-OSS 120b',
-    logo: `/images/llm-logos/OpenAI.png`,
-  },
-  {
-    value: 'Nvidia-Nemotron-Lightning',
-    label: 'Nemotron 3.5 Lightning',
-    logo: `/images/llm-logos/NVIDIA.png`,
-  },
-  {
-    value: 'Mistral-Ministral',
-    label: 'Ministral 14B',
-    logo: `/images/llm-logos/Mistral.png`,
-  },
-  {
-    value: 'Meta-Llama-Mid',
-    label: 'Llama 4 Maverick',
-    logo: `/images/llm-logos/Meta.png`,
-  },
-  {
-    value: 'Microsoft-Phi-Medium',
-    label: 'Phi 4 Medium',
-    logo: `/images/llm-logos/Microsoft.png`,
-  },
-  // {
-  //   value: 'OpenRouter-Grok',
-  //   label: 'Grok 4.3',
-  //   logo: `/images/llm-logos/xAI.png`,
-  // },
-  // {
-  //   value: 'OpenRouter-Claude-Haiku',
-  //   label: 'Claude Haiku 4.5',
-  //   logo: `/images/llm-logos/Anthropic.png`,
-  // },
-]
+// LLM providers offered in the model picker, from the shared model list in
+// models.js (loaded before this file; the stats dashboard reads the same list)
+const LLM_PROVIDERS = (window.TIP_GENIUS_MODELS || [])
+  .filter((model) => model.offered)
+  .map(({ value, label, logo }) => ({ value, label, logo }))
 
 // Leagues shown as tabs, mirroring sports_list in tip_genius_config.yaml.
 // Fixed rather than read from the predictions, so a provider that failed for
@@ -66,9 +18,23 @@ const LEAGUES = [
 ]
 
 // Visitors who never picked a provider get a random one on every visit,
-// so no single provider is everyone's first impression
+// so no single provider is everyone's first impression. The pick is kept for
+// the browser session: switching to the stats page and back keeps the model
+// (and its cached predictions) instead of drawing a new one
 function randomLlmProvider() {
-  return LLM_PROVIDERS[Math.floor(Math.random() * LLM_PROVIDERS.length)].value
+  try {
+    const sessionPick = sessionStorage.getItem('sessionLLM')
+    if (LLM_PROVIDERS.some((p) => p.value === sessionPick)) return sessionPick
+  } catch {
+    // Storage unavailable: a fresh pick per page
+  }
+  const pick = LLM_PROVIDERS[Math.floor(Math.random() * LLM_PROVIDERS.length)].value
+  try {
+    sessionStorage.setItem('sessionLLM', pick)
+  } catch {
+    // See above
+  }
+  return pick
 }
 
 // Keeps a deliberately chosen provider (lastUsedLLM is only written by the menu).
@@ -113,19 +79,15 @@ function updateFooterYear() {
 async function initializeApp() {
   try {
     updateFooterYear()
-
-    // Fetch the version information first
-    const response = await fetch('/version.json?v=' + Date.now())
-    if (response.ok) {
-      const data = await response.json()
-      appVersion = data.version
-      console.log('App initialized with version:', appVersion)
-    }
   } catch (error) {
-    console.warn('Could not load version, using fallback:', appVersion)
+    console.warn('Could not update the footer year:', error)
   }
 
-  // Initialize configuration with the correct version
+  // The build version is only shown under the matches: load it alongside
+  // instead of making the tabs and the predictions wait for it
+  loadAppVersion()
+
+  // Configuration (DYNAMIC_CACHE follows the version once it is known)
   CONFIG = {
     ALLOWED_ORIGINS: [
       'http://localhost:3000',
@@ -166,6 +128,24 @@ async function initializeApp() {
   setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
 }
 
+// Build version from version.json; updates the line under the matches when it
+// arrives after they were drawn
+async function loadAppVersion() {
+  try {
+    const response = await fetch('/version.json?v=' + Date.now())
+    if (!response.ok) return
+    const data = await response.json()
+    appVersion = data.version
+    if (CONFIG) CONFIG.DYNAMIC_CACHE = `tip-genius-dynamic-${appVersion}`
+    document.querySelectorAll('[data-build-version]').forEach((element) => {
+      element.textContent = `Build Version: ${appVersion}`
+    })
+    console.log('App initialized with version:', appVersion)
+  } catch (error) {
+    console.warn('Could not load version, using fallback:', appVersion)
+  }
+}
+
 // Function to update the active LLM logo in the header
 function updateActiveLlmLogo() {
   const activeLlmLogo = document.getElementById('activeLlmLogo')
@@ -183,6 +163,15 @@ function updateActiveLlmLogo() {
   img.alt = `${provider.label} logo`
   img.className = 'w-6 h-6 object-contain'
   img.title = provider.label
+  try {
+    // index.html shows this logo before main.js runs on the next page load
+    localStorage.setItem(
+      'activeLlmLogo',
+      JSON.stringify({ value: provider.value, src: provider.logo, alt: img.alt })
+    )
+  } catch {
+    // Storage unavailable: the spinner shows until main.js runs
+  }
 
   // Add error handling
   img.onerror = () => {
@@ -511,6 +500,7 @@ function renderMatches(matches, timestamp) {
     versionElement.className =
       'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-2 mb-6'
     versionElement.textContent = `Build Version: ${appVersion}`
+    versionElement.dataset.buildVersion = ''
     versionElement.style.opacity = '0'
     container.appendChild(versionElement)
     elements.push(versionElement)
@@ -679,11 +669,14 @@ async function fetchLeagueData() {
   console.log('Cache invalidated or empty, fetching fresh data')
   cachedLeagueData = null
 
-  // Clear KV cache if using service worker
+  // Clear KV cache if using service worker (only an existing cache: open()
+  // would create an empty one, e.g. under the fallback version name)
   if ('caches' in window) {
     try {
-      const cache = await caches.open(CONFIG.DYNAMIC_CACHE)
-      await cache.delete(CONFIG.API_URL)
+      if (await caches.has(CONFIG.DYNAMIC_CACHE)) {
+        const cache = await caches.open(CONFIG.DYNAMIC_CACHE)
+        await cache.delete(CONFIG.API_URL)
+      }
     } catch (error) {
       console.warn('Cache clear failed:', error)
     }
@@ -711,145 +704,53 @@ async function fetchLeagueData() {
   return data
 }
 
-// Tab creation and handling
+// Tab creation and handling: the active look comes from the aria-selected:*
+// classes in index.html, so marking a tab is one attribute
 function setActiveTab(tabId) {
-  document.querySelectorAll('button[id^="tab-"]').forEach((tab) => {
-    const isActive = tab.id === tabId
-
-    // First, remove all state-related classes
-    tab.classList.remove(
-      // Inactive state classes
-      'bg-gray-100',
-      'dark:bg-slate-900',
-      'text-gray-500',
-      'dark:text-gray-400',
-      'font-normal',
-      'hover:bg-gray-50',
-      'dark:hover:bg-gray-700',
-      'hover:text-sky-700',
-      'dark:hover:text-sky-400',
-      'border-transparent',
-      // Active state classes
-      'bg-white',
-      'dark:bg-gray-800',
-      'text-sky-700',
-      'dark:text-sky-400',
-      'font-semibold',
-      'border-sky-500',
-      'dark:border-sky-400',
-      'shadow-md',
-      'tab-active'
-    )
-
-    // Then add appropriate classes for current state
-    if (isActive) {
-      tab.classList.add(
-        'bg-white',
-        'dark:bg-gray-800',
-        'text-sky-700',
-        'dark:text-sky-400',
-        'font-semibold',
-        'border-sky-500',
-        'dark:border-sky-400',
-        'shadow-md',
-        'tab-active'
-      )
-    } else {
-      tab.classList.add(
-        'bg-gray-100',
-        'dark:bg-slate-900',
-        'text-gray-500',
-        'dark:text-gray-400',
-        'font-normal',
-        'hover:bg-gray-50',
-        'dark:hover:bg-gray-700',
-        'hover:text-sky-700',
-        'dark:hover:text-sky-400',
-        'border-transparent'
-      )
-    }
+  document.querySelectorAll('#league-tabs [role="tab"]').forEach((tab) => {
+    tab.setAttribute('aria-selected', String(tab.id === tabId))
   })
 }
 
-// Create Tab helper function
-function createTab(league, index, totalLeagues) {
-  const button = document.createElement('button')
-  const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
-  button.id = tabId
-
-  // Base classes for tabs
-  const baseClasses = [
-    'flex',
-    'items-center',
-    'justify-center',
-    'sm:gap-2',
-    'px-3',
-    'sm:px-4',
-    'py-3',
-    'sm:py-4',
-    'sm:text-lg',
-    'focus:z-10',
-    'flex-1',
-    'lg:flex-none',
-    'lg:w-56',
-    'sm:min-w-32',
-    'sm:max-w-64',
-    'transition-all',
-    'duration-300',
-    'relative',
-    'border-b-2',
-    'border-transparent',
-    'tracking-wide',
-    'font-mono',
-  ]
-
-  // Conditional rounding classes
-  if (index === 0) baseClasses.push('rounded-l-md')
-  if (index === totalLeagues - 1) baseClasses.push('rounded-r-md')
-
-  // Interactive state classes
-  const stateClasses = [
-    'bg-gray-100',
-    'dark:bg-slate-900',
-    'text-gray-500',
-    'dark:text-gray-400',
-    'font-normal',
-    'hover:bg-gray-50',
-    'dark:hover:bg-gray-700',
-    'hover:text-sky-700',
-    'dark:hover:text-sky-400',
-    'hover:shadow-md',
-    'hover:-translate-y-0.5',
-  ]
-
-  button.className = [...baseClasses, ...stateClasses].join(' ')
-  return button
+// Arrow keys, Home and End move between the league tabs and select the tab,
+// as expected from elements announced as tabs (same handler on the stats page)
+function bindTabKeys(tablist) {
+  tablist.addEventListener('keydown', (event) => {
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')]
+    const index = tabs.indexOf(document.activeElement)
+    if (index < 0) return
+    const target = {
+      ArrowRight: index + 1,
+      ArrowLeft: index - 1,
+      Home: 0,
+      End: tabs.length - 1,
+    }[event.key]
+    if (target === undefined) return
+    event.preventDefault()
+    const tab = tabs[(target + tabs.length) % tabs.length]
+    tab.focus()
+    tab.click()
+  })
 }
 
 // Create Tabs function
 async function createTabs() {
-  const tabContainer = document.getElementById('league-tabs')
-
   try {
     const leagues = LEAGUES.map((name) => ({ name }))
 
-    // Clear existing tabs
-    tabContainer.innerHTML = ''
+    leagues.forEach((league) => {
+      // The buttons are static markup in index.html (part of the first
+      // paint); this only wires them up. LEAGUES and the markup must match
+      const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
+      const button = document.getElementById(tabId)
+      if (!button) {
+        console.warn('No tab in index.html for league: %s', league.name)
+        return
+      }
 
-    leagues.forEach((league, index) => {
-      const button = createTab(league, index, leagues.length)
-
-      // Create and add the logo image
-      const img = document.createElement('img')
-      const logoFilename = league.name
-        .split(' - ')
-        .map((part) => part.replace(/\s+/g, ''))
-        .join('-')
-      img.src = `/images/leagues/${logoFilename}.png`
-      img.alt = `${league.name} logo`
-      img.className = 'w-7 h-7 sm:w-6 sm:h-6 object-contain'
-      img.loading = 'lazy'
-      img.onerror = () => {
+      // Hide a logo that fails to load (also when it failed before this ran)
+      const img = button.querySelector('img')
+      const hideLogo = () => {
         console.warn(
           'Failed to load logo for: %s (tried path: %s)',
           league.name,
@@ -857,18 +758,10 @@ async function createTabs() {
         )
         img.style.display = 'none'
       }
-
-      // Create span for league name (hidden on mobile, visible on sm and up)
-      const span = document.createElement('span')
-      span.className = 'hidden sm:inline-block'
-      let displayName = league.name
-        .replace(/UEFA\s+/, '') // Remove "UEFA" prefix
-        .split(' - ')[0] // Remove country suffix
-      span.textContent = displayName
-
-      // Add both elements to button
-      button.appendChild(img)
-      button.appendChild(span)
+      if (img) {
+        img.addEventListener('error', hideLogo)
+        if (img.complete && img.naturalWidth === 0) hideLogo()
+      }
 
       // Add click handler
       button.addEventListener('click', () => {
@@ -877,9 +770,8 @@ async function createTabs() {
         loadLeagueData(currentLeague)
         setActiveTab(button.id)
       })
-
-      tabContainer.appendChild(button)
     })
+    bindTabKeys(document.getElementById('league-tabs'))
 
     // Initialize with default or stored league
     if (!currentLeague || !leagues.some((l) => l.name === currentLeague)) {
