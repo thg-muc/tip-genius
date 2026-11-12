@@ -18,9 +18,23 @@ const LEAGUES = [
 ]
 
 // Visitors who never picked a provider get a random one on every visit,
-// so no single provider is everyone's first impression
+// so no single provider is everyone's first impression. The pick is kept for
+// the browser session: switching to the stats page and back keeps the model
+// (and its cached predictions) instead of drawing a new one
 function randomLlmProvider() {
-  return LLM_PROVIDERS[Math.floor(Math.random() * LLM_PROVIDERS.length)].value
+  try {
+    const sessionPick = sessionStorage.getItem('sessionLLM')
+    if (LLM_PROVIDERS.some((p) => p.value === sessionPick)) return sessionPick
+  } catch {
+    // Storage unavailable: a fresh pick per page
+  }
+  const pick = LLM_PROVIDERS[Math.floor(Math.random() * LLM_PROVIDERS.length)].value
+  try {
+    sessionStorage.setItem('sessionLLM', pick)
+  } catch {
+    // See above
+  }
+  return pick
 }
 
 // Keeps a deliberately chosen provider (lastUsedLLM is only written by the menu).
@@ -65,19 +79,15 @@ function updateFooterYear() {
 async function initializeApp() {
   try {
     updateFooterYear()
-
-    // Fetch the version information first
-    const response = await fetch('/version.json?v=' + Date.now())
-    if (response.ok) {
-      const data = await response.json()
-      appVersion = data.version
-      console.log('App initialized with version:', appVersion)
-    }
   } catch (error) {
-    console.warn('Could not load version, using fallback:', appVersion)
+    console.warn('Could not update the footer year:', error)
   }
 
-  // Initialize configuration with the correct version
+  // The build version is only shown under the matches: load it alongside
+  // instead of making the tabs and the predictions wait for it
+  loadAppVersion()
+
+  // Configuration (DYNAMIC_CACHE follows the version once it is known)
   CONFIG = {
     ALLOWED_ORIGINS: [
       'http://localhost:3000',
@@ -118,6 +128,24 @@ async function initializeApp() {
   setInterval(refreshData, CONFIG.CACHE_DURATION * 1000)
 }
 
+// Build version from version.json; updates the line under the matches when it
+// arrives after they were drawn
+async function loadAppVersion() {
+  try {
+    const response = await fetch('/version.json?v=' + Date.now())
+    if (!response.ok) return
+    const data = await response.json()
+    appVersion = data.version
+    if (CONFIG) CONFIG.DYNAMIC_CACHE = `tip-genius-dynamic-${appVersion}`
+    document.querySelectorAll('[data-build-version]').forEach((element) => {
+      element.textContent = `Build Version: ${appVersion}`
+    })
+    console.log('App initialized with version:', appVersion)
+  } catch (error) {
+    console.warn('Could not load version, using fallback:', appVersion)
+  }
+}
+
 // Function to update the active LLM logo in the header
 function updateActiveLlmLogo() {
   const activeLlmLogo = document.getElementById('activeLlmLogo')
@@ -135,6 +163,15 @@ function updateActiveLlmLogo() {
   img.alt = `${provider.label} logo`
   img.className = 'w-6 h-6 object-contain'
   img.title = provider.label
+  try {
+    // index.html shows this logo before main.js runs on the next page load
+    localStorage.setItem(
+      'activeLlmLogo',
+      JSON.stringify({ value: provider.value, src: provider.logo, alt: img.alt })
+    )
+  } catch {
+    // Storage unavailable: the spinner shows until main.js runs
+  }
 
   // Add error handling
   img.onerror = () => {
@@ -463,6 +500,7 @@ function renderMatches(matches, timestamp) {
     versionElement.className =
       'text-[0.65rem] sm:text-xs text-gray-500 dark:text-gray-500 italic text-center mt-2 mb-6'
     versionElement.textContent = `Build Version: ${appVersion}`
+    versionElement.dataset.buildVersion = ''
     versionElement.style.opacity = '0'
     container.appendChild(versionElement)
     elements.push(versionElement)
@@ -663,63 +701,11 @@ async function fetchLeagueData() {
   return data
 }
 
-// Tab creation and handling
+// Tab creation and handling: the active look comes from the aria-selected:*
+// classes in index.html, so marking a tab is one attribute
 function setActiveTab(tabId) {
-  document.querySelectorAll('button[id^="tab-"]').forEach((tab) => {
-    const isActive = tab.id === tabId
-
-    // First, remove all state-related classes
-    tab.classList.remove(
-      // Inactive state classes
-      'bg-gray-100',
-      'dark:bg-slate-900',
-      'text-gray-500',
-      'dark:text-gray-400',
-      'font-normal',
-      'hover:bg-gray-50',
-      'dark:hover:bg-gray-700',
-      'hover:text-sky-700',
-      'dark:hover:text-sky-400',
-      'border-transparent',
-      // Active state classes
-      'bg-white',
-      'dark:bg-gray-800',
-      'text-sky-700',
-      'dark:text-sky-400',
-      'font-semibold',
-      'border-sky-500',
-      'dark:border-sky-400',
-      'shadow-md',
-      'tab-active'
-    )
-
-    // Then add appropriate classes for current state
-    if (isActive) {
-      tab.classList.add(
-        'bg-white',
-        'dark:bg-gray-800',
-        'text-sky-700',
-        'dark:text-sky-400',
-        'font-semibold',
-        'border-sky-500',
-        'dark:border-sky-400',
-        'shadow-md',
-        'tab-active'
-      )
-    } else {
-      tab.classList.add(
-        'bg-gray-100',
-        'dark:bg-slate-900',
-        'text-gray-500',
-        'dark:text-gray-400',
-        'font-normal',
-        'hover:bg-gray-50',
-        'dark:hover:bg-gray-700',
-        'hover:text-sky-700',
-        'dark:hover:text-sky-400',
-        'border-transparent'
-      )
-    }
+  document.querySelectorAll('#league-tabs [role="tab"]').forEach((tab) => {
+    tab.setAttribute('aria-selected', String(tab.id === tabId))
   })
 }
 

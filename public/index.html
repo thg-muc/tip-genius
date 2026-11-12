@@ -52,6 +52,22 @@
                                     <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
                             </div>
+                            <script>
+                                // The logo main.js showed last time, if it is still the model it
+                                // will pick (chosen in the menu, or this session's random pick)
+                                ;(() => {
+                                    try {
+                                        const logo = JSON.parse(localStorage.getItem('activeLlmLogo'))
+                                        const current = localStorage.getItem('lastUsedLLM') || sessionStorage.getItem('sessionLLM')
+                                        if (!logo || logo.value !== current) return
+                                        const img = document.createElement('img')
+                                        img.src = logo.src
+                                        img.alt = logo.alt
+                                        img.className = 'w-6 h-6 object-contain'
+                                        document.getElementById('activeLlmLogo').replaceChildren(img)
+                                    } catch {}
+                                })()
+                            </script>
                             <!-- Dropdown indicator -->
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-2 sm:h-4 w-2 sm:w-4 sm:ml-1 text-gray-500 dark:text-gray-400 " fill="none" viewBox="0 0 24 24" stroke="currentColor">
 
@@ -85,14 +101,26 @@
             <!-- Full width up to four w-56 tabs (max-w-4xl); the stats page uses the same width -->
             <div class="w-full lg:max-w-4xl flex shadow-md rounded-md overflow-hidden">
                 <!-- The league tabs are static (part of the first paint, so the bar does not pop in);
-                     createTabs() in main.js wires them up and setActiveTab() switches the state classes.
-                     The stats page has the same bar with an extra "All leagues" tab -->
-                <div id="league-tabs" class="flex w-full">
-                    <button type="button" id="tab-premier-league---england" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 border-transparent tracking-wide font-mono rounded-l-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5"><img src="/images/leagues/PremierLeague-England.png" alt="Premier League - England logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Premier League</span></button>
-                    <button type="button" id="tab-bundesliga---germany" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 border-transparent tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5"><img src="/images/leagues/Bundesliga-Germany.png" alt="Bundesliga - Germany logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Bundesliga</span></button>
-                    <button type="button" id="tab-la-liga---spain" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 border-transparent tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5"><img src="/images/leagues/LaLiga-Spain.png" alt="La Liga - Spain logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">La Liga</span></button>
-                    <button type="button" id="tab-uefa-champions-league" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 border-transparent tracking-wide font-mono rounded-r-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5"><img src="/images/leagues/UEFAChampionsLeague.png" alt="UEFA Champions League logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Champions League</span></button>
+                     the active look comes from the aria-selected:* classes, so marking a tab is one
+                     attribute (the script below, then setActiveTab() in main.js). The stats page has
+                     the same bar with an extra "All leagues" tab -->
+                <div id="league-tabs" class="flex w-full" role="tablist" aria-label="League">
+                    <button type="button" role="tab" aria-selected="false" id="tab-premier-league---england" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-l-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/PremierLeague-England.png" alt="Premier League - England logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Premier League</span></button>
+                    <button type="button" role="tab" aria-selected="false" id="tab-bundesliga---germany" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/Bundesliga-Germany.png" alt="Bundesliga - Germany logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Bundesliga</span></button>
+                    <button type="button" role="tab" aria-selected="false" id="tab-la-liga---spain" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/LaLiga-Spain.png" alt="La Liga - Spain logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">La Liga</span></button>
+                    <button type="button" role="tab" aria-selected="false" id="tab-uefa-champions-league" class="flex items-center justify-center sm:gap-2 px-3 sm:px-4 py-3 sm:py-4 sm:text-lg focus:z-10 flex-1 lg:flex-none lg:w-56 sm:min-w-32 sm:max-w-64 transition-all duration-300 relative border-b-2 tracking-wide font-mono rounded-r-md bg-gray-100 dark:bg-slate-900 text-gray-500 dark:text-gray-400 font-normal border-transparent hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-sky-700 dark:hover:text-sky-400 hover:shadow-md hover:-translate-y-0.5 aria-selected:bg-white dark:aria-selected:bg-gray-800 aria-selected:text-sky-700 dark:aria-selected:text-sky-400 aria-selected:font-semibold aria-selected:border-sky-500 dark:aria-selected:border-sky-400 aria-selected:shadow-md"><img src="/images/leagues/UEFAChampionsLeague.png" alt="UEFA Champions League logo" class="w-7 h-7 sm:w-6 sm:h-6 object-contain"><span class="hidden sm:inline-block">Champions League</span></button>
                 </div>
+                <script>
+                    // Mark the saved league before the first paint (same rule as main.js:
+                    // the stored league, else the first tab)
+                    ;(() => {
+                        let league = null
+                        try { league = localStorage.getItem('lastUsedLeague') } catch {}
+                        const id = league && 'tab-' + league.replace(/\s+/g, '-').toLowerCase()
+                        const tab = (id && document.getElementById(id)) || document.querySelector('#league-tabs [role="tab"]')
+                        tab.setAttribute('aria-selected', 'true')
+                    })()
+                </script>
             </div>
         </div>
         <!-- Error message container -->
