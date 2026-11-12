@@ -814,9 +814,11 @@ async function init() {
   document.body.classList.add('loaded')
 }
 
-// Module scripts run after the deferred Chart.js script, so there is no need to
-// wait for every image; fall back to 'load' if the CDN script is still missing
-if (window.Chart) init()
+// The deferred Chart.js script has usually run by now, so there is no need to
+// wait for every image; otherwise wait for 'load', unless it already fired
+// (the data module loads asynchronously, so it can come after 'load'; without
+// Chart.js the page then shows its tables and no charts)
+if (window.Chart || document.readyState === 'complete') init()
 else window.addEventListener('load', init)
 </script>
 </body>

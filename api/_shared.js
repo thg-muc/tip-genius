@@ -22,12 +22,13 @@ export function handleCommon(req, res) {
   res.setHeader('X-Content-Type-Options', 'nosniff')
 
   // CORS: exact match, so look-alike origins (e.g. a longer host name that
-  // merely contains an allowed one) get no header
+  // merely contains an allowed one) get no header. Vary on every response, so
+  // a cached copy is never reused for a request from another origin
+  res.setHeader('Vary', 'Origin')
   const origin = req.headers.origin
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Access-Control-Allow-Methods', 'GET')
-    res.setHeader('Vary', 'Origin')
   }
 
   if (req.method === 'OPTIONS') {
