@@ -23,7 +23,7 @@
     <!-- Tailwind CSS -->
     <link rel="stylesheet" href="/css/tailwind.css">
     <!-- Prefetch the other page on hover, so the switch is instant (Chromium only) -->
-    <script type="speculationrules">{"prefetch": [{"urls": ["/dashboard-a.html"], "eagerness": "moderate"}]}</script>
+    <script type="speculationrules">{"prefetch": [{"urls": ["/dashboard"], "eagerness": "moderate"}]}</script>
 </head>
 
 <body class="font-sans flex flex-col min-h-screen bg-gradient-to-br from-slate-100 to-slate-300 dark:from-slate-900 dark:to-blue-950">
@@ -38,8 +38,8 @@
                 </a>
                 <!-- Header right section: the switch to the stats page and the LLM menu (GitHub is linked from the stats page) -->
                 <div class="flex items-center gap-1 sm:gap-2">
-                    <!-- Switch to the statistics page (phase 2: link /dashboard) -->
-                    <a href="/dashboard-a.html" class="w-20 sm:w-24 h-10 inline-flex items-center gap-1.5 pl-4 pr-1 sm:pl-6 text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400 transition duration-200"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M3 20h18"/></svg>Stats</a>
+                    <!-- Switch to the statistics page (/dashboard, rewritten to dashboard.html in vercel.json) -->
+                    <a href="/dashboard" class="w-20 sm:w-24 h-10 inline-flex items-center gap-1.5 pl-4 pr-1 sm:pl-6 text-sm sm:text-base text-gray-500 dark:text-gray-400 hover:text-sky-700 dark:hover:text-sky-400 transition duration-200"><svg class="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M3 20h18"/></svg>Stats</a>
                     <!-- LLM Logo Button (replaces Hamburger button); fixed slot width so the
                          Stats link sits where the stats page puts its Tips link -->
                     <div class="relative w-12 sm:w-16 flex justify-end">

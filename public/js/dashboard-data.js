@@ -1,8 +1,8 @@
-// Shared data layer for the statistics dashboard variants.
+// Data layer of the statistics dashboard (public/dashboard.html).
 //
 // Loads the dashboard JSON (written by the cron step, see lib/stats.py), applies
-// the agreed filters and display rules and returns plain view objects, so the
-// pages only differ in presentation. Rows in the JSON refer to models by their
+// the agreed filters and display rules and returns plain view objects for the
+// page to render. Rows in the JSON refer to models by their
 // index in `models`; everything returned here carries the resolved model info.
 
 // Display names and logos: models from the shared list in models.js (also used
@@ -516,34 +516,6 @@ export function buildView(stats, state) {
   }
 }
 
-// --- Headline (key finding: do the models beat backing the favourite?) -------
-
-export function headline(view) {
-  const { best, fav, llms } = view
-  if (!best || !fav) return null
-  const beating = llms.filter((r) => r.avg0 > fav.avg0)
-  const delta = best.avg0 - fav.avg0
-  const overlap = best.ciLow < fav.ciHigh && fav.ciLow < best.ciHigh
-  const pointsGap = best.points - fav.points
-  return {
-    best,
-    fav,
-    delta,
-    pointsGap,
-    beating: beating.length,
-    total: llms.length,
-    overlap,
-    verdict:
-      delta > 0
-        ? overlap
-          ? 'ahead-noise'
-          : 'ahead'
-        : overlap
-          ? 'behind-noise'
-          : 'behind',
-  }
-}
-
 // --- Timeline -------------------------------------------------------------------
 
 const MONTHS = [
@@ -825,7 +797,7 @@ export function escapeHtml(text) {
   )
 }
 
-// --- Notes shared by all variants ------------------------------------------
+// --- Notes above the table --------------------------------------------------
 
 export function viewNotes(view) {
   const notes = []
