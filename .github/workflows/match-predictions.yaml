@@ -53,6 +53,10 @@ jobs:
       - name: Run unit tests
         run: uv run pytest tests/unit
 
+      # Frontend and API route tests (Node's built-in test runner, no dependencies)
+      - name: Run JS tests
+        run: npm test
+
       # Run the main prediction script with required environment variables
       - name: Run prediction update
         id: prediction_run
