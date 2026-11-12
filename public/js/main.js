@@ -778,6 +778,30 @@ function createTab(league, index, totalLeagues) {
   return button
 }
 
+// Fallback for a league whose button is missing in index.html
+function buildTab(league, index, totalLeagues) {
+  const button = createTab(league, index, totalLeagues)
+  const img = document.createElement('img')
+  const logoFilename = league.name
+    .split(' - ')
+    .map((part) => part.replace(/\s+/g, ''))
+    .join('-')
+  img.src = `/images/leagues/${logoFilename}.png`
+  img.alt = `${league.name} logo`
+  img.className = 'w-7 h-7 sm:w-6 sm:h-6 object-contain'
+
+  // League name (hidden on mobile, visible on sm and up)
+  const span = document.createElement('span')
+  span.className = 'hidden sm:inline-block'
+  span.textContent = league.name
+    .replace(/UEFA\s+/, '') // Remove "UEFA" prefix
+    .split(' - ')[0] // Remove country suffix
+
+  button.appendChild(img)
+  button.appendChild(span)
+  return button
+}
+
 // Create Tabs function
 async function createTabs() {
   const tabContainer = document.getElementById('league-tabs')
@@ -785,23 +809,17 @@ async function createTabs() {
   try {
     const leagues = LEAGUES.map((name) => ({ name }))
 
-    // Clear existing tabs
-    tabContainer.innerHTML = ''
-
     leagues.forEach((league, index) => {
-      const button = createTab(league, index, leagues.length)
+      // The buttons are in index.html (part of the first paint); build one
+      // only if it is missing there
+      const tabId = `tab-${league.name.replace(/\s+/g, '-').toLowerCase()}`
+      const button =
+        document.getElementById(tabId) || buildTab(league, index, leagues.length)
+      if (!button.isConnected) tabContainer.appendChild(button)
 
-      // Create and add the logo image
-      const img = document.createElement('img')
-      const logoFilename = league.name
-        .split(' - ')
-        .map((part) => part.replace(/\s+/g, ''))
-        .join('-')
-      img.src = `/images/leagues/${logoFilename}.png`
-      img.alt = `${league.name} logo`
-      img.className = 'w-7 h-7 sm:w-6 sm:h-6 object-contain'
-      img.loading = 'lazy'
-      img.onerror = () => {
+      // Hide a logo that fails to load (also when it failed before this ran)
+      const img = button.querySelector('img')
+      const hideLogo = () => {
         console.warn(
           'Failed to load logo for: %s (tried path: %s)',
           league.name,
@@ -809,18 +827,10 @@ async function createTabs() {
         )
         img.style.display = 'none'
       }
-
-      // Create span for league name (hidden on mobile, visible on sm and up)
-      const span = document.createElement('span')
-      span.className = 'hidden sm:inline-block'
-      let displayName = league.name
-        .replace(/UEFA\s+/, '') // Remove "UEFA" prefix
-        .split(' - ')[0] // Remove country suffix
-      span.textContent = displayName
-
-      // Add both elements to button
-      button.appendChild(img)
-      button.appendChild(span)
+      if (img) {
+        img.addEventListener('error', hideLogo)
+        if (img.complete && img.naturalWidth === 0) hideLogo()
+      }
 
       // Add click handler
       button.addEventListener('click', () => {
@@ -829,8 +839,6 @@ async function createTabs() {
         loadLeagueData(currentLeague)
         setActiveTab(button.id)
       })
-
-      tabContainer.appendChild(button)
     })
 
     // Initialize with default or stored league
