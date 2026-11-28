@@ -11,7 +11,7 @@ sports_list:
 llm_provider_options:
   # - Google-Gemini-Flash-Lite # API Rate Limits
   - Deepseek-Chat
-  - Mistral-Ministral
+  # - Mistral-Ministral # API billing: HTTP 402, no subscription/budget since 27.11.2026
   - Meta-Llama-Mid
   - Microsoft-Phi-Medium
   - OpenRouter-GPT-OSS-Large

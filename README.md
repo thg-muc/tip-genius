@@ -16,7 +16,7 @@ Tip Genius leverages LLMs to generate match predictions by analyzing odds data a
 
 So far, the following LLM models have been successfully tested with Tip Genius:
 
-- **Mistral Ministral 14B** (free, via Mistral AI)
+- **Mistral Ministral 14B** (via Mistral AI) — disabled since November 2026, see below
 - **Mistral Medium 3.5** (via Mistral AI) — no longer in the free tier, see below
 - **OpenAI GPT-OSS 120b** (via OpenRouter)
 - **NVIDIA Nemotron 3.5 Lightning** (free, via NVIDIA build.nvidia.com)
@@ -33,8 +33,14 @@ selection is configured in `src/tip_genius/cfg/tip_genius_config.yaml`.
 Mistral's free tier no longer serves Mistral Medium or Small: since September
 2026 they are provisioned at zero requests per minute
 (`x-ratelimit-limit-req-minute: 0`), so every call returns HTTP 429. Tip Genius
-therefore uses Ministral 14B, which the free tier still allows at 30 requests per
-minute.
+therefore switched to Ministral 14B, which the free tier allowed at 30 requests
+per minute. Since 27 November 2026 Ministral fails as well: every call returns
+HTTP 402 (`billing_no_api_budget_configured`, "You need a subscription to access
+this API"), so all Mistral models are disabled. The configuration stays in
+`src/tip_genius/cfg/llm_config.yaml`; re-enabling Ministral needs a Mistral
+subscription or API budget, the provider line in `tip_genius_config.yaml`, the
+`MISTRAL_API_KEY` entry in the prediction workflow and `offered: true` in
+`public/js/models.js`.
 
 ## Features
 
