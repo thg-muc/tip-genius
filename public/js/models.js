@@ -41,13 +41,6 @@ window.TIP_GENIUS_MODELS = [
     offered: true,
   },
   {
-    value: 'Mistral-Ministral',
-    label: 'Ministral 14B',
-    short: 'Ministral',
-    logo: '/images/llm-logos/Mistral.png',
-    offered: true,
-  },
-  {
     value: 'Meta-Llama-Mid',
     label: 'Llama 4 Maverick',
     short: 'Llama',
@@ -63,6 +56,13 @@ window.TIP_GENIUS_MODELS = [
   },
 
   // Retired or not offered (kept for the statistics and for re-enabling)
+  {
+    value: 'Mistral-Ministral',
+    label: 'Ministral 14B',
+    short: 'Ministral',
+    logo: '/images/llm-logos/Mistral.png',
+    offered: false,
+  },
   {
     value: 'Google-Gemini-Flash-Lite',
     label: 'Gemini 2.5 Flash Lite',

@@ -7,7 +7,10 @@
 # 3. Add the API key to GitHub Secrets in the repository settings
 
 mistral-ministral:
-  api_rate_limit: 30 # requests per minute for free tier (Medium/Small are at 0 there)
+  # Disabled since 27.11.2026: the free tier answers HTTP 402 (no API budget), so
+  # re-enabling needs a Mistral subscription or budget (see README). 30 req/min was
+  # the former free-tier limit; check the paid plan's limit before relying on it.
+  api_rate_limit: 30 # requests per minute
   api_key_env_name: MISTRAL_API_KEY
   base_url: https://api.mistral.ai/v1
   operation: chat/completions
